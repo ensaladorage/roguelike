@@ -160,40 +160,12 @@ export class ChestManager {
         });
         return cloned;
       } catch (e) {
-        // fallback to primitive below
+        console.warn("Final chest model clone failed:", e);
       }
     }
 
-    const group = new THREE.Group();
-
-    const wood = new THREE.MeshStandardMaterial({ color: 0x8b5a2b });
-    const darkWood = new THREE.MeshStandardMaterial({ color: 0x5b351c });
-    const metal = new THREE.MeshStandardMaterial({ color: 0xd5b64a });
-
-    const base = new THREE.Mesh(
-      new THREE.BoxGeometry(0.9, 0.45, 0.65),
-      wood
-    );
-    base.position.y = 0.25;
-    group.add(base);
-
-    const lid = new THREE.Mesh(
-      new THREE.BoxGeometry(0.95, 0.22, 0.7),
-      darkWood
-    );
-
-    lid.position.y = 0.6;
-    lid.name = "lid";
-    group.add(lid);
-
-    const lock = new THREE.Mesh(
-      new THREE.BoxGeometry(0.18, 0.2, 0.08),
-      metal
-    );
-    lock.position.set(0, 0.45, 0.37);
-    group.add(lock);
-
-    return group;
+    console.warn("Final chest model is not loaded. Check Assets/Models/chest.glb.");
+    return new THREE.Group();
   }
 
   // =========================

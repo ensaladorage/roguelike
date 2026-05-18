@@ -21,7 +21,7 @@ Build a simple top-down roguelike with:
 - Enemy logic lives in EnemyAI.js
 - Chest logic lives in Chest.js
 - Environment and global lighting live in Environment.js
-- Coin logic and rendering (including outline via EffectComposer) lives in Coin.js
+- Coin logic lives in Coin.js
 - Scene.js only manages world + rendering + wiring
 - UI (HUD/log/audio) lives in Scene or UI helpers only
 - Game rules must NOT be inside input handlers
@@ -30,6 +30,18 @@ Build a simple top-down roguelike with:
 - Level geometry data can live in Scene.js, but should stay declarative and easy to replace
 - Enemy loot drop decisions live in EnemyAI.js and must be emitted as events
 - Scene.js renders dropped loot and handles pickup wiring only
+
+---
+
+## Level architecture rules
+
+- Keep Scene.js as orchestration only.
+- Room/layout data must live in data files.
+- Three.js mesh placement must live in builder classes.
+- Support modular .glb environment assets for floors and walls.
+- Keep handcrafted room templates as the main workflow.
+- Do not implement full procedural generation until room templates and level assembly are stable.
+- Preserve compatibility with current gameplay systems: player, enemies, chests, coins, exit, collisions, navigation.
 
 ---
 
@@ -51,6 +63,7 @@ Build a simple top-down roguelike with:
 - Player attack cooldown = source of truth
 - Enemy attack cooldown = independent timer
 - Damage must be event-driven
+- Damage flash effects must be triggered only by real damage events, not by combat start or attack intent events
 - Never trigger attacks from input
 - Enemy coin drops must be event-driven after enemy death
 
@@ -62,6 +75,8 @@ Build a simple top-down roguelike with:
 - Use separate walkable areas and collision walls for level layout
 - Chests should be distributed naturally in rooms, not all in one cluster
 - Chest ground drops should spawn toward the chest front, away from nearby walls
+- Coin outlines/visibility helpers must not use global postprocessing or alter scene lighting
+- Coin drops should animate from their source, avoid walls, and become collectible only after landing
 - Enemy patrol routes may pass through doors and enter rooms
 
 ---

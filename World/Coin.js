@@ -3,15 +3,27 @@ import { GLTFLoader } from "three/addons/loaders/GLTFLoader.js";
 import * as SkeletonUtils from "three/addons/utils/SkeletonUtils.js";
 import { flatDistance } from "../Game/Utils.js";
 
+const COIN_OCCLUSION_RING_RADIUS = 0.15;
+const COIN_OCCLUSION_RING_THICKNESS = 0.018;
+const COIN_LAUNCH_DURATION = 0.9;
+const COIN_LAUNCH_HEIGHT = 2.2;
+const COIN_GROUND_Y = 0.08;
+const COIN_WALL_CLEARANCE = 0.28;
+const COIN_LANDING_MIN_DISTANCE = 0.62;
+const COIN_LANDING_MAX_DISTANCE = 1.35;
+const COIN_LANDING_ANGLE_SPREAD = Math.PI * 0.95;
+
 export class CoinManager {
   constructor(scene) {
     this.scene = scene; // GameScene instance
     this.coinDrops = [];
     this.models = {};
     this.loader = new GLTFLoader();
+    this.raycaster = new THREE.Raycaster();
+    this.rayDirection = new THREE.Vector3();
+    this.coinWorldPosition = new THREE.Vector3();
+    this.parentWorldQuaternion = new THREE.Quaternion();
 
-    // Outline handled by scene.outlineManager (created in Scene.js)
-    // try load coin model asynchronously
     this.loadModel();
   }
 
@@ -25,8 +37,6 @@ export class CoinManager {
       // silently ignore
     }
   }
-
-  // Outline setup moved to OutlineManager (World/OutlineManager.js)
 
   createCoinModel() {
     let coinRoot = null;
@@ -70,23 +80,9 @@ export class CoinManager {
       coinRoot = group;
     }
 
-    // Add subtle outline as a mesh fallback so coins look good even without postprocessing
-    const outline = coinRoot.clone();
-    outline.traverse((child) => {
-      if (!child.isMesh) return;
-      child.material = new THREE.MeshBasicMaterial({
-        color: 0xffdf5d,
-        transparent: true,
-        opacity: 0.18,
-        depthTest: false,
-        depthWrite: false,
-        side: THREE.BackSide,
-      });
-      child.renderOrder = 10;
-      child.userData.ignoreFlash = true;
-    });
-    outline.scale.multiplyScalar(1);
-    coinRoot.add(outline);
+    const occlusionMarker = this.createOcclusionMarker();
+    coinRoot.add(occlusionMarker);
+    coinRoot.userData.occlusionMarker = occlusionMarker;
 
     coinRoot.userData.pulse = {
       baseScale: 1,
@@ -98,17 +94,53 @@ export class CoinManager {
     return coinRoot;
   }
 
+  createOcclusionMarker() {
+    const group = new THREE.Group();
+    group.name = "coinOcclusionMarker";
+    group.visible = false;
+    group.renderOrder = 80;
+    group.position.y = 0.42;
+
+    const ring = new THREE.Mesh(
+      new THREE.RingGeometry(
+        COIN_OCCLUSION_RING_RADIUS,
+        COIN_OCCLUSION_RING_RADIUS + COIN_OCCLUSION_RING_THICKNESS,
+        48
+      ),
+      new THREE.MeshBasicMaterial({
+        color: 0xffdf5d,
+        transparent: true,
+        opacity: 0.82,
+        depthTest: false,
+        depthWrite: false,
+        side: THREE.DoubleSide,
+      })
+    );
+    ring.userData.ignoreFlash = true;
+
+    group.add(ring);
+    return group;
+  }
+
   addCoinDrops(coins) {
-    for (const c of coins) {
+    const count = coins.length;
+
+    for (let index = 0; index < count; index += 1) {
+      const c = coins[index];
       const model = this.createCoinModel();
+      const origin = c.fallbackOrigin ? c.fallbackOrigin.clone() : c.position.clone();
 
       const resolved = this.resolveDropPosition(
         c.position.clone(),
-        c.fallbackOrigin ? c.fallbackOrigin.clone() : c.position.clone()
+        origin,
+        index,
+        count
       );
 
-      model.position.copy(resolved);
-      model.position.y = 0.08;
+      origin.y = COIN_GROUND_Y;
+      resolved.y = COIN_GROUND_Y;
+
+      model.position.copy(origin);
 
       this.scene.levelGroup.add(model);
 
@@ -116,19 +148,104 @@ export class CoinManager {
         model,
         value: c.value,
         collected: false,
+        collectable: false,
         spinSpeed: 1.6 + this.coinDrops.length * 0.13,
+        launch: {
+          from: origin,
+          to: resolved,
+          elapsed: 0,
+          duration: COIN_LAUNCH_DURATION + Math.random() * 0.16,
+          height: COIN_LAUNCH_HEIGHT + Math.random() * 0.18,
+        },
       });
     }
   }
 
-  resolveDropPosition(position, fallbackOrigin) {
-    if (this.scene.isWalkablePosition(position, 0.12)) {
-      position.y = 0;
-      return position;
+  resolveDropPosition(position, fallbackOrigin, dropIndex = 0, dropCount = 1) {
+    const origin = fallbackOrigin.clone();
+    origin.y = 0;
+
+    const baseOffset = position.clone().sub(origin);
+    baseOffset.y = 0;
+
+    const baseAngle = baseOffset.lengthSq() > 0.0001
+      ? Math.atan2(baseOffset.z, baseOffset.x)
+      : Math.random() * Math.PI * 2;
+
+    const centeredIndex = dropIndex - (dropCount - 1) / 2;
+    const preferredAngle = baseAngle + centeredIndex * 0.42;
+
+    for (let attempt = 0; attempt < 18; attempt += 1) {
+      const angleJitter = (Math.random() - 0.5) * COIN_LANDING_ANGLE_SPREAD;
+      const distance = THREE.MathUtils.lerp(
+        COIN_LANDING_MIN_DISTANCE,
+        COIN_LANDING_MAX_DISTANCE,
+        Math.random()
+      );
+
+      const angle = preferredAngle + angleJitter + attempt * 0.23;
+      const candidate = new THREE.Vector3(
+        origin.x + Math.cos(angle) * distance,
+        0,
+        origin.z + Math.sin(angle) * distance
+      );
+
+      const safeCandidate = this.resolveWallCollision(origin, candidate);
+      if (safeCandidate) return safeCandidate;
     }
-    const fallback = fallbackOrigin.clone();
+
+    const originalCandidate = position.clone();
+    originalCandidate.y = 0;
+    const safeOriginal = this.resolveWallCollision(origin, originalCandidate);
+    if (safeOriginal) return safeOriginal;
+
+    const fallback = origin.clone();
     fallback.y = 0;
     return fallback;
+  }
+
+  resolveWallCollision(origin, candidate) {
+    if (this.isSafeLanding(origin, candidate)) {
+      return candidate.clone();
+    }
+
+    const lastSafe = this.findLastSafeLandingBeforeCollision(origin, candidate);
+    if (!lastSafe) return null;
+
+    const travelled = flatDistance(origin, lastSafe);
+    if (travelled < COIN_LANDING_MIN_DISTANCE * 0.45) {
+      return null;
+    }
+
+    return lastSafe;
+  }
+
+  isSafeLanding(origin, candidate) {
+    return (
+      this.scene.isWalkablePosition(candidate, COIN_WALL_CLEARANCE) &&
+      !this.scene.movementHitsWall(origin, candidate, COIN_WALL_CLEARANCE)
+    );
+  }
+
+  findLastSafeLandingBeforeCollision(origin, candidate) {
+    let low = 0;
+    let high = 1;
+    let lastSafe = null;
+
+    for (let i = 0; i < 10; i += 1) {
+      const t = (low + high) / 2;
+      const point = origin.clone().lerp(candidate, t);
+      point.y = 0;
+
+      if (this.isSafeLanding(origin, point)) {
+        lastSafe = point;
+        low = t;
+      } else {
+        high = t;
+      }
+    }
+
+    return lastSafe;
   }
 
   update(delta) {
@@ -143,18 +260,79 @@ export class CoinManager {
       coin.model.scale.set(s, s, s);
 
       if (coin.collected) continue;
+
+      this.updateLaunch(coin, delta);
+
       coin.model.rotation.y += delta * (coin.spinSpeed ?? 1.6);
+
+      if (!coin.collectable) {
+        this.updateOcclusionMarker(coin);
+        continue;
+      }
 
       const distance = flatDistance(playerPos, coin.model.position);
       if (distance <= 0.8) {
         this.collectCoin(coin);
       }
+
+      this.updateOcclusionMarker(coin);
+    }
+  }
+
+  updateLaunch(coin, delta) {
+    const launch = coin.launch;
+    if (!launch) return;
+
+    launch.elapsed += delta;
+    const t = Math.min(1, launch.elapsed / launch.duration);
+    const eased = 1 - Math.pow(1 - t, 3);
+
+    coin.model.position.lerpVectors(launch.from, launch.to, eased);
+    coin.model.position.y = THREE.MathUtils.lerp(
+      launch.from.y,
+      launch.to.y,
+      eased
+    ) + Math.sin(t * Math.PI) * launch.height;
+
+    if (t < 1) return;
+
+    coin.model.position.copy(launch.to);
+    coin.collectable = true;
+    coin.launch = null;
+  }
+
+  updateOcclusionMarker(coin) {
+    const marker = coin.model.userData.occlusionMarker;
+    if (!marker) return;
+
+    if (coin.collected || !this.scene.camera || !this.scene.wallMeshes?.length) {
+      marker.visible = false;
+      return;
     }
 
-    // update outline selection via scene-wide OutlineManager if present
-    if (this.scene.outlineManager && this.scene.outlineManager.enabled) {
-      const selected = this.coinDrops.filter(c => !c.collected).map(c => c.model);
-      this.scene.outlineManager.setSelection(selected);
+    coin.model.getWorldPosition(this.coinWorldPosition);
+    this.coinWorldPosition.y += 0.2;
+
+    const cameraPosition = this.scene.camera.position;
+    this.rayDirection.subVectors(this.coinWorldPosition, cameraPosition);
+    const coinDistance = this.rayDirection.length();
+
+    if (coinDistance <= 0.0001) {
+      marker.visible = false;
+      return;
+    }
+
+    this.rayDirection.normalize();
+    this.raycaster.set(cameraPosition, this.rayDirection);
+    this.raycaster.far = coinDistance - 0.08;
+
+    const isBehindWall = this.raycaster.intersectObjects(this.scene.wallMeshes, false).length > 0;
+    marker.visible = isBehindWall;
+
+    if (isBehindWall) {
+      coin.model.getWorldQuaternion(this.parentWorldQuaternion);
+      marker.quaternion.copy(this.parentWorldQuaternion.invert());
+      marker.quaternion.multiply(this.scene.camera.quaternion);
     }
   }
 

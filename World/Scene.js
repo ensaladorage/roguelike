@@ -10,7 +10,6 @@ import { HUD } from "../UI/HUD.js";
 import { SFX } from "../UI/SFX.js";
 import { ChestManager } from "./Chest.js";
 import { CoinManager } from "./Coin.js";
-import { OutlineManager } from "./OutlineManager.js";
 import { Environment } from "./Environment.js";
 
 const PLAYER_GROUND_Y = 0;
@@ -190,10 +189,11 @@ export class GameScene {
         }
       };
 
-      const [playerGltf, enemyGltf, colormap, variationA] =
+      const [playerGltf, enemyGltf, chestGltf, colormap, variationA] =
         await Promise.all([
           loader.loadAsync(modelPath("character-human")),
           loader.loadAsync(modelPath("character-orc")),
+          loader.loadAsync(modelPath("chest")),
           loadTextureWithFallback("colormap"),
           loadTextureWithFallback("variation-a"),
         ]);
@@ -262,9 +262,11 @@ export class GameScene {
 
       prepareForScene(playerGltf);
       prepareForScene(enemyGltf);
+      prepareForScene(chestGltf);
 
       this.models.player = playerGltf;
       this.models.enemy = enemyGltf;
+      this.models.chest = chestGltf;
       this.models.textures = {
         colormap,
         "variation-a": variationA,
@@ -292,7 +294,6 @@ export class GameScene {
     this.renderer.toneMappingExposure = 1;
 
     container.appendChild(this.renderer.domElement);
-    this.outlineManager = new OutlineManager(this);
 
     this.clock = new THREE.Clock();
     this.floorSize = 48;
@@ -307,6 +308,7 @@ export class GameScene {
     this.coinDrops = [];
     this.walkableAreas = [];
     this.collisionWalls = [];
+    this.wallMeshes = [];
     this.navBounds = null;
     this.exitButton = null;
     this.clickEffects = [];
@@ -446,6 +448,7 @@ export class GameScene {
     else this.coinDrops = [];
     this.walkableAreas = [];
     this.collisionWalls = [];
+    this.wallMeshes = [];
     this.navBounds = null;
     this.exitButton = null;
     this.clickEffects = [];
@@ -641,6 +644,7 @@ export class GameScene {
 
     this.levelGroup.add(mesh);
     this.collisionWalls.push(piece);
+    this.wallMeshes.push(mesh);
   }
 
   addExitButton(exit) {
@@ -1181,7 +1185,6 @@ export class GameScene {
     this.handleGameEvents(events);
     this.chestManager.update();
 
-    this.checkCoinProximity();
     this.checkExitButton();
 
     this.updateClickEffects(delta);
@@ -1189,11 +1192,7 @@ export class GameScene {
 
     this.updateCamera(delta);
 
-    if (this.outlineManager && this.outlineManager.composer) {
-      this.outlineManager.render();
-    } else {
-      this.renderer.render(this.scene, this.camera);
-    }
+    this.renderer.render(this.scene, this.camera);
 
     requestAnimationFrame(() => this.animate());
   }
@@ -1236,7 +1235,7 @@ export class GameScene {
       effect.elapsed += delta;
 
       const t = Math.min(1, effect.elapsed / effect.duration);
-      const scale = 1 + t * 1.9;
+      const scale = 1 + t * 0.5;
 
       effect.mesh.scale.set(scale, scale, scale);
       effect.material.opacity = 0.9 * (1 - t);
@@ -1259,27 +1258,28 @@ export class GameScene {
       switch (event.type) {
         case "combatStart":
           this.addLog("Combate iniciado.");
-          this.flashModel(this.player.model, 0xffffff, 0.12);
           break;
 
         case "playerAttack":
           this.addLog(`-${event.damage} HP enemigo.`);
-          this.flashModel(event.enemy.model, 0xfff0a3, 0.12);
           this.sfx.play("playerAttack");
           break;
 
         case "enemyAttack":
           this.addLog(`Enemigo ataca: -${event.damage} PV.`);
-          this.flashModel(event.enemy.model, 0xff6b35, 0.14);
-          this.flashModel(this.player.model, 0xff4058, 0.18);
           this.sfx.play("enemyAttack");
           break;
 
         case "enemyDamaged":
-          this.flashModel(event.enemy.model, 0xfff0a3, 0.1);
+          if (event.damage > 0) {
+            this.flashModel(event.enemy.model, 0xff4058, 0.12);
+          }
           break;
 
         case "playerDamaged":
+          if (event.damage > 0) {
+            this.flashModel(this.player.model, 0xff4058, 0.16);
+          }
           this.updateHud();
           break;
 
@@ -1302,17 +1302,34 @@ export class GameScene {
 
   flashModel(model, color, duration) {
     const flashColor = new THREE.Color(color);
+    this.feedbackEffects = this.feedbackEffects.filter(
+      (effect) => effect.model !== model
+    );
 
     model.traverse((child) => {
       if (child.userData.ignoreFlash) return;
-      if (!child.isMesh || !child.material?.color) return;
+      if (!child.isMesh || !child.material) return;
 
-      if (!child.userData.baseColor) {
-        child.userData.baseColor =
-          child.material.color.clone();
+      if (!child.userData.flashMaterialsCloned) {
+        child.material = Array.isArray(child.material)
+          ? child.material.map((material) => material.clone())
+          : child.material.clone();
+        child.userData.flashMaterialsCloned = true;
       }
 
-      child.material.color.copy(flashColor);
+      const materials = Array.isArray(child.material)
+        ? child.material
+        : [child.material];
+
+      for (const material of materials) {
+        if (!material?.color) continue;
+
+        if (!material.userData.baseColor) {
+          material.userData.baseColor = material.color.clone();
+        }
+
+        material.color.copy(flashColor);
+      }
     });
 
     this.feedbackEffects.push({
@@ -1333,19 +1350,18 @@ export class GameScene {
       );
 
       effect.model.traverse((child) => {
-        if (
-          !child.isMesh ||
-          !child.material?.color ||
-          !child.userData.baseColor
-        ) {
-          return;
-        }
+        if (!child.isMesh || !child.material) return;
 
-        child.material.color.copy(effect.flashColor);
-        child.material.color.lerp(
-          child.userData.baseColor,
-          t
-        );
+        const materials = Array.isArray(child.material)
+          ? child.material
+          : [child.material];
+
+        for (const material of materials) {
+          if (!material?.color || !material.userData.baseColor) continue;
+
+          material.color.copy(effect.flashColor);
+          material.color.lerp(material.userData.baseColor, t);
+        }
       });
 
       return t < 1;
