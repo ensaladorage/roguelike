@@ -352,14 +352,6 @@ export class GameScene {
     console.log("levelLoaded", { level: levelIndex + 1, name: level.name });
   }
 
-  hasLevel(levelIndex) {
-    return Boolean(this.levelDefinitions[levelIndex]);
-  }
-
-  getNextLevelIndex() {
-    return this.exitButton?.nextLevel ?? null;
-  }
-
   placePlayer(position) {
     this.player.model.position.set(position.x, PLAYER_GROUND_Y, position.z);
     this.player.groundY = PLAYER_GROUND_Y;
@@ -415,7 +407,6 @@ export class GameScene {
     this.exitButton = {
       group,
       button,
-      nextLevel: exit.nextLevel,
       disabled: Boolean(exit.disabled),
       activated: false,
     };
@@ -930,7 +921,6 @@ export class GameScene {
     this.addLog("Salida activada.");
     console.log("levelExitActivated", {
       from: this.levelIndex + 1,
-      to: this.exitButton.nextLevel === null ? null : this.exitButton.nextLevel + 1,
     });
 
     this.gameManager.activateLevelExit();

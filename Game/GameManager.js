@@ -56,18 +56,8 @@ export class GameManager {
     if (this.isGameOver) return;
     if (this.levelExitLocked) return;
 
-    const nextLevelIndex = this.scene.getNextLevelIndex();
-    if (nextLevelIndex === null) return;
-
     this.levelExitLocked = true;
-
-    if (!this.scene.hasLevel(nextLevelIndex)) {
-      this.scene.addLog("No hay mas niveles disponibles.");
-      console.log("levelExitMissingTarget", { nextLevelIndex });
-      return;
-    }
-
-    this.scene.loadLevel(nextLevelIndex);
+    console.log("floorExitActivated", { floor: this.currentLevelIndex + 1 });
   }
 
   onPlayerDeath() {

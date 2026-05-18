@@ -322,13 +322,15 @@ export class ModularTileBuilder {
       return piece.absoluteRotationY;
     }
 
-    const baseRotation = piece.rotationY ?? 0;
-
-    if (definition.placementMode === "linear" || definition.fallback?.kind === "doorway") {
-      return baseRotation + (piece.w >= piece.d ? 0 : Math.PI / 2);
+    if (piece.rotationY !== undefined) {
+      return piece.rotationY;
     }
 
-    return baseRotation;
+    if (definition.placementMode === "linear" || definition.fallback?.kind === "doorway") {
+      return piece.w >= piece.d ? 0 : Math.PI / 2;
+    }
+
+    return 0;
   }
 
   getScaleForDefinition(piece, definition, sourceSize) {

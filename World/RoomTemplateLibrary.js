@@ -25,11 +25,18 @@ function rotateSide(side, quarterTurns) {
   return sides[(index + quarterTurns) % sides.length];
 }
 
+function rotateCorner(corner, quarterTurns) {
+  const corners = ["northWest", "northEast", "southEast", "southWest"];
+  const index = corners.indexOf(corner);
+  if (index === -1) return corner;
+  return corners[(index + quarterTurns) % corners.length];
+}
+
 function transformArea(area, placement, quarterTurns) {
   const rotated = rotatePoint(area, quarterTurns);
   const swapAxes = quarterTurns % 2 === 1;
 
-  return {
+  const transformed = {
     ...area,
     x: placement.position.x + rotated.x,
     z: placement.position.z + rotated.z,
@@ -37,6 +44,16 @@ function transformArea(area, placement, quarterTurns) {
     d: swapAxes ? area.w : area.d,
     rotationY: (area.rotationY ?? 0) + quarterTurns * QUARTER_TURN,
   };
+
+  if (area.side) {
+    transformed.side = rotateSide(area.side, quarterTurns);
+  }
+
+  if (area.corner) {
+    transformed.corner = rotateCorner(area.corner, quarterTurns);
+  }
+
+  return transformed;
 }
 
 function transformPoint(point, placement, quarterTurns) {

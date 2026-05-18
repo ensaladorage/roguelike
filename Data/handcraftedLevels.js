@@ -2,57 +2,28 @@ export const HANDCRAFTED_LEVELS = [
   {
     kind: "assembled",
     tileSetId: "scenarioDefault",
-    name: "Example Enter Room",
-    playerStart: { x: 0, z: 3.2 },
-    floorSize: 18,
+    name: "Test Floor: EnterRoom + CombatRoom + ExitRoom",
+    playerStart: { x: 0, z: -5.8 },
+    floorSize: 34,
     rooms: [
       {
-        id: "enter_preview",
+        id: "EnterRoom",
         templateId: "enter_room",
-        position: { x: 0, z: 0 },
+        position: { x: 0, z: -9 },
+        rotationY: 0,
       },
-    ],
-    exit: {
-      x: 0,
-      z: -3.7,
-      nextLevel: 1,
-    },
-  },
-  {
-    kind: "assembled",
-    tileSetId: "scenarioDefault",
-    name: "Example Combat Room",
-    playerStart: { x: 0, z: 3 },
-    floorSize: 20,
-    rooms: [
       {
-        id: "combat_preview",
+        id: "CombatRoom",
         templateId: "combat_room_example",
-        position: { x: 0, z: 0 },
+        position: { x: 0, z: 1 },
+        rotationY: 0,
       },
-    ],
-    exit: {
-      x: 0,
-      z: -3.2,
-      nextLevel: 2,
-    },
-  },
-  {
-    kind: "assembled",
-    tileSetId: "scenarioDefault",
-    name: "Example Exit Room",
-    playerStart: { x: 0, z: -3 },
-    floorSize: 20,
-    rooms: [
       {
-        id: "exit_preview",
+        id: "ExitRoom",
         templateId: "exit_room_example",
-        position: { x: 0, z: 0 },
+        position: { x: 0, z: 10 },
+        rotationY: 0,
       },
     ],
-    exit: {
-      nextLevel: null,
-      disabled: true,
-    },
   },
 ];

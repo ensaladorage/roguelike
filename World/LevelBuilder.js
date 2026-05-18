@@ -143,6 +143,11 @@ export class LevelBuilder {
       environment.decorativeModules.push(...room.obstacleModules);
 
       walkableAreas.push(...room.walkableAreas.map(cloneArea));
+      walkableAreas.push(
+        ...room.doorOpenings.map((opening) =>
+          this.createDoorOpeningWalkableArea(opening)
+        )
+      );
       collisionWalls.push(...room.wallModules.map(cloneArea));
       collisionWalls.push(
         ...room.obstacleModules
@@ -183,6 +188,19 @@ export class LevelBuilder {
       chests,
       enemies,
       exit,
+    };
+  }
+
+  createDoorOpeningWalkableArea(opening) {
+    const width = opening.width ?? 1;
+    const thresholdDepth = 1.4;
+    const isHorizontal = opening.side === "north" || opening.side === "south";
+
+    return {
+      x: opening.x,
+      z: opening.z,
+      w: isHorizontal ? width : thresholdDepth,
+      d: isHorizontal ? thresholdDepth : width,
     };
   }
 

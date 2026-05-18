@@ -1,5 +1,19 @@
 const WALL_TILE_SIZE = 1;
 
+const WALL_ROTATION_BY_SIDE = {
+  north: 0,
+  south: 0,
+  west: Math.PI / 2,
+  east: Math.PI / 2,
+};
+
+const CORNER_ROTATION_BY_CORNER = {
+  northWest: 0,
+  northEast: Math.PI / 2,
+  southEast: Math.PI,
+  southWest: -Math.PI / 2,
+};
+
 function createWallSegment(side, dimensions, startOffset, endOffset, moduleId) {
   const length = endOffset - startOffset;
   if (length <= 0.05) return null;
@@ -15,6 +29,8 @@ function createWallSegment(side, dimensions, startOffset, endOffset, moduleId) {
         z: -halfD + WALL_TILE_SIZE / 2,
         w: length,
         d: WALL_TILE_SIZE,
+        side,
+        rotationY: WALL_ROTATION_BY_SIDE[side],
         moduleId,
       };
 
@@ -24,6 +40,8 @@ function createWallSegment(side, dimensions, startOffset, endOffset, moduleId) {
         z: halfD - WALL_TILE_SIZE / 2,
         w: length,
         d: WALL_TILE_SIZE,
+        side,
+        rotationY: WALL_ROTATION_BY_SIDE[side],
         moduleId,
       };
 
@@ -33,6 +51,8 @@ function createWallSegment(side, dimensions, startOffset, endOffset, moduleId) {
         z: centerOffset,
         w: WALL_TILE_SIZE,
         d: length,
+        side,
+        rotationY: WALL_ROTATION_BY_SIDE[side],
         moduleId,
       };
 
@@ -42,6 +62,8 @@ function createWallSegment(side, dimensions, startOffset, endOffset, moduleId) {
         z: centerOffset,
         w: WALL_TILE_SIZE,
         d: length,
+        side,
+        rotationY: WALL_ROTATION_BY_SIDE[side],
         moduleId,
       };
 
@@ -63,7 +85,8 @@ function createDoorwayModule(opening, dimensions) {
         z: -halfD + WALL_TILE_SIZE / 2,
         w: width,
         d: WALL_TILE_SIZE,
-        rotationY: 0,
+        side: opening.side,
+        rotationY: WALL_ROTATION_BY_SIDE[opening.side],
         moduleId,
       };
 
@@ -73,7 +96,8 @@ function createDoorwayModule(opening, dimensions) {
         z: halfD - WALL_TILE_SIZE / 2,
         w: width,
         d: WALL_TILE_SIZE,
-        rotationY: 0,
+        side: opening.side,
+        rotationY: WALL_ROTATION_BY_SIDE[opening.side],
         moduleId,
       };
 
@@ -83,7 +107,8 @@ function createDoorwayModule(opening, dimensions) {
         z: opening.offset,
         w: WALL_TILE_SIZE,
         d: width,
-        rotationY: Math.PI / 2,
+        side: opening.side,
+        rotationY: WALL_ROTATION_BY_SIDE[opening.side],
         moduleId,
       };
 
@@ -93,7 +118,8 @@ function createDoorwayModule(opening, dimensions) {
         z: opening.offset,
         w: WALL_TILE_SIZE,
         d: width,
-        rotationY: Math.PI / 2,
+        side: opening.side,
+        rotationY: WALL_ROTATION_BY_SIDE[opening.side],
         moduleId,
       };
 
@@ -107,10 +133,42 @@ function createCornerModules(dimensions, moduleId = "wallCorner") {
   const halfD = dimensions.d / 2;
 
   return [
-    { x: -halfW + 0.5, z: -halfD + 0.5, w: 1, d: 1, moduleId },
-    { x: halfW - 0.5, z: -halfD + 0.5, w: 1, d: 1, moduleId },
-    { x: -halfW + 0.5, z: halfD - 0.5, w: 1, d: 1, moduleId },
-    { x: halfW - 0.5, z: halfD - 0.5, w: 1, d: 1, moduleId },
+    {
+      x: -halfW + 0.5,
+      z: -halfD + 0.5,
+      w: 1,
+      d: 1,
+      corner: "northWest",
+      rotationY: CORNER_ROTATION_BY_CORNER.northWest,
+      moduleId,
+    },
+    {
+      x: halfW - 0.5,
+      z: -halfD + 0.5,
+      w: 1,
+      d: 1,
+      corner: "northEast",
+      rotationY: CORNER_ROTATION_BY_CORNER.northEast,
+      moduleId,
+    },
+    {
+      x: halfW - 0.5,
+      z: halfD - 0.5,
+      w: 1,
+      d: 1,
+      corner: "southEast",
+      rotationY: CORNER_ROTATION_BY_CORNER.southEast,
+      moduleId,
+    },
+    {
+      x: -halfW + 0.5,
+      z: halfD - 0.5,
+      w: 1,
+      d: 1,
+      corner: "southWest",
+      rotationY: CORNER_ROTATION_BY_CORNER.southWest,
+      moduleId,
+    },
   ];
 }
 
