@@ -103,6 +103,30 @@
       color: #f4f1e8;
     }
 
+    .hud-button {
+      margin-top: 10px;
+      width: 100%;
+      border: 1px solid rgba(244, 241, 232, 0.16);
+      border-radius: 999px;
+      background: rgba(255, 255, 255, 0.06);
+      color: #f4f1e8;
+      font-size: 13px;
+      line-height: 1.4;
+      padding: 10px 14px;
+      cursor: pointer;
+      transition: background 160ms ease, transform 160ms ease;
+      pointer-events: auto;
+    }
+
+    .hud-button:hover {
+      background: rgba(255, 255, 255, 0.1);
+      transform: translateY(-1px);
+    }
+
+    .hud-button:active {
+      transform: translateY(0);
+    }
+
     .footer-hint {
       position: fixed;
       right: 16px;
@@ -147,6 +171,7 @@
         <span>Inventario</span>
         <strong id="itemText">Vacío</strong>
       </div>
+      <button id="toggleOutlineButton" class="hud-button" type="button">Probar outline monedas</button>
     </div>
 
     <div class="panel log" id="log"></div>
@@ -162,6 +187,6 @@
       }
     }
   </script>
-  <script type="module" src="./Main.js"></script>
+  <script type="module" src="./main.js"></script>
 </body>
 </html>

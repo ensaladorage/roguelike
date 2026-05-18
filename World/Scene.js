@@ -1,4 +1,4 @@
-import * as THREE from "three";
+﻿import * as THREE from "three";
 import { GLTFLoader } from "three/addons/loaders/GLTFLoader.js";
 import * as SkeletonUtils from "three/addons/utils/SkeletonUtils.js";
 import { EnemyAI } from "./EnemyAI.js";
@@ -9,8 +9,16 @@ import { flatDistance } from "../Game/Utils.js";
 import { HUD } from "../UI/HUD.js";
 import { SFX } from "../UI/SFX.js";
 import { ChestManager } from "./Chest.js";
+<<<<<<< HEAD
 import { CoinManager } from "./Coin.js";
 import { Environment } from "./Environment.js";
+=======
+import { EffectComposer } from "three/addons/postprocessing/EffectComposer.js";
+import { RenderPass } from "three/addons/postprocessing/RenderPass.js";
+import { OutlinePass } from "three/addons/postprocessing/OutlinePass.js";
+import { ShaderPass } from "three/addons/postprocessing/ShaderPass.js";
+import { FXAAShader } from "three/addons/shaders/FXAAShader.js";
+>>>>>>> f7b05e759bd4449ca4a7c5e3e6db122cdd20a069
 
 const PLAYER_GROUND_Y = 0;
 const PLAYER_COLLISION_RADIUS = 0.32;
@@ -159,9 +167,7 @@ export class GameScene {
     this.scene = new THREE.Scene();
     this.scene.background = new THREE.Color(0x111317);
 
-    this.environment = new Environment(this);
     this.chestManager = new ChestManager(this);
-    this.coinManager = new CoinManager(this);
     this.models = {};
     this.loadModels = async () => {
       const loader = new GLTFLoader();
@@ -189,10 +195,18 @@ export class GameScene {
         }
       };
 
+<<<<<<< HEAD
       const [playerGltf, enemyGltf, chestGltf, colormap, variationA] =
         await Promise.all([
           loader.loadAsync(modelPath("character-human")),
           loader.loadAsync(modelPath("character-orc")),
+=======
+      const [playerGltf, enemyGltf, coinGltf, chestGltf, colormap, variationA] =
+        await Promise.all([
+          loader.loadAsync(modelPath("character-human")),
+          loader.loadAsync(modelPath("character-orc")),
+          loader.loadAsync(modelPath("coin")),
+>>>>>>> f7b05e759bd4449ca4a7c5e3e6db122cdd20a069
           loader.loadAsync(modelPath("chest")),
           loadTextureWithFallback("colormap"),
           loadTextureWithFallback("variation-a"),
@@ -236,6 +250,8 @@ export class GameScene {
 
         applyTexture(playerGltf, colormap);
       applyTexture(enemyGltf, colormap);
+      applyTexture(coinGltf, colormap);
+      applyTexture(chestGltf, colormap);
 
       // ensure model instances cast/receive shadows when cloned
       const prepareForScene = (gltf) => {
@@ -262,10 +278,18 @@ export class GameScene {
 
       prepareForScene(playerGltf);
       prepareForScene(enemyGltf);
+<<<<<<< HEAD
+=======
+      prepareForScene(coinGltf);
+>>>>>>> f7b05e759bd4449ca4a7c5e3e6db122cdd20a069
       prepareForScene(chestGltf);
 
       this.models.player = playerGltf;
       this.models.enemy = enemyGltf;
+<<<<<<< HEAD
+=======
+      this.models.coin = coinGltf;
+>>>>>>> f7b05e759bd4449ca4a7c5e3e6db122cdd20a069
       this.models.chest = chestGltf;
       this.models.textures = {
         colormap,
@@ -294,6 +318,15 @@ export class GameScene {
     this.renderer.toneMappingExposure = 1;
 
     container.appendChild(this.renderer.domElement);
+<<<<<<< HEAD
+=======
+
+    // Post-processing toggle (disabled by default to preserve original lighting)
+    this.postProcessingEnabled = false;
+    if (this.postProcessingEnabled) {
+      this.setupPostProcessing?.();
+    }
+>>>>>>> f7b05e759bd4449ca4a7c5e3e6db122cdd20a069
 
     this.clock = new THREE.Clock();
     this.floorSize = 48;
@@ -318,12 +351,17 @@ export class GameScene {
     this.hud = new HUD();
     this.sfx = new SFX();
     this.gameManager = new GameManager(this);
+    this.coinOutlineEnabled = false;
+
+    this.hud.onOutlineToggle(() => {
+      this.toggleCoinOutline(!this.coinOutlineEnabled);
+    });
 
     this.init();
   }
 
   async init() {
-    this.environment.setup();
+    this.addLights();
     this.addFloor();
 
     try {
@@ -364,7 +402,30 @@ export class GameScene {
     this.animate();
   }
 
+  addLights() {
+    // Hemisphere provides a sky/ground lighting balance
+    const hemi = new THREE.HemisphereLight(0xffffff, 0x444444, 0.6);
+    this.scene.add(hemi);
 
+    // Directional sun light (primary lighting with shadows)
+    const sun = new THREE.DirectionalLight(0xffffff, 1.1);
+    sun.position.set(8, 14, 10);
+    sun.castShadow = true;
+    sun.shadow.mapSize.width = 2048;
+    sun.shadow.mapSize.height = 2048;
+    sun.shadow.camera.near = 0.5;
+    sun.shadow.camera.far = 50;
+    sun.shadow.camera.left = -20;
+    sun.shadow.camera.right = 20;
+    sun.shadow.camera.top = 20;
+    sun.shadow.camera.bottom = -20;
+    sun.shadow.bias = -0.0001;
+    this.scene.add(sun);
+
+    // Soft ambient for fill (low intensity to avoid flatness)
+    const ambient = new THREE.AmbientLight(0xffffff, 0.25);
+    this.scene.add(ambient);
+  }
 
   addFloor() {
     const geo = new THREE.PlaneGeometry(
@@ -444,8 +505,7 @@ export class GameScene {
     this.enemy = null;
     this.enemies = [];
     this.chests = [];
-    if (this.coinManager) this.coinManager.clear();
-    else this.coinDrops = [];
+    this.coinDrops = [];
     this.walkableAreas = [];
     this.collisionWalls = [];
     this.wallMeshes = [];
@@ -743,6 +803,195 @@ export class GameScene {
     return new EnemyAI(enemyRoot, patrolPoints, {
       coinDrop: data.coinDrop,
     });
+  }
+
+  addCoinDrops(coins) {
+    for (const coin of coins) {
+      const model = this.createCoinModel();
+
+      const resolved = this.resolveDropPosition(
+        coin.position.clone(),
+        coin.fallbackOrigin ? coin.fallbackOrigin.clone() : coin.position.clone()
+      );
+
+      model.position.copy(resolved);
+      model.position.y = 0.08;
+
+      this.levelGroup.add(model);
+
+      // mark spawned coin as outlined via post-processing
+      this.addOutlineFor?.(model);
+
+      this.coinDrops.push({
+        model,
+        value: coin.value,
+        collected: false,
+        spinSpeed: 1.4 + Math.random() * 1.1,
+      });
+    }
+  }
+
+  resolveDropPosition(position, fallbackOrigin) {
+    if (this.isWalkablePosition(position, 0.12)) {
+      position.y = 0;
+      return position;
+    }
+
+    const fallback = fallbackOrigin.clone();
+    fallback.y = 0;
+    return fallback;
+  }
+
+ createCoinModel() {
+  let coinRoot;
+
+  // =========================
+  // 1. MODELO (GLTF si existe)
+  // =========================
+  if (this.models?.loaded && this.models.coin) {
+    const cloned = SkeletonUtils.clone(this.models.coin.scene);
+
+    cloned.traverse((child) => {
+      if (!child.isMesh) return;
+
+      child.castShadow = true;
+      child.receiveShadow = true;
+
+      if (child.material?.map) {
+        child.material.map.colorSpace = THREE.SRGBColorSpace;
+      }
+
+      if (
+        child.material?.isMeshStandardMaterial ||
+        child.material?.isMeshPhysicalMaterial
+      ) {
+        child.material.metalness = 0;
+        child.material.roughness = 0.8;
+      }
+    });
+
+    coinRoot = cloned;
+  }
+
+  // =========================
+  // 2. FALLBACK PRIMITIVO
+  // =========================
+  if (!coinRoot) {
+    const group = new THREE.Group();
+
+    const coinMat = new THREE.MeshStandardMaterial({
+      color: 0xe0bb42,
+      emissive: 0x3b2b06,
+      roughness: 0.35,
+      metalness: 0.35,
+    });
+
+    const coin = new THREE.Mesh(
+      new THREE.CylinderGeometry(0.16, 0.16, 0.055, 24),
+      coinMat
+    );
+
+    coin.userData.ignoreFlash = true;
+    group.add(coin);
+
+    const shine = new THREE.Mesh(
+      new THREE.BoxGeometry(0.05, 0.06, 0.19),
+      new THREE.MeshBasicMaterial({ color: 0xffec95 })
+    );
+
+    shine.position.y = 0.035;
+    shine.userData.ignoreFlash = true;
+    group.add(shine);
+
+    coinRoot = group;
+  }
+
+  // =========================
+  // 3. ZELDA PULSE EFFECT DATA
+  // =========================
+  coinRoot.userData.pulse = {
+    baseScale: 1,
+    t: Math.random() * Math.PI * 2, // desincroniza monedas
+    speed: 2.2,
+    amplitude: 0.08,
+  };
+
+  coinRoot.rotation.y = Math.random() * Math.PI * 2;
+  coinRoot.rotation.x = (Math.random() - 0.5) * 0.16;
+
+  return coinRoot;
+}
+
+  // Post-processing / Outline helpers
+  setupPostProcessing() {
+    try {
+      this.composer = new EffectComposer(this.renderer);
+      this.composer.setSize(window.innerWidth, window.innerHeight);
+
+      const renderPass = new RenderPass(this.scene, this.camera);
+      this.composer.addPass(renderPass);
+
+      this.outlinePass = new OutlinePass(new THREE.Vector2(window.innerWidth, window.innerHeight), this.scene, this.camera);
+      this.outlinePass.edgeStrength = 3.0;
+      this.outlinePass.edgeGlow = 0.6;
+      this.outlinePass.visibleEdgeColor.setHex(0xffdf5d);
+      this.outlinePass.hiddenEdgeColor.setHex(0x332200);
+      this.outlinePass.selectedObjects = [];
+      this.composer.addPass(this.outlinePass);
+
+      this.fxaaPass = new ShaderPass(FXAAShader);
+      if (this.fxaaPass.material && this.fxaaPass.material.uniforms && this.fxaaPass.material.uniforms.resolution) {
+        this.fxaaPass.material.uniforms.resolution.value.set(1 / window.innerWidth, 1 / window.innerHeight);
+      }
+      this.composer.addPass(this.fxaaPass);
+    } catch (e) {
+      console.warn("Post-processing setup failed:", e);
+      this.composer = null;
+      this.outlinePass = null;
+      this.fxaaPass = null;
+    }
+  }
+
+  addOutlineFor(object) {
+    if (!this.outlinePass) return;
+    if (!this.outlinePass.selectedObjects) this.outlinePass.selectedObjects = [];
+    if (!this.outlinePass.selectedObjects.includes(object)) {
+      this.outlinePass.selectedObjects.push(object);
+    }
+  }
+
+  removeOutlineFor(object) {
+    if (!this.outlinePass || !this.outlinePass.selectedObjects) return;
+    const idx = this.outlinePass.selectedObjects.indexOf(object);
+    if (idx !== -1) this.outlinePass.selectedObjects.splice(idx, 1);
+  }
+
+  toggleCoinOutline(enabled) {
+    this.coinOutlineEnabled = enabled;
+    this.hud.setOutlineButtonState(enabled);
+    this.postProcessingEnabled = enabled;
+
+    if (enabled && !this.composer) {
+      this.setupPostProcessing();
+    }
+
+    if (!this.outlinePass) return;
+
+    if (enabled) {
+      for (const coin of this.coinDrops) {
+        if (coin.model && !this.outlinePass.selectedObjects.includes(coin.model)) {
+          this.addOutlineFor(coin.model);
+        }
+      }
+      this.addLog("Outline de monedas activado.");
+    } else {
+      for (const coin of this.coinDrops) {
+        if (coin.model) {
+          this.removeOutlineFor(coin.model);
+        }
+      }
+      this.addLog("Outline de monedas desactivado.");
+    }
   }
 
   createClickFeedback(position) {
@@ -1170,7 +1419,17 @@ export class GameScene {
       enemy.update(delta, this.camera);
     }
 
-    if (this.coinManager) this.coinManager.update(delta);
+    for (const coin of this.coinDrops) {
+      if (!coin.model?.userData?.pulse) continue;
+
+      const pulse = coin.model.userData.pulse;
+      pulse.t += delta * pulse.speed;
+
+      const s = pulse.baseScale + Math.sin(pulse.t) * pulse.amplitude;
+      coin.model.scale.set(s, s, s);
+    }
+
+    this.updateCoinDrops(delta);
 
     const previousPlayerPosition = this.player.model.position.clone();
 
@@ -1192,14 +1451,42 @@ export class GameScene {
 
     this.updateCamera(delta);
 
+<<<<<<< HEAD
     this.renderer.render(this.scene, this.camera);
+=======
+    if (this.postProcessingEnabled && this.composer) {
+      this.composer.render();
+    } else {
+      this.renderer.render(this.scene, this.camera);
+    }
+>>>>>>> f7b05e759bd4449ca4a7c5e3e6db122cdd20a069
 
     requestAnimationFrame(() => this.animate());
   }
 
+  checkCoinProximity() {
+    const playerPos = this.player.model.position;
 
+    for (const coin of this.coinDrops) {
+      if (coin.collected) continue;
 
+      const distance = flatDistance(playerPos, coin.model.position);
 
+      if (distance <= 0.8) {
+        this.collectCoin(coin);
+      }
+    }
+  }
+
+  collectCoin(coin) {
+    coin.collected = true;
+    coin.model.visible = false;
+    this.player.addGold(coin.value);
+    this.updateHud();
+    this.addLog(`Moneda recogida: +${coin.value} oro.`);
+    console.log("coinCollected", { gold: coin.value });
+    this.sfx.play("chest");
+  }
 
   checkExitButton() {
     if (!this.exitButton || this.exitButton.activated) return;
@@ -1228,7 +1515,13 @@ export class GameScene {
     this.gameManager.activateLevelExit();
   }
 
+  updateCoinDrops(delta) {
+    for (const coin of this.coinDrops) {
+      if (coin.collected) continue;
 
+      coin.model.rotation.y += delta * coin.spinSpeed;
+    }
+  }
 
   updateClickEffects(delta) {
     this.clickEffects = this.clickEffects.filter((effect) => {
@@ -1284,7 +1577,7 @@ export class GameScene {
           break;
 
         case "enemyCoinsDropped":
-          this.coinManager.addCoinDrops(event.coins);
+          this.addCoinDrops(event.coins);
           break;
 
         case "enemyDefeated":
@@ -1403,5 +1696,11 @@ export class GameScene {
       window.innerWidth,
       window.innerHeight
     );
+    if (this.composer) {
+      this.composer.setSize(window.innerWidth, window.innerHeight);
+      if (this.fxaaPass && this.fxaaPass.material && this.fxaaPass.material.uniforms && this.fxaaPass.material.uniforms.resolution) {
+        this.fxaaPass.material.uniforms.resolution.value.set(1 / window.innerWidth, 1 / window.innerHeight);
+      }
+    }
   }
 }
