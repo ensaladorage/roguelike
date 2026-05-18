@@ -103,9 +103,9 @@ export class ChestManager {
     for (let i = 0; i < count; i++) {
       const centered = i - (count - 1) / 2;
 
-      const sideOffset = centered * 0.28;
+      const sideOffset = centered * 0.42 + (Math.random() * 0.18 - 0.09);
       const forwardOffset =
-        (coinDrop.radius ?? 0.6) + (Math.abs(centered) % 2) * 0.12;
+        (coinDrop.radius ?? 0.6) + 0.45 + (Math.abs(centered) % 2) * 0.14 + (Math.random() * 0.2 - 0.1);
 
       const position = origin
         .clone()

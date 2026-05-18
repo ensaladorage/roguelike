@@ -20,8 +20,6 @@ Build a simple top-down roguelike with:
 - Player logic lives in Player.js (FSM only)
 - Enemy logic lives in EnemyAI.js
 - Chest logic lives in Chest.js
-- Environment and global lighting live in Environment.js
-- Coin logic and rendering (including outline via EffectComposer) lives in Coin.js
 - Scene.js only manages world + rendering + wiring
 - UI (HUD/log/audio) lives in Scene or UI helpers only
 - Game rules must NOT be inside input handlers

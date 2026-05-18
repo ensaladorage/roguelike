@@ -221,9 +221,9 @@ export class EnemyAI {
 
     for (let i = 0; i < count; i += 1) {
       const centered = i - (count - 1) / 2;
-      const sideOffset = centered * 0.28;
-      const ringOffset = Math.abs(centered) % 2 === 0 ? 0 : 0.14;
-      const distance = (this.coinDrop.radius ?? 0.7) + ringOffset;
+      const sideOffset = centered * 0.42 + (Math.random() * 0.18 - 0.09);
+      const ringOffset = Math.abs(centered) % 2 === 0 ? 0 : 0.16;
+      const distance = (this.coinDrop.radius ?? 0.7) + 0.45 + ringOffset + (Math.random() * 0.18 - 0.09);
 
       const position = origin
         .clone()
