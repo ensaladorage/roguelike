@@ -327,7 +327,7 @@ export class CoinManager {
     this.raycaster.set(cameraPosition, this.rayDirection);
     this.raycaster.far = coinDistance - 0.08;
 
-    const isBehindWall = this.raycaster.intersectObjects(this.scene.wallMeshes, false).length > 0;
+    const isBehindWall = this.raycaster.intersectObjects(this.scene.wallMeshes, true).length > 0;
     marker.visible = isBehindWall;
   }
 

@@ -1,0 +1,422 @@
+import * as THREE from "three";
+import { GLTFLoader } from "three/addons/loaders/GLTFLoader.js";
+import * as SkeletonUtils from "three/addons/utils/SkeletonUtils.js";
+import { getTileSetDefinition } from "../Data/tileSetDefinitions.js";
+
+export class ModularTileBuilder {
+  constructor(scene) {
+    this.scene = scene;
+    this.loadingManager = new THREE.LoadingManager();
+    this.loadingManager.setURLModifier((url) => {
+      if (url.startsWith("Textures/")) {
+        return `Assets/Models/${url}`;
+      }
+
+      return url.replace(
+        "Assets/Models/Scenario/Textures/",
+        "Assets/Models/Textures/"
+      );
+    });
+    this.loader = new GLTFLoader(this.loadingManager);
+    this.assetCache = new Map();
+    this.assetMeta = new Map();
+    this.warnedAssets = new Set();
+  }
+
+  async preloadTileSet(tileSetId) {
+    const tileSet = getTileSetDefinition(tileSetId);
+    const moduleDefinitions = Object.values(tileSet.modules);
+
+    await Promise.all(
+      moduleDefinitions.map(async (definition) => {
+        if (!definition.assetPath) return;
+        if (this.assetCache.has(definition.assetPath)) return;
+
+        try {
+          const gltf = await this.loader.loadAsync(definition.assetPath);
+          this.prepareAsset(gltf.scene);
+          this.assetCache.set(definition.assetPath, gltf);
+          this.assetMeta.set(definition.assetPath, this.measureAsset(gltf.scene));
+        } catch (error) {
+          this.assetCache.set(definition.assetPath, null);
+          this.logMissingAsset(definition, error);
+        }
+      })
+    );
+  }
+
+  buildLevel(environment) {
+    const tileSet = getTileSetDefinition(environment.tileSetId);
+    const wallMeshes = [];
+
+    for (const floorModule of environment.floorModules ?? []) {
+      this.buildPiece(floorModule, tileSet, wallMeshes);
+    }
+
+    for (const wallModule of environment.wallModules ?? []) {
+      this.buildPiece(wallModule, tileSet, wallMeshes);
+    }
+
+    for (const doorwayModule of environment.doorwayModules ?? []) {
+      this.buildPiece(doorwayModule, tileSet, wallMeshes);
+    }
+
+    for (const decorativeModule of environment.decorativeModules ?? []) {
+      this.buildPiece(decorativeModule, tileSet, wallMeshes);
+    }
+
+    return {
+      wallMeshes,
+    };
+  }
+
+  buildPiece(piece, tileSet, wallMeshes) {
+    const definition = tileSet.modules[piece.moduleId];
+    if (!definition) return;
+
+    switch (definition.placementMode) {
+      case "grid":
+        this.buildGridModules(piece, definition);
+        return;
+
+      case "linear":
+        this.buildLinearModules(piece, definition, wallMeshes);
+        return;
+
+      case "single":
+      default:
+        this.buildSingleModule(piece, definition, wallMeshes);
+    }
+  }
+
+  buildGridModules(piece, definition) {
+    const footprint = definition.footprint ?? { w: piece.w, d: piece.d };
+    const countX = Math.max(1, Math.round(piece.w / footprint.w));
+    const countZ = Math.max(1, Math.round(piece.d / footprint.d));
+    const tileW = piece.w / countX;
+    const tileD = piece.d / countZ;
+    const startX = piece.x - piece.w / 2 + tileW / 2;
+    const startZ = piece.z - piece.d / 2 + tileD / 2;
+
+    for (let ix = 0; ix < countX; ix += 1) {
+      for (let iz = 0; iz < countZ; iz += 1) {
+        const modulePiece = {
+          ...piece,
+          x: startX + ix * tileW,
+          z: startZ + iz * tileD,
+          w: tileW,
+          d: tileD,
+        };
+
+        const object = this.createModuleObject(modulePiece, definition);
+        if (object) this.scene.levelGroup.add(object);
+      }
+    }
+  }
+
+  buildLinearModules(piece, definition, wallMeshes) {
+    const isHorizontal = piece.w >= piece.d;
+    const length = Math.max(piece.w, piece.d);
+    const thickness = Math.min(piece.w, piece.d);
+    const footprintLength = definition.footprint?.length ?? length;
+    const count = Math.max(1, Math.round(length / footprintLength));
+    const segmentLength = length / count;
+    const startOffset = -length / 2 + segmentLength / 2;
+
+    for (let index = 0; index < count; index += 1) {
+      const offset = startOffset + index * segmentLength;
+      const modulePiece = {
+        ...piece,
+        x: isHorizontal ? piece.x + offset : piece.x,
+        z: isHorizontal ? piece.z : piece.z + offset,
+        w: isHorizontal ? segmentLength : thickness,
+        d: isHorizontal ? thickness : segmentLength,
+      };
+
+      const object = this.createModuleObject(modulePiece, definition);
+      if (!object) continue;
+
+      this.scene.levelGroup.add(object);
+      wallMeshes.push(object);
+    }
+  }
+
+  buildSingleModule(piece, definition, wallMeshes) {
+    const object = this.createModuleObject(piece, definition);
+    if (!object) return;
+
+    this.scene.levelGroup.add(object);
+
+    if (this.blocksSight(definition)) {
+      wallMeshes.push(object);
+    }
+  }
+
+  createModuleObject(piece, definition) {
+    const asset = definition.assetPath ? this.assetCache.get(definition.assetPath) : null;
+
+    if (asset?.scene) {
+      return this.createAssetInstance(piece, definition, asset.scene);
+    }
+
+    return this.createFallbackInstance(piece, definition);
+  }
+
+  createAssetInstance(piece, definition, assetScene) {
+    const meta = this.assetMeta.get(definition.assetPath);
+    if (!meta) {
+      return this.createFallbackInstance(piece, definition);
+    }
+
+    const root = new THREE.Group();
+    const clone = SkeletonUtils.clone(assetScene);
+    const rotationY = this.getModuleRotationY(piece, definition);
+    const scale = this.getScaleForDefinition(piece, definition, meta.size);
+
+    clone.scale.set(scale.x, scale.y, scale.z);
+    clone.position.set(
+      -meta.center.x * scale.x,
+      -meta.min.y * scale.y,
+      -meta.center.z * scale.z
+    );
+
+    root.add(clone);
+    root.position.set(piece.x, piece.y ?? definition.positionY ?? 0, piece.z);
+    root.rotation.y = rotationY;
+
+    return root;
+  }
+
+  createFallbackInstance(piece, definition) {
+    const fallback = definition.fallback ?? {};
+
+    switch (fallback.kind) {
+      case "wall":
+      case "corner":
+      case "obstacle":
+        return this.createFallbackWall(piece, fallback);
+
+      case "doorway":
+        return this.createFallbackDoorway(piece, fallback);
+
+      case "decor":
+        return this.createFallbackDecor(piece, fallback, definition);
+
+      case "floor":
+      default:
+        return this.createFallbackFloor(piece, fallback, definition);
+    }
+  }
+
+  createFallbackFloor(piece, fallback, definition) {
+    const mesh = new THREE.Mesh(
+      new THREE.PlaneGeometry(piece.w, piece.d),
+      new THREE.MeshStandardMaterial({
+        color: piece.color ?? fallback.color ?? 0x303735,
+        roughness: 0.9,
+        metalness: 0,
+      })
+    );
+
+    mesh.rotation.x = -Math.PI / 2;
+    mesh.position.set(piece.x, piece.y ?? definition.positionY ?? 0.01, piece.z);
+    mesh.receiveShadow = true;
+
+    return mesh;
+  }
+
+  createFallbackWall(piece, fallback) {
+    const height = piece.height ?? 1;
+    const mesh = new THREE.Mesh(
+      new THREE.BoxGeometry(piece.w, height, piece.d),
+      new THREE.MeshStandardMaterial({
+        color: fallback.color ?? 0x15191c,
+        roughness: 0.8,
+        metalness: 0,
+      })
+    );
+
+    mesh.position.set(piece.x, height / 2, piece.z);
+    mesh.castShadow = true;
+    mesh.receiveShadow = true;
+
+    return mesh;
+  }
+
+  createFallbackDecor(piece, fallback, definition) {
+    const height = piece.height ?? definition.footprint?.height ?? 0.35;
+    const mesh = new THREE.Mesh(
+      new THREE.BoxGeometry(piece.w ?? 1, height, piece.d ?? 1),
+      new THREE.MeshStandardMaterial({
+        color: fallback.color ?? 0x5a5f5c,
+        roughness: 0.85,
+        metalness: 0,
+      })
+    );
+
+    mesh.position.set(piece.x, height / 2, piece.z);
+    mesh.rotation.y = piece.rotationY ?? 0;
+    mesh.castShadow = true;
+    mesh.receiveShadow = true;
+
+    return mesh;
+  }
+
+  createFallbackDoorway(piece, fallback) {
+    const group = new THREE.Group();
+    const width = Math.max(piece.w, piece.d);
+    const thickness = Math.min(piece.w, piece.d);
+    const height = piece.height ?? 1.65;
+
+    const frameMaterial = new THREE.MeshStandardMaterial({
+      color: fallback.color ?? 0x20262a,
+      roughness: 0.75,
+      metalness: 0,
+    });
+
+    const accentMaterial = new THREE.MeshStandardMaterial({
+      color: fallback.accent ?? 0x464b53,
+      roughness: 0.7,
+      metalness: 0,
+    });
+
+    const postSize = Math.max(0.12, thickness * 0.45);
+    const span = width - postSize;
+
+    const leftPost = new THREE.Mesh(
+      new THREE.BoxGeometry(postSize, height, thickness),
+      frameMaterial
+    );
+    const rightPost = leftPost.clone();
+    const lintel = new THREE.Mesh(
+      new THREE.BoxGeometry(width, 0.2, thickness),
+      accentMaterial
+    );
+
+    leftPost.position.set(-span / 2, height / 2, 0);
+    rightPost.position.set(span / 2, height / 2, 0);
+    lintel.position.set(0, height - 0.1, 0);
+
+    leftPost.castShadow = true;
+    leftPost.receiveShadow = true;
+    rightPost.castShadow = true;
+    rightPost.receiveShadow = true;
+    lintel.castShadow = true;
+    lintel.receiveShadow = true;
+
+    group.add(leftPost);
+    group.add(rightPost);
+    group.add(lintel);
+
+    group.position.set(piece.x, 0, piece.z);
+    group.rotation.y = this.getModuleRotationY(piece, {
+      placementMode: "linear",
+      fallback: { kind: "doorway" },
+    });
+
+    return group;
+  }
+
+  getModuleRotationY(piece, definition) {
+    if (piece.absoluteRotationY !== undefined) {
+      return piece.absoluteRotationY;
+    }
+
+    const baseRotation = piece.rotationY ?? 0;
+
+    if (definition.placementMode === "linear" || definition.fallback?.kind === "doorway") {
+      return baseRotation + (piece.w >= piece.d ? 0 : Math.PI / 2);
+    }
+
+    return baseRotation;
+  }
+
+  getScaleForDefinition(piece, definition, sourceSize) {
+    if (definition.preserveOriginalScale) {
+      return new THREE.Vector3(1, 1, 1);
+    }
+
+    const safeSize = {
+      x: Math.max(sourceSize.x, 0.0001),
+      y: Math.max(sourceSize.y, 0.0001),
+      z: Math.max(sourceSize.z, 0.0001),
+    };
+
+    switch (definition.placementMode) {
+      case "grid":
+      case "single":
+        return new THREE.Vector3(
+          piece.w / safeSize.x,
+          (piece.height ?? definition.footprint?.height ?? safeSize.y) / safeSize.y,
+          piece.d / safeSize.z
+        );
+
+      case "linear": {
+        const length = Math.max(piece.w, piece.d);
+        const thickness = Math.min(piece.w, piece.d);
+
+        return new THREE.Vector3(
+          length / safeSize.x,
+          (piece.height ?? definition.footprint?.height ?? safeSize.y) / safeSize.y,
+          thickness / safeSize.z
+        );
+      }
+
+      default:
+        return new THREE.Vector3(1, 1, 1);
+    }
+  }
+
+  blocksSight(definition) {
+    const kind = definition.fallback?.kind;
+    return kind === "wall" || kind === "doorway" || kind === "obstacle";
+  }
+
+  prepareAsset(root) {
+    root.traverse((node) => {
+      if (!node.isMesh) return;
+
+      node.castShadow = true;
+      node.receiveShadow = true;
+
+      if (node.material?.map) {
+        node.material.map.colorSpace = THREE.SRGBColorSpace;
+      }
+
+      if (node.material?.isMeshStandardMaterial || node.material?.isMeshPhysicalMaterial) {
+        node.material.metalness = 0;
+        node.material.roughness = Math.max(node.material.roughness ?? 1, 0.72);
+        node.material.needsUpdate = true;
+      }
+    });
+  }
+
+  measureAsset(root) {
+    const box = new THREE.Box3().setFromObject(root);
+    const size = new THREE.Vector3();
+    const center = new THREE.Vector3();
+
+    box.getSize(size);
+    box.getCenter(center);
+
+    return {
+      size,
+      center,
+      min: box.min.clone(),
+    };
+  }
+
+  logMissingAsset(definition, error) {
+    if (this.warnedAssets.has(definition.assetPath)) return;
+
+    this.warnedAssets.add(definition.assetPath);
+    console.warn("environmentAssetFallback", {
+      assetPath: definition.assetPath,
+      error: error?.message ?? error,
+    });
+
+    if (typeof this.scene.addLog === "function") {
+      this.scene.addLog(`Fallback visual para ${definition.id}.`);
+    }
+  }
+}

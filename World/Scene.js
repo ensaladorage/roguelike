@@ -1,4 +1,4 @@
-﻿import * as THREE from "three";
+import * as THREE from "three";
 import { GLTFLoader } from "three/addons/loaders/GLTFLoader.js";
 import * as SkeletonUtils from "three/addons/utils/SkeletonUtils.js";
 import { EnemyAI } from "./EnemyAI.js";
@@ -11,146 +11,15 @@ import { SFX } from "../UI/SFX.js";
 import { ChestManager } from "./Chest.js";
 import { CoinManager } from "./Coin.js";
 import { Environment } from "./Environment.js";
+import { HANDCRAFTED_LEVELS } from "../Data/handcraftedLevels.js";
+import { ROOM_TEMPLATES } from "../Data/roomTemplates.js";
+import { RoomTemplateLibrary } from "./RoomTemplateLibrary.js";
+import { LevelBuilder } from "./LevelBuilder.js";
+import { ModularTileBuilder } from "./ModularTileBuilder.js";
 
 const PLAYER_GROUND_Y = 0;
 const PLAYER_COLLISION_RADIUS = 0.32;
-const WALL_HEIGHT = 1.65;
-const WALL_THICKNESS = 0.34;
-const FLOOR_Y = 0.01;
 const NAV_GRID_SIZE = 0.7;
-
-const LEVELS = [
-  {
-    name: "Nivel 1",
-    playerStart: { x: 0, z: 17.2 },
-    floorSize: 48,
-    floorPatches: [
-      { x: 0, z: 14.5, w: 4, d: 11, color: 0x27312f },
-      { x: 0, z: -15.55, w: 4, d: 13.1, color: 0x27312f },
-      { x: -11.25, z: 0, w: 1.5, d: 18, color: 0x303735 },
-      { x: -0.15, z: 0, w: 6.7, d: 18, color: 0x303735 },
-      { x: 11.1, z: 0, w: 1.8, d: 18, color: 0x303735 },
-      { x: -7, z: -4.25, w: 7, d: 9.5, color: 0x303735 },
-      { x: -7, z: 7.75, w: 7, d: 2.5, color: 0x303735 },
-      { x: 6.7, z: -8.1, w: 7, d: 1.8, color: 0x303735 },
-      { x: 6.7, z: -0.05, w: 7, d: 4.3, color: 0x303735 },
-      { x: 6.7, z: 8.05, w: 7, d: 1.9, color: 0x303735 },
-      { x: -7, z: 3.5, w: 7, d: 6, color: 0x3a3428 },
-      { x: 6.7, z: -4.7, w: 7, d: 5, color: 0x2c3a3d },
-      { x: 6.7, z: 4.6, w: 7, d: 5, color: 0x35383f },
-    ],
-    walkableAreas: [
-      { x: 0, z: 14, w: 4, d: 12 },
-      { x: 0, z: 0, w: 24, d: 18 },
-      { x: 0, z: -15.1, w: 4, d: 14 },
-    ],
-    rooms: [
-      {
-        x: -7,
-        z: 3.5,
-        w: 7,
-        d: 6,
-        door: { side: "east", offset: 0, width: 2.3 },
-      },
-      {
-        x: 6.7,
-        z: -4.7,
-        w: 7,
-        d: 5,
-        door: { side: "west", offset: 0, width: 2.1 },
-      },
-      {
-        x: 6.7,
-        z: 4.6,
-        w: 7,
-        d: 5,
-        door: { side: "west", offset: 0, width: 2.1 },
-      },
-    ],
-    outerWalls: [
-      { x: -2.17, z: 14, w: WALL_THICKNESS, d: 12 },
-      { x: 2.17, z: 14, w: WALL_THICKNESS, d: 12 },
-      { x: 0, z: 20.17, w: 4.34, d: WALL_THICKNESS },
-      { x: -12.17, z: 0, w: WALL_THICKNESS, d: 18.34 },
-      { x: 12.17, z: 0, w: WALL_THICKNESS, d: 18.34 },
-      { x: -7, z: 9.17, w: 10, d: WALL_THICKNESS },
-      { x: 7, z: 9.17, w: 10, d: WALL_THICKNESS },
-      { x: -7, z: -9.17, w: 10, d: WALL_THICKNESS },
-      { x: 7, z: -9.17, w: 10, d: WALL_THICKNESS },
-      { x: -2.17, z: -15.1, w: WALL_THICKNESS, d: 14 },
-      { x: 2.17, z: -15.1, w: WALL_THICKNESS, d: 14 },
-      { x: 0, z: -22.27, w: 4.34, d: WALL_THICKNESS },
-    ],
-    chests: [
-      { x: -9.7, z: 2.2, rotationY: Math.PI / 2, gold: 18 },
-      { x: -6.1, z: 5.7, rotationY: Math.PI, gold: 25 },
-      { x: 5.2, z: -6.4, rotationY: 0, gold: 32 },
-      { x: 9.4, z: -4.0, rotationY: -Math.PI / 2, gold: 22 },
-      { x: 9.4, z: 3.6, rotationY: -Math.PI / 2, gold: 28 },
-      { x: 6.3, z: 6.3, rotationY: Math.PI, gold: 36 },
-    ],
-    enemies: [
-      {
-        x: -1.7,
-        z: 7.7,
-        coinDrop: { count: 5, value: 4, radius: 0.58 },
-        patrol: [
-          { x: -1.7, z: 7.7 },
-          { x: -3.6, z: 3.5 },
-          { x: -7.3, z: 3.2 },
-          { x: -3.6, z: 3.5 },
-          { x: -1.7, z: 1.0 },
-          { x: 2.4, z: 1.0 },
-          { x: 2.4, z: 7.7 },
-        ],
-      },
-      {
-        x: 2.4,
-        z: -8.0,
-        coinDrop: { count: 6, value: 3, radius: 0.65 },
-        patrol: [
-          { x: 2.4, z: -8.0 },
-          { x: 10.8, z: -8.0 },
-          { x: 10.8, z: -1.6 },
-          { x: 2.4, z: -1.6 },
-          { x: 2.4, z: -4.7 },
-          { x: 3.1, z: -4.7 },
-          { x: 6.9, z: -4.8 },
-          { x: 3.1, z: -4.7 },
-          { x: 2.4, z: -1.6 },
-          { x: 2.4, z: 4.6 },
-          { x: 3.1, z: 4.6 },
-          { x: 7.2, z: 4.7 },
-          { x: 3.1, z: 4.6 },
-          { x: 2.4, z: 4.6 },
-          { x: 2.4, z: -8.0 },
-        ],
-      },
-    ],
-    exit: { x: 0, z: -20.45, nextLevel: 1 },
-  },
-  {
-    name: "Nivel 2",
-    playerStart: { x: 0, z: 13.8 },
-    floorSize: 48,
-    floorPatches: [
-      { x: 0, z: 0, w: 22, d: 32, color: 0x2d3536 },
-    ],
-    walkableAreas: [
-      { x: 0, z: 0, w: 22, d: 32 },
-    ],
-    rooms: [],
-    outerWalls: [
-      { x: -11.17, z: 0, w: WALL_THICKNESS, d: 32.34 },
-      { x: 11.17, z: 0, w: WALL_THICKNESS, d: 32.34 },
-      { x: 0, z: 16.17, w: 22.34, d: WALL_THICKNESS },
-      { x: 0, z: -16.17, w: 22.34, d: WALL_THICKNESS },
-    ],
-    chests: [],
-    enemies: [],
-    exit: { x: 0, z: -14.1, nextLevel: null, disabled: true },
-  },
-];
 
 export class GameScene {
   constructor(container) {
@@ -163,117 +32,12 @@ export class GameScene {
     this.chestManager = new ChestManager(this);
     this.coinManager = new CoinManager(this);
     this.models = {};
-    this.loadModels = async () => {
-      const loader = new GLTFLoader();
-      const texLoader = new THREE.TextureLoader();
-
-      const modelPath = (name) => `Assets/Models/${name}.glb`;
-      const texPathPrimary = (name) => `Assets/Models/Textures/${name}.png`;
-      const texPathFallback = (name) => `Assets/Textures/${name}.png`;
-
-      const loadTextureAsync = (url) =>
-        new Promise((resolve, reject) => {
-          texLoader.load(url, (tex) => resolve(tex), undefined, (err) => reject(err));
-        });
-
-      // try to load texture from primary (moved) location first, fallback if missing
-      const loadTextureWithFallback = async (name) => {
-        try {
-          return await loadTextureAsync(texPathPrimary(name));
-        } catch (e) {
-          try {
-            return await loadTextureAsync(texPathFallback(name));
-          } catch (e2) {
-            throw e2;
-          }
-        }
-      };
-
-      const [playerGltf, enemyGltf, chestGltf, colormap, variationA] =
-        await Promise.all([
-          loader.loadAsync(modelPath("character-human")),
-          loader.loadAsync(modelPath("character-orc")),
-          loader.loadAsync(modelPath("chest")),
-          loadTextureWithFallback("colormap"),
-          loadTextureWithFallback("variation-a"),
-        ]);
-
-      // ensure textures are configured for glTF (no flipY)
-      try {
-        colormap.flipY = false;
-        colormap.encoding = THREE.sRGBEncoding;
-      } catch (e) {}
-      try {
-        variationA.flipY = false;
-        variationA.encoding = THREE.sRGBEncoding;
-      } catch (e) {}
-
-      // apply a default color map to loaded models (colormap)
-      const applyTexture = (gltf, tex) => {
-        if (!gltf || !gltf.scene) return;
-        gltf.scene.traverse((node) => {
-          if (node.isMesh && node.material) {
-            const apply = (m) => {
-              try {
-                if (m.map !== tex) {
-                  m.map = tex;
-                }
-                if (m.map) m.map.needsUpdate = true;
-                m.needsUpdate = true;
-              } catch (e) {
-                // ignore individual material failures
-              }
-            };
-
-            if (Array.isArray(node.material)) {
-              node.material.forEach(apply);
-            } else {
-              apply(node.material);
-            }
-          }
-        });
-      };
-
-        applyTexture(playerGltf, colormap);
-      applyTexture(enemyGltf, colormap);
-      applyTexture(chestGltf, colormap);
-
-      // ensure model instances cast/receive shadows when cloned
-      const prepareForScene = (gltf) => {
-        if (!gltf || !gltf.scene) return;
-        gltf.scene.traverse((n) => {
-          if (n.isMesh) {
-            n.castShadow = true;
-            n.receiveShadow = true;
-            if (n.material) {
-              if (n.material.isMeshStandardMaterial || n.material.isMeshPhysicalMaterial) {
-                // Ensure texture uses sRGB color space
-                if (n.material.map) {
-                  n.material.map.colorSpace = THREE.SRGBColorSpace;
-                }
-                // Optimize material properties (avoid overly glossy/rough)
-                n.material.metalness = 0;
-                n.material.roughness = Math.max(n.material.roughness ?? 1, 0.7);
-                n.material.needsUpdate = true;
-              }
-            }
-          }
-        });
-      };
-
-      prepareForScene(playerGltf);
-      prepareForScene(enemyGltf);
-      prepareForScene(chestGltf);
-
-      this.models.player = playerGltf;
-      this.models.enemy = enemyGltf;
-      this.models.chest = chestGltf;
-      this.models.textures = {
-        colormap,
-        "variation-a": variationA,
-      };
-      this.models.loaded = true;
-    };
+    this.levelDefinitions = HANDCRAFTED_LEVELS;
+    this.roomTemplateLibrary = new RoomTemplateLibrary(ROOM_TEMPLATES);
+    this.levelBuilder = new LevelBuilder({
+      roomTemplateLibrary: this.roomTemplateLibrary,
+    });
+    this.modularTileBuilder = new ModularTileBuilder(this);
 
     this.camera = new THREE.PerspectiveCamera(
       45,
@@ -281,7 +45,6 @@ export class GameScene {
       0.1,
       100
     );
-
     this.camera.position.set(7.5, 8.5, 9.5);
 
     this.renderer = new THREE.WebGLRenderer({ antialias: true });
@@ -289,16 +52,13 @@ export class GameScene {
     this.renderer.setPixelRatio(window.devicePixelRatio || 1);
     this.renderer.shadowMap.enabled = true;
     this.renderer.shadowMap.type = THREE.PCFSoftShadowMap;
-    // Color space & tone mapping (CRUCIAL for proper texture display)
     this.renderer.outputColorSpace = THREE.SRGBColorSpace;
     this.renderer.toneMapping = THREE.ACESFilmicToneMapping;
     this.renderer.toneMappingExposure = 1;
-
     container.appendChild(this.renderer.domElement);
 
     this.clock = new THREE.Clock();
     this.floorSize = 48;
-
     this.levelIndex = 0;
     this.levelGroup = new THREE.Group();
     this.scene.add(this.levelGroup);
@@ -313,7 +73,6 @@ export class GameScene {
     this.navBounds = null;
     this.exitButton = null;
     this.clickEffects = [];
-
     this.feedbackEffects = [];
 
     this.hud = new HUD();
@@ -328,11 +87,13 @@ export class GameScene {
     this.addFloor();
 
     try {
-      await this.loadModels();
+      await Promise.all([
+        this.loadCharacterModels(),
+        this.preloadEnvironmentTileSets(),
+      ]);
     } catch (err) {
-      console.error("model load failed", err);
-      this.addLog("Error cargando modelos: " + (err.message || err));
-      this.models.loaded = false;
+      console.error("initial asset load failed", err);
+      this.addLog("Assets de entorno o personajes con fallback activo.");
     }
 
     try {
@@ -361,33 +122,161 @@ export class GameScene {
     });
 
     window.addEventListener("resize", () => this.onResize());
-
     this.animate();
   }
 
-  addFloor() {
-    const geo = new THREE.PlaneGeometry(
-      this.floorSize,
-      this.floorSize
-    );
+  async preloadEnvironmentTileSets() {
+    const tileSetIds = [
+      ...new Set(
+        this.levelDefinitions.map(
+          (level) => level.tileSetId ?? "scenarioDefault"
+        )
+      ),
+    ];
 
-    const mat = new THREE.MeshStandardMaterial({
-      color: 0x111317,
-      roughness: 0.95,
-      metalness: 0,
+    await Promise.all(
+      tileSetIds.map((tileSetId) =>
+        this.modularTileBuilder.preloadTileSet(tileSetId)
+      )
+    );
+  }
+
+  async loadCharacterModels() {
+    const loader = new GLTFLoader();
+    const texLoader = new THREE.TextureLoader();
+
+    const modelPath = (name) => `Assets/Models/${name}.glb`;
+    const texPathPrimary = (name) => `Assets/Models/Textures/${name}.png`;
+    const texPathFallback = (name) => `Assets/Textures/${name}.png`;
+
+    const loadTextureAsync = (url) =>
+      new Promise((resolve, reject) => {
+        texLoader.load(url, (tex) => resolve(tex), undefined, (err) => reject(err));
+      });
+
+    const loadTextureWithFallback = async (name) => {
+      try {
+        return await loadTextureAsync(texPathPrimary(name));
+      } catch (primaryError) {
+        try {
+          return await loadTextureAsync(texPathFallback(name));
+        } catch (fallbackError) {
+          throw fallbackError;
+        }
+      }
+    };
+
+    const [playerGltf, enemyGltf, chestGltf, colormap, variationA] =
+      await Promise.all([
+        loader.loadAsync(modelPath("character-human")),
+        loader.loadAsync(modelPath("character-orc")),
+        loader.loadAsync(modelPath("chest")),
+        loadTextureWithFallback("colormap"),
+        loadTextureWithFallback("variation-a"),
+      ]);
+
+    try {
+      colormap.flipY = false;
+      colormap.encoding = THREE.sRGBEncoding;
+    } catch (error) {}
+
+    try {
+      variationA.flipY = false;
+      variationA.encoding = THREE.sRGBEncoding;
+    } catch (error) {}
+
+    const applyTexture = (gltf, tex) => {
+      if (!gltf?.scene) return;
+
+      gltf.scene.traverse((node) => {
+        if (!node.isMesh || !node.material) return;
+
+        const applyMaterial = (material) => {
+          try {
+            if (material.map !== tex) {
+              material.map = tex;
+            }
+
+            if (material.map) material.map.needsUpdate = true;
+            material.needsUpdate = true;
+          } catch (error) {}
+        };
+
+        if (Array.isArray(node.material)) {
+          node.material.forEach(applyMaterial);
+        } else {
+          applyMaterial(node.material);
+        }
+      });
+    };
+
+    applyTexture(playerGltf, colormap);
+    applyTexture(enemyGltf, colormap);
+    applyTexture(chestGltf, colormap);
+
+    const prepareForScene = (gltf) => {
+      if (!gltf?.scene) return;
+
+      gltf.scene.traverse((node) => {
+        if (!node.isMesh) return;
+
+        node.castShadow = true;
+        node.receiveShadow = true;
+
+        if (node.material?.map) {
+          node.material.map.colorSpace = THREE.SRGBColorSpace;
+        }
+
+        if (node.material?.isMeshStandardMaterial || node.material?.isMeshPhysicalMaterial) {
+          node.material.metalness = 0;
+          node.material.roughness = Math.max(node.material.roughness ?? 1, 0.7);
+          node.material.needsUpdate = true;
+        }
+      });
+    };
+
+    prepareForScene(playerGltf);
+    prepareForScene(enemyGltf);
+    prepareForScene(chestGltf);
+
+    this.models.player = playerGltf;
+    this.models.enemy = enemyGltf;
+    this.models.chest = chestGltf;
+    this.models.textures = {
+      colormap,
+      "variation-a": variationA,
+    };
+    this.models.loaded = true;
+  }
+
+  addFloor() {
+    const material = new THREE.MeshBasicMaterial({
+      color: 0x000000,
+      transparent: true,
+      opacity: 0,
+      depthWrite: false,
+      colorWrite: false,
     });
 
-    this.floor = new THREE.Mesh(geo, mat);
+    this.floor = new THREE.Mesh(
+      new THREE.PlaneGeometry(this.floorSize, this.floorSize),
+      material
+    );
     this.floor.rotation.x = -Math.PI / 2;
-    this.floor.receiveShadow = true;
-
+    this.floor.receiveShadow = false;
     this.scene.add(this.floor);
   }
 
-  async createPlayer() {
-    let playerModel;
+  updateFloorPlane(size) {
+    this.floorSize = size;
+    this.floor.geometry.dispose();
+    this.floor.geometry = new THREE.PlaneGeometry(size, size);
+  }
 
-    if (this.models && this.models.loaded && this.models.player) {
+  async createPlayer() {
+    let playerModel = null;
+
+    if (this.models?.loaded && this.models.player) {
       try {
         playerModel = SkeletonUtils.clone(this.models.player.scene);
         playerModel.traverse((child) => {
@@ -396,22 +285,19 @@ export class GameScene {
           child.castShadow = true;
           child.receiveShadow = true;
 
-          if (child.material) {
-            // Ensure texture uses sRGB color space
-            if (child.material.map) {
-              child.material.map.colorSpace = THREE.SRGBColorSpace;
-            }
-            // Optimize material
-            if (child.material.isMeshStandardMaterial || child.material.isMeshPhysicalMaterial) {
-              child.material.metalness = 0;
-              child.material.roughness = Math.max(child.material.roughness ?? 1, 0.7);
-              child.material.needsUpdate = true;
-            }
+          if (child.material?.map) {
+            child.material.map.colorSpace = THREE.SRGBColorSpace;
+          }
+
+          if (child.material?.isMeshStandardMaterial || child.material?.isMeshPhysicalMaterial) {
+            child.material.metalness = 0;
+            child.material.roughness = Math.max(child.material.roughness ?? 1, 0.7);
+            child.material.needsUpdate = true;
           }
         });
-        playerModel.scale.set(1.2, 1.2, 1.2);
-      } catch (e) {
-        console.warn("Failed to clone player model:", e);
+        playerModel.scale.set(1, 1, 1);
+      } catch (error) {
+        console.warn("Failed to clone player model:", error);
       }
     }
 
@@ -424,7 +310,6 @@ export class GameScene {
       playerModel.receiveShadow = true;
     }
 
-    // Create root group for player (allows rotation, weapons, effects, animations, offsets)
     const playerRoot = new THREE.Group();
     playerRoot.position.y = PLAYER_GROUND_Y;
     playerRoot.add(playerModel);
@@ -434,11 +319,13 @@ export class GameScene {
   }
 
   loadLevel(levelIndex) {
-    const level = LEVELS[levelIndex];
+    const definition = this.levelDefinitions[levelIndex];
+    if (!definition) return;
+
+    const level = this.levelBuilder.build(definition);
     if (!level) return;
 
     this.levelIndex = levelIndex;
-    this.floorSize = level.floorSize;
     this.levelGroup.clear();
     this.enemy = null;
     this.enemies = [];
@@ -453,6 +340,7 @@ export class GameScene {
     this.clickEffects = [];
     this.feedbackEffects = [];
 
+    this.updateFloorPlane(level.floorSize ?? 48);
     this.addLevelGeometry(level);
     this.chestManager.load(level);
     this.addLevelEnemies(level);
@@ -465,7 +353,7 @@ export class GameScene {
   }
 
   hasLevel(levelIndex) {
-    return Boolean(LEVELS[levelIndex]);
+    return Boolean(this.levelDefinitions[levelIndex]);
   }
 
   getNextLevelIndex() {
@@ -473,11 +361,7 @@ export class GameScene {
   }
 
   placePlayer(position) {
-    this.player.model.position.set(
-      position.x,
-      PLAYER_GROUND_Y,
-      position.z
-    );
+    this.player.model.position.set(position.x, PLAYER_GROUND_Y, position.z);
     this.player.groundY = PLAYER_GROUND_Y;
     this.player.model.visible = true;
     this.player.currentEnemy = null;
@@ -485,165 +369,16 @@ export class GameScene {
   }
 
   addLevelGeometry(level) {
-    for (const patch of level.floorPatches) {
-      this.createFloorPatch(patch);
-    }
-
-    const walkableAreas = level.walkableAreas ?? level.floorPatches;
-
-    for (const area of walkableAreas) {
-      this.walkableAreas.push(area);
-    }
-
+    this.walkableAreas = (level.walkableAreas ?? []).map((area) => ({ ...area }));
+    this.collisionWalls = (level.collisionWalls ?? []).map((wall) => ({ ...wall }));
     this.navBounds = this.calculateNavBounds(this.walkableAreas);
 
-    for (const wall of level.outerWalls) {
-      this.createWall(wall);
-    }
+    const environmentBuild = this.modularTileBuilder.buildLevel(level.environment);
+    this.wallMeshes = environmentBuild.wallMeshes;
 
-    for (const room of level.rooms) {
-      this.createRoomWalls(room);
-    }
-
-    if (level.exit) {
+    if (level.exit?.x !== undefined && level.exit?.z !== undefined) {
       this.addExitButton(level.exit);
     }
-  }
-
-  createFloorPatch(area) {
-    const geo = new THREE.PlaneGeometry(area.w, area.d);
-    const mat = new THREE.MeshStandardMaterial({
-      color: area.color,
-      roughness: 0.9,
-      metalness: 0,
-    });
-
-    const mesh = new THREE.Mesh(geo, mat);
-    mesh.rotation.x = -Math.PI / 2;
-    mesh.position.set(area.x, FLOOR_Y, area.z);
-    mesh.receiveShadow = true;
-
-    this.levelGroup.add(mesh);
-  }
-
-  createRoomWalls(room) {
-    const west = room.x - room.w / 2;
-    const east = room.x + room.w / 2;
-    const north = room.z - room.d / 2;
-    const south = room.z + room.d / 2;
-
-    this.createRoomWallSide(
-      room,
-      "north",
-      room.x,
-      north,
-      room.w,
-      WALL_THICKNESS
-    );
-    this.createRoomWallSide(
-      room,
-      "south",
-      room.x,
-      south,
-      room.w,
-      WALL_THICKNESS
-    );
-    this.createRoomWallSide(
-      room,
-      "west",
-      west,
-      room.z,
-      WALL_THICKNESS,
-      room.d
-    );
-    this.createRoomWallSide(
-      room,
-      "east",
-      east,
-      room.z,
-      WALL_THICKNESS,
-      room.d
-    );
-  }
-
-  createRoomWallSide(room, side, x, z, w, d) {
-    if (room.door.side !== side) {
-      this.createWall({ x, z, w, d });
-      return;
-    }
-
-    if (side === "north" || side === "south") {
-      this.createHorizontalWallWithOpening(room, z);
-      return;
-    }
-
-    this.createVerticalWallWithOpening(room, x);
-  }
-
-  createHorizontalWallWithOpening(room, z) {
-    const wallStart = room.x - room.w / 2;
-    const wallEnd = room.x + room.w / 2;
-    const openingCenter = room.x + room.door.offset;
-    const openingStart = openingCenter - room.door.width / 2;
-    const openingEnd = openingCenter + room.door.width / 2;
-
-    this.createWallFromRange(wallStart, openingStart, z, "horizontal");
-    this.createWallFromRange(openingEnd, wallEnd, z, "horizontal");
-  }
-
-  createVerticalWallWithOpening(room, x) {
-    const wallStart = room.z - room.d / 2;
-    const wallEnd = room.z + room.d / 2;
-    const openingCenter = room.z + room.door.offset;
-    const openingStart = openingCenter - room.door.width / 2;
-    const openingEnd = openingCenter + room.door.width / 2;
-
-    this.createWallFromRange(wallStart, openingStart, x, "vertical");
-    this.createWallFromRange(openingEnd, wallEnd, x, "vertical");
-  }
-
-  createWallFromRange(start, end, fixed, axis) {
-    const length = end - start;
-    if (length <= 0.1) return;
-
-    const center = start + length / 2;
-
-    if (axis === "horizontal") {
-      this.createWall({
-        x: center,
-        z: fixed,
-        w: length,
-        d: WALL_THICKNESS,
-      });
-      return;
-    }
-
-    this.createWall({
-      x: fixed,
-      z: center,
-      w: WALL_THICKNESS,
-      d: length,
-    });
-  }
-
-  createWall(piece) {
-    const mat = new THREE.MeshStandardMaterial({
-      color: 0x15191c,
-      roughness: 0.8,
-    });
-
-    const mesh = new THREE.Mesh(
-      new THREE.BoxGeometry(piece.w, WALL_HEIGHT, piece.d),
-      mat
-    );
-
-    mesh.position.set(piece.x, WALL_HEIGHT / 2, piece.z);
-    mesh.castShadow = true;
-    mesh.receiveShadow = true;
-
-    this.levelGroup.add(mesh);
-    this.collisionWalls.push(piece);
-    this.wallMeshes.push(mesh);
   }
 
   addExitButton(exit) {
@@ -664,7 +399,6 @@ export class GameScene {
       new THREE.CylinderGeometry(0.82, 0.82, 0.08, 32),
       baseMat
     );
-
     base.position.y = 0.04;
     group.add(base);
 
@@ -672,7 +406,6 @@ export class GameScene {
       new THREE.CylinderGeometry(0.55, 0.62, 0.1, 32),
       buttonMat
     );
-
     button.position.y = 0.13;
     group.add(button);
 
@@ -689,16 +422,14 @@ export class GameScene {
   }
 
   addLevelEnemies(level) {
-    this.enemies = level.enemies.map((data) =>
-      this.createEnemy(data)
-    );
-
+    this.enemies = (level.enemies ?? []).map((data) => this.createEnemy(data));
     this.enemy = this.enemies[0] ?? null;
   }
 
   createEnemy(data) {
-    let enemyModel;
-    if (this.models.loaded) {
+    let enemyModel = null;
+
+    if (this.models.loaded && this.models.enemy) {
       enemyModel = SkeletonUtils.clone(this.models.enemy.scene);
       enemyModel.traverse((child) => {
         if (!child.isMesh) return;
@@ -706,20 +437,17 @@ export class GameScene {
         child.castShadow = true;
         child.receiveShadow = true;
 
-        if (child.material) {
-          // Ensure texture uses sRGB color space
-          if (child.material.map) {
-            child.material.map.colorSpace = THREE.SRGBColorSpace;
-          }
-          // Optimize material
-          if (child.material.isMeshStandardMaterial || child.material.isMeshPhysicalMaterial) {
-            child.material.metalness = 0;
-            child.material.roughness = Math.max(child.material.roughness ?? 1, 0.7);
-            child.material.needsUpdate = true;
-          }
+        if (child.material?.map) {
+          child.material.map.colorSpace = THREE.SRGBColorSpace;
+        }
+
+        if (child.material?.isMeshStandardMaterial || child.material?.isMeshPhysicalMaterial) {
+          child.material.metalness = 0;
+          child.material.roughness = Math.max(child.material.roughness ?? 1, 0.7);
+          child.material.needsUpdate = true;
         }
       });
-      enemyModel.scale.set(1.2, 1.2, 1.2);
+      enemyModel.scale.set(1, 1, 1);
     } else {
       enemyModel = new THREE.Mesh(
         new THREE.BoxGeometry(0.8, 1.2, 0.8),
@@ -729,13 +457,12 @@ export class GameScene {
       enemyModel.receiveShadow = true;
     }
 
-    // Create root group for enemy (allows rotation, effects, animations, offsets)
     const enemyRoot = new THREE.Group();
     enemyRoot.position.set(data.x, 0, data.z);
     enemyRoot.add(enemyModel);
     this.levelGroup.add(enemyRoot);
 
-    const patrolPoints = data.patrol.map(
+    const patrolPoints = (data.patrol ?? [{ x: data.x, z: data.z }]).map(
       (point) => new THREE.Vector3(point.x, 0.6, point.z)
     );
 
@@ -745,7 +472,7 @@ export class GameScene {
   }
 
   createClickFeedback(position) {
-    const mat = new THREE.MeshBasicMaterial({
+    const material = new THREE.MeshBasicMaterial({
       color: 0x63d982,
       transparent: true,
       opacity: 0.9,
@@ -756,7 +483,7 @@ export class GameScene {
 
     const mesh = new THREE.Mesh(
       new THREE.RingGeometry(0.32, 0.39, 48),
-      mat
+      material
     );
 
     mesh.rotation.x = -Math.PI / 2;
@@ -766,7 +493,7 @@ export class GameScene {
     this.levelGroup.add(mesh);
     this.clickEffects.push({
       mesh,
-      material: mat,
+      material,
       elapsed: 0,
       duration: 0.75,
     });
@@ -824,9 +551,7 @@ export class GameScene {
 
       if (current.x === goal.x && current.z === goal.z) {
         return this.simplifyNavigationPath(
-          this.reconstructNavigationPath(cameFrom, current).concat(
-            to.clone()
-          )
+          this.reconstructNavigationPath(cameFrom, current).concat(to.clone())
         );
       }
 
@@ -940,7 +665,6 @@ export class GameScene {
   navHeuristic(a, b) {
     const dx = Math.abs(a.x - b.x);
     const dz = Math.abs(a.z - b.z);
-
     return Math.hypot(dx, dz);
   }
 
@@ -989,11 +713,7 @@ export class GameScene {
 
   getWalkableTarget(point) {
     const target = { x: point.x, z: point.z };
-
-    if (!this.isWalkablePosition(target, PLAYER_COLLISION_RADIUS)) {
-      return null;
-    }
-
+    if (!this.isWalkablePosition(target, PLAYER_COLLISION_RADIUS)) return null;
     return target;
   }
 
@@ -1172,7 +892,6 @@ export class GameScene {
     if (this.coinManager) this.coinManager.update(delta);
 
     const previousPlayerPosition = this.player.model.position.clone();
-
     this.player.update(delta);
     this.applyPlayerWorldCollision(previousPlayerPosition);
 
@@ -1183,15 +902,11 @@ export class GameScene {
 
     this.handleGameEvents(events);
     this.chestManager.update();
-
     this.checkExitButton();
-
     this.updateClickEffects(delta);
     this.updateFeedbackEffects(delta);
-
     this.updateCamera(delta);
     this.player.updateOcclusionMarker(this.camera, this.wallMeshes);
-
     this.renderer.render(this.scene, this.camera);
 
     requestAnimationFrame(() => this.animate());
@@ -1215,10 +930,7 @@ export class GameScene {
     this.addLog("Salida activada.");
     console.log("levelExitActivated", {
       from: this.levelIndex + 1,
-      to:
-        this.exitButton.nextLevel === null
-          ? null
-          : this.exitButton.nextLevel + 1,
+      to: this.exitButton.nextLevel === null ? null : this.exitButton.nextLevel + 1,
     });
 
     this.gameManager.activateLevelExit();
@@ -1239,7 +951,6 @@ export class GameScene {
       effect.mesh.removeFromParent();
       effect.material.dispose();
       effect.mesh.geometry.dispose();
-
       return false;
     });
   }
@@ -1338,10 +1049,7 @@ export class GameScene {
     this.feedbackEffects = this.feedbackEffects.filter((effect) => {
       effect.elapsed += delta;
 
-      const t = Math.min(
-        1,
-        effect.elapsed / effect.duration
-      );
+      const t = Math.min(1, effect.elapsed / effect.duration);
 
       effect.model.traverse((child) => {
         if (!child.isMesh || !child.material) return;
@@ -1388,14 +1096,8 @@ export class GameScene {
   }
 
   onResize() {
-    this.camera.aspect =
-      window.innerWidth / window.innerHeight;
-
+    this.camera.aspect = window.innerWidth / window.innerHeight;
     this.camera.updateProjectionMatrix();
-
-    this.renderer.setSize(
-      window.innerWidth,
-      window.innerHeight
-    );
+    this.renderer.setSize(window.innerWidth, window.innerHeight);
   }
 }

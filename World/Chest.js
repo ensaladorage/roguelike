@@ -20,9 +20,7 @@ export class ChestManager {
 
       model.position.set(data.x, 0, data.z);
       model.rotation.y = data.rotationY;
-      model.scale.set(1.6, 1.6, 1.6
-      
-      );
+      model.scale.set(1, 1, 1);
 
       this.scene.levelGroup.add(model);
 

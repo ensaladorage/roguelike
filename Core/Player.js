@@ -116,7 +116,7 @@ export class Player {
 
     return this.occlusionRaycaster.intersectObjects(
       wallMeshes,
-      false
+      true
     ).length > 0;
   }
 
