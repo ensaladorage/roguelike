@@ -1190,6 +1190,7 @@ export class GameScene {
     this.updateFeedbackEffects(delta);
 
     this.updateCamera(delta);
+    this.player.updateOcclusionMarker(this.camera, this.wallMeshes);
 
     this.renderer.render(this.scene, this.camera);
 
@@ -1396,11 +1397,5 @@ export class GameScene {
       window.innerWidth,
       window.innerHeight
     );
-    if (this.composer) {
-      this.composer.setSize(window.innerWidth, window.innerHeight);
-      if (this.fxaaPass && this.fxaaPass.material && this.fxaaPass.material.uniforms && this.fxaaPass.material.uniforms.resolution) {
-        this.fxaaPass.material.uniforms.resolution.value.set(1 / window.innerWidth, 1 / window.innerHeight);
-      }
-    }
   }
 }

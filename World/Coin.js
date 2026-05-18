@@ -22,7 +22,6 @@ export class CoinManager {
     this.raycaster = new THREE.Raycaster();
     this.rayDirection = new THREE.Vector3();
     this.coinWorldPosition = new THREE.Vector3();
-    this.parentWorldQuaternion = new THREE.Quaternion();
 
     this.loadModel();
   }
@@ -99,7 +98,7 @@ export class CoinManager {
     group.name = "coinOcclusionMarker";
     group.visible = false;
     group.renderOrder = 80;
-    group.position.y = 0.42;
+    group.position.y = 0.02;
 
     const ring = new THREE.Mesh(
       new THREE.RingGeometry(
@@ -116,6 +115,8 @@ export class CoinManager {
         side: THREE.DoubleSide,
       })
     );
+    ring.rotation.x = -Math.PI / 2;
+    ring.renderOrder = 80;
     ring.userData.ignoreFlash = true;
 
     group.add(ring);
@@ -328,12 +329,6 @@ export class CoinManager {
 
     const isBehindWall = this.raycaster.intersectObjects(this.scene.wallMeshes, false).length > 0;
     marker.visible = isBehindWall;
-
-    if (isBehindWall) {
-      coin.model.getWorldQuaternion(this.parentWorldQuaternion);
-      marker.quaternion.copy(this.parentWorldQuaternion.invert());
-      marker.quaternion.multiply(this.scene.camera.quaternion);
-    }
   }
 
   collectCoin(coin) {

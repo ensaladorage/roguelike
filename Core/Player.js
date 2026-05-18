@@ -7,6 +7,10 @@ export const PLAYER_STATES = {
   DEAD: "dead",
 };
 
+const OCCLUSION_RING_INNER_RADIUS = 0.42;
+const OCCLUSION_RING_OUTER_RADIUS = 0.5;
+const OCCLUSION_RING_Y = 0.06;
+
 export class Player {
   constructor(model) {
     this.model = model;
@@ -36,6 +40,84 @@ export class Player {
     // Guardamos la rotación visual aparte para evitar
     // que lookAt() rompa la dirección del personaje.
     this.visualRotation = 0;
+
+    this.occlusionRaycaster = new THREE.Raycaster();
+    this.occlusionDirection = new THREE.Vector3();
+    this.occlusionSample = new THREE.Vector3();
+    this.occlusionMarker = this.createOcclusionMarker();
+    this.model.add(this.occlusionMarker);
+  }
+
+  createOcclusionMarker() {
+    const marker = new THREE.Group();
+    marker.name = "playerOcclusionMarker";
+    marker.visible = false;
+    marker.position.y = OCCLUSION_RING_Y;
+    marker.renderOrder = 90;
+
+    const ring = new THREE.Mesh(
+      new THREE.RingGeometry(
+        OCCLUSION_RING_INNER_RADIUS,
+        OCCLUSION_RING_OUTER_RADIUS,
+        64
+      ),
+      new THREE.MeshBasicMaterial({
+        color: 0x56c271,
+        transparent: true,
+        opacity: 0.92,
+        depthTest: false,
+        depthWrite: false,
+        side: THREE.DoubleSide,
+      })
+    );
+
+    ring.rotation.x = -Math.PI / 2;
+    ring.renderOrder = 90;
+    ring.userData.ignoreFlash = true;
+    marker.add(ring);
+
+    return marker;
+  }
+
+  updateOcclusionMarker(camera, wallMeshes = []) {
+    if (
+      !this.occlusionMarker ||
+      !this.model.visible ||
+      !camera ||
+      wallMeshes.length === 0
+    ) {
+      if (this.occlusionMarker) this.occlusionMarker.visible = false;
+      return;
+    }
+
+    const coveredSamples = [
+      this.isOcclusionSampleCovered(camera, wallMeshes, 0.2),
+      this.isOcclusionSampleCovered(camera, wallMeshes, 0.75),
+    ];
+
+    this.occlusionMarker.visible = coveredSamples.every(Boolean);
+  }
+
+  isOcclusionSampleCovered(camera, wallMeshes, sampleY) {
+    this.occlusionSample.copy(this.model.position);
+    this.occlusionSample.y += sampleY;
+
+    this.occlusionDirection.subVectors(
+      this.occlusionSample,
+      camera.position
+    );
+
+    const distance = this.occlusionDirection.length();
+    if (distance <= 0.0001) return false;
+
+    this.occlusionDirection.normalize();
+    this.occlusionRaycaster.set(camera.position, this.occlusionDirection);
+    this.occlusionRaycaster.far = distance - 0.08;
+
+    return this.occlusionRaycaster.intersectObjects(
+      wallMeshes,
+      false
+    ).length > 0;
   }
 
   setTarget(position) {
