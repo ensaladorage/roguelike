@@ -232,6 +232,80 @@ function createRectRoomTemplate({
 
 export const ROOM_TEMPLATES = [
   createRectRoomTemplate({
+    id: "enter_room",
+    name: "Entrada",
+    dimensions: { w: 5, d: 11 },
+    doorOpenings: [
+      { side: "south", offset: 0, width: 1 },
+    ],
+  }),
+  createRectRoomTemplate({
+    id: "combat_room_example",
+    name: "Sala de Combate Example",
+    dimensions: { w: 11, d: 9 },
+    doorOpenings: [
+      { side: "north", offset: 0, width: 1 },
+      { side: "south", offset: 0, width: 1 },
+    ],
+    enemySpawns: [
+      {
+        x: -2.5,
+        z: -1,
+        coinDrop: { count: 5, value: 3, radius: 0.62 },
+        patrol: [
+          { x: -2.5, z: -1 },
+          { x: 2.5, z: -1 },
+          { x: 2.5, z: 2 },
+          { x: -2.5, z: 2 },
+        ],
+      },
+      {
+        x: 3,
+        z: 2,
+        coinDrop: { count: 4, value: 4, radius: 0.58 },
+        patrol: [
+          { x: 3, z: 2 },
+          { x: 0.5, z: 2.5 },
+          { x: -3, z: -2 },
+          { x: 2.5, z: -2.2 },
+        ],
+      },
+    ],
+    chestSpawns: [
+      { x: 3.5, z: 2.5, rotationY: Math.PI, gold: 25 },
+    ],
+    decorativeModules: [
+      { x: -2, z: 2, w: 1, d: 1, moduleId: "floorDetail" },
+      { x: 2, z: -2, w: 1, d: 1, moduleId: "floorDetail" },
+      { x: -3, z: -2.5, w: 1, d: 1, moduleId: "stones" },
+      { x: 4, z: -1, w: 1, d: 1, moduleId: "stones", rotationY: Math.PI / 2 },
+      { x: 0, z: -3.2, w: 1, d: 1, moduleId: "woodSupport" },
+    ],
+    obstacleModules: [
+      { x: 0, z: 1.4, w: 1, d: 1, moduleId: "rocks", collision: true },
+    ],
+  }),
+  createRectRoomTemplate({
+    id: "exit_room_example",
+    name: "Sala de Salida Example",
+    dimensions: { w: 9, d: 9 },
+    doorOpenings: [
+      { side: "north", offset: 0, width: 1 },
+    ],
+    exitMarker: {
+      x: 0,
+      z: 1.7,
+    },
+    chestSpawns: [
+      { x: -2.5, z: -1.8, rotationY: 0, gold: 35 },
+    ],
+    decorativeModules: [
+      { x: 0, z: 3.5, w: 1, d: 1, moduleId: "banner", rotationY: Math.PI },
+      { x: -1, z: 2.5, w: 1, d: 1, moduleId: "floorDetail" },
+      { x: 2.5, z: -2, w: 1, d: 1, moduleId: "stones", rotationY: Math.PI },
+    ],
+  }),
+  createRectRoomTemplate({
     id: "corridor_straight",
     name: "Corredor Recto",
     dimensions: { w: 5, d: 10 },

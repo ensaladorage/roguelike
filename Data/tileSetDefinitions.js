@@ -129,6 +129,17 @@ export const TILESET_DEFINITIONS = {
           color: 0x8a2531,
         },
       },
+      woodSupport: {
+        id: "woodSupport",
+        placementMode: "single",
+        assetPath: "Assets/Models/Scenario/wood-support.glb",
+        preserveOriginalScale: true,
+        footprint: { w: 1, d: 1, height: 1 },
+        fallback: {
+          kind: "decor",
+          color: 0xb56f42,
+        },
+      },
     },
   },
 };

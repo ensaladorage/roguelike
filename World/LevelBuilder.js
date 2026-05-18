@@ -5,10 +5,10 @@ function cloneArea(area) {
 }
 
 const OUTER_WALL_ROTATION = {
-  north: Math.PI,
-  south: 0,
-  west: -Math.PI / 2,
-  east: Math.PI / 2,
+  north: 0,
+  south: Math.PI,
+  west: Math.PI / 2,
+  east: -Math.PI / 2,
 };
 
 export class LevelBuilder {
@@ -19,11 +19,55 @@ export class LevelBuilder {
   build(levelDefinition) {
     if (!levelDefinition) return null;
 
+    if (levelDefinition.kind === "authored") {
+      return this.buildAuthoredLevel(levelDefinition);
+    }
+
     if (levelDefinition.kind === "assembled") {
       return this.buildAssembledLevel(levelDefinition);
     }
 
     return this.buildLegacyLevel(levelDefinition);
+  }
+
+  buildAuthoredLevel(levelDefinition) {
+    const environment = {
+      tileSetId: levelDefinition.tileSetId ?? "scenarioDefault",
+      floorModules: (levelDefinition.floorModules ?? []).map(cloneArea),
+      wallModules: (levelDefinition.wallModules ?? []).map(cloneArea),
+      doorwayModules: (levelDefinition.doorwayModules ?? []).map(cloneArea),
+      decorativeModules: [
+        ...(levelDefinition.decorativeModules ?? []),
+        ...(levelDefinition.obstacleModules ?? []),
+      ].map(cloneArea),
+    };
+
+    const collisionWalls = [
+      ...(levelDefinition.wallModules ?? []),
+      ...(levelDefinition.obstacleModules ?? []).filter((module) => module.collision),
+    ].map(cloneArea);
+
+    if (levelDefinition.outerBoundary) {
+      const boundary = this.createOuterBoundaryModules(levelDefinition.outerBoundary);
+
+      environment.wallModules.push(...boundary.wallModules);
+      environment.decorativeModules.push(...boundary.decorativeModules);
+      collisionWalls.push(...boundary.wallModules.map(cloneArea));
+    }
+
+    return {
+      ...levelDefinition,
+      environment,
+      walkableAreas: (levelDefinition.walkableAreas ?? []).map(cloneArea),
+      collisionWalls,
+      chests: (levelDefinition.chests ?? []).map((chest) => ({ ...chest })),
+      enemies: (levelDefinition.enemies ?? []).map((enemy) => ({
+        ...enemy,
+        patrol: (enemy.patrol ?? []).map((point) => ({ ...point })),
+        coinDrop: enemy.coinDrop ? { ...enemy.coinDrop } : undefined,
+      })),
+      exit: levelDefinition.exit ? { ...levelDefinition.exit } : null,
+    };
   }
 
   buildLegacyLevel(levelDefinition) {
@@ -229,14 +273,14 @@ export class LevelBuilder {
           x: x - halfW + 0.5 - row,
           z,
           w: 1,
-          d,
+          d: d - 2,
           moduleId: dirtModuleId,
         },
         {
           x: x + halfW - 0.5 + row,
           z,
           w: 1,
-          d,
+          d: d - 2,
           moduleId: dirtModuleId,
         }
       );
