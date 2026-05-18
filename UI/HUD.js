@@ -4,22 +4,7 @@ export class HUD {
     this.hpBar = document.querySelector("#hpBar");
     this.goldText = document.querySelector("#goldText");
     this.logElement = document.querySelector("#log");
-    this.outlineButton = document.querySelector("#toggleOutlineButton");
     this.logEntries = [];
-  }
-
-  onOutlineToggle(callback) {
-    if (!this.outlineButton) return;
-    this.outlineButton.addEventListener("click", () => {
-      callback();
-    });
-  }
-
-  setOutlineButtonState(active) {
-    if (!this.outlineButton) return;
-    this.outlineButton.textContent = active
-      ? "Desactivar outline monedas"
-      : "Probar outline monedas";
   }
 
   updatePlayer(player) {
