@@ -23,8 +23,8 @@ export const COMBAT_ROOM_TEMPLATES = [
     ],
     wallModules: [
       {
-        x: -4.5,
-        z: -4.5,
+        x: -5,
+        z: -5,
         w: 1,
         d: 1,
         corner: "northWest",
@@ -32,8 +32,8 @@ export const COMBAT_ROOM_TEMPLATES = [
         moduleId: "wallCorner",
       },
       {
-        x: 4.5,
-        z: -4.5,
+        x: 5,
+        z: -5,
         w: 1,
         d: 1,
         corner: "northEast",
@@ -41,8 +41,8 @@ export const COMBAT_ROOM_TEMPLATES = [
         moduleId: "wallCorner",
       },
       {
-        x: 4.5,
-        z: 4.5,
+        x: 5,
+        z: 5,
         w: 1,
         d: 1,
         corner: "southEast",
@@ -50,8 +50,8 @@ export const COMBAT_ROOM_TEMPLATES = [
         moduleId: "wallCorner",
       },
       {
-        x: -4.5,
-        z: 4.5,
+        x: -5,
+        z: 5,
         w: 1,
         d: 1,
         corner: "southWest",
@@ -141,7 +141,6 @@ export const COMBAT_ROOM_TEMPLATES = [
       {
         x: -3,
         z: -2.2,
-        coinDrop: { count: 5, value: 3, radius: 0.62 },
         patrol: [
           { x: -3, z: -2.2 },
           { x: -3.4, z: 1.6 },
@@ -151,7 +150,6 @@ export const COMBAT_ROOM_TEMPLATES = [
       {
         x: 3,
         z: 2.2,
-        coinDrop: { count: 4, value: 4, radius: 0.58 },
         patrol: [
           { x: 3, z: 2.2 },
           { x: 3.4, z: -1.6 },
@@ -161,9 +159,9 @@ export const COMBAT_ROOM_TEMPLATES = [
     ],
     chestSpawns: [
       {
-        x: 3.7,
-        z: -3.2,
-        rotationY: Math.PI,
+        x: 3.5,
+        z: -4,
+        rotationY: 0,
         gold: 26,
         optional: true,
       },
@@ -178,8 +176,8 @@ export const COMBAT_ROOM_TEMPLATES = [
       {
         x: 0,
         z: 0,
-        w: 2,
-        d: 2,
+        w: 1,
+        d: 1,
         moduleId: "rocks",
         collision: true,
       },

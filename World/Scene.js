@@ -67,7 +67,6 @@ export class GameScene {
     this.enemy = null;
     this.enemies = [];
     this.chests = [];
-    this.coinDrops = [];
     this.walkableAreas = [];
     this.collisionWalls = [];
     this.wallMeshes = [];
@@ -332,7 +331,6 @@ export class GameScene {
     this.enemies = [];
     this.chests = [];
     if (this.coinManager) this.coinManager.clear();
-    else this.coinDrops = [];
     this.walkableAreas = [];
     this.collisionWalls = [];
     this.wallMeshes = [];
@@ -459,7 +457,6 @@ export class GameScene {
     );
 
     return new EnemyAI(enemyRoot, patrolPoints, {
-      coinDrop: data.coinDrop,
       collisionRadius: ENEMY_COLLISION_RADIUS,
       patrolAreas: data.patrolAreas,
       navigation: this.createEnemyNavigation(),

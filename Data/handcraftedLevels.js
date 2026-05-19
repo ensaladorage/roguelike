@@ -2,14 +2,14 @@ export const HANDCRAFTED_LEVELS = [
   {
     kind: "assembled",
     tileSetId: "scenarioDefault",
-    name: "Test Floor: EnterRoom + combat_obstacle_01 + ExitRoom",
+    name: "Test Floor: enter_room_01 + combat_obstacle_01 + exit_room_01",
     connectorStyleId: "openCorridor",
     playerStart: { x: 0, z: -5.8 },
     floorSize: 38,
     rooms: [
       {
         id: "EnterRoom",
-        templateId: "enter_room",
+        templateId: "enter_room_01",
         position: { x: 0, z: -9 },
         rotationY: 0,
       },
@@ -21,7 +21,7 @@ export const HANDCRAFTED_LEVELS = [
       },
       {
         id: "ExitRoom",
-        templateId: "exit_room_example",
+        templateId: "exit_room_01",
         position: { x: 0, z: 12 },
         rotationY: 0,
       },

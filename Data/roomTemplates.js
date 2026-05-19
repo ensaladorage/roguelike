@@ -1,4 +1,6 @@
+import { ENTER_ROOM_TEMPLATES } from "./enterRooms.js";
 import { COMBAT_ROOM_TEMPLATES } from "./combatRooms.js";
+import { EXIT_ROOM_TEMPLATES } from "./exitRooms.js";
 
 const WALL_TILE_SIZE = 1;
 
@@ -291,35 +293,9 @@ function createRectRoomTemplate({
 }
 
 export const ROOM_TEMPLATES = [
-  createRectRoomTemplate({
-    id: "enter_room",
-    name: "Entrada",
-    dimensions: { w: 5, d: 11 },
-    doorOpenings: [
-      { side: "south", offset: 0, width: 1 },
-    ],
-  }),
+  ...ENTER_ROOM_TEMPLATES,
   ...COMBAT_ROOM_TEMPLATES,
-  createRectRoomTemplate({
-    id: "exit_room_example",
-    name: "Sala de Salida Example",
-    dimensions: { w: 9, d: 9 },
-    doorOpenings: [
-      { side: "north", offset: 0, width: 1 },
-    ],
-    exitMarker: {
-      x: 0,
-      z: 1.7,
-    },
-    chestSpawns: [
-      { x: -2.5, z: -1.8, rotationY: 0, gold: 35 },
-    ],
-    decorativeModules: [
-      { x: 0, z: 3.5, w: 1, d: 1, moduleId: "banner", rotationY: Math.PI },
-      { x: -1, z: 2.5, w: 1, d: 1, moduleId: "floorDetail" },
-      { x: 2.5, z: -2, w: 1, d: 1, moduleId: "stones", rotationY: Math.PI },
-    ],
-  }),
+  ...EXIT_ROOM_TEMPLATES,
   createRectRoomTemplate({
     id: "corridor_straight",
     name: "Corredor Recto",
@@ -346,7 +322,6 @@ export const ROOM_TEMPLATES = [
       {
         x: -2.5,
         z: -1,
-        coinDrop: { count: 5, value: 3, radius: 0.62 },
         patrol: [
           { x: -2.5, z: -1 },
           { x: 2.5, z: -1 },
@@ -357,7 +332,6 @@ export const ROOM_TEMPLATES = [
       {
         x: 3,
         z: 2,
-        coinDrop: { count: 4, value: 4, radius: 0.58 },
         patrol: [
           { x: 3, z: 2 },
           { x: 0.5, z: 2.5 },

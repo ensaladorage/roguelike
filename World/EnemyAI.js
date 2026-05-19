@@ -1,4 +1,5 @@
 import * as THREE from "three";
+import { COIN_REWARD_SOURCE, getCoinReward } from "./Coin.js";
 
 export const ENEMY_STATES = {
   PATROL: "patrol",
@@ -43,11 +44,6 @@ export class EnemyAI {
     this.target = null;
     this.events = [];
     this.hasTakenCombatHit = false;
-    this.coinDrop = {
-      count: options.coinDrop?.count ?? 4,
-      value: options.coinDrop?.value ?? 3,
-      radius: options.coinDrop?.radius ?? 0.7,
-    };
     this.healthBar = this.createHealthBar();
     this.model.add(this.healthBar);
 
@@ -399,7 +395,8 @@ export class EnemyAI {
 
   createCoinDrops() {
     const coins = [];
-    const count = Math.max(0, this.coinDrop.count);
+    const coinReward = getCoinReward(COIN_REWARD_SOURCE.ENEMY);
+    const count = Math.max(0, coinReward.count);
     if (count === 0) return coins;
 
     const origin = this.model.position.clone();
@@ -414,7 +411,7 @@ export class EnemyAI {
       const centered = i - (count - 1) / 2;
       const sideOffset = centered * 0.42 + (Math.random() * 0.18 - 0.09);
       const ringOffset = Math.abs(centered) % 2 === 0 ? 0 : 0.16;
-      const distance = (this.coinDrop.radius ?? 0.7) + 0.45 + ringOffset + (Math.random() * 0.18 - 0.09);
+      const distance = coinReward.radius + 0.45 + ringOffset + (Math.random() * 0.18 - 0.09);
 
       const position = origin
         .clone()
@@ -422,7 +419,7 @@ export class EnemyAI {
         .addScaledVector(right, sideOffset);
 
       coins.push({
-        value: this.coinDrop.value,
+        value: coinReward.value,
         position: new THREE.Vector3(position.x, 0, position.z),
         fallbackOrigin: origin.clone(),
       });
@@ -430,7 +427,7 @@ export class EnemyAI {
 
     console.log("enemyCoinsDropped", {
       count: coins.length,
-      value: this.coinDrop.value,
+      value: coinReward.value,
     });
 
     return coins;

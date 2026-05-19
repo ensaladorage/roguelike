@@ -1,6 +1,7 @@
 import * as THREE from "three";
 import * as SkeletonUtils from "three/addons/utils/SkeletonUtils.js";
 import { flatDistance } from "../Game/Utils.js";
+import { COIN_REWARD_SOURCE, getCoinReward } from "./Coin.js";
 
 export class ChestManager {
   constructor(scene) {
@@ -27,11 +28,6 @@ export class ChestManager {
       return {
         model,
         gold: data.gold,
-        coinDrop: data.coinDrop ?? {
-          count: 3,
-          value: 1,
-          radius: 0.62,
-        },
         collected: false,
       };
     });
@@ -87,8 +83,8 @@ export class ChestManager {
   // =========================
   spawnCoins(chest) {
     const coins = [];
-    const coinDrop = chest.coinDrop;
-    const count = Math.max(0, coinDrop.count ?? 0);
+    const coinReward = getCoinReward(COIN_REWARD_SOURCE.CHEST);
+    const count = Math.max(0, coinReward.count ?? 0);
 
     const origin = chest.model.position;
 
@@ -103,7 +99,7 @@ export class ChestManager {
 
       const sideOffset = centered * 0.42 + (Math.random() * 0.18 - 0.09);
       const forwardOffset =
-        (coinDrop.radius ?? 0.6) + 0.45 + (Math.abs(centered) % 2) * 0.14 + (Math.random() * 0.2 - 0.1);
+        coinReward.radius + 0.45 + (Math.abs(centered) % 2) * 0.14 + (Math.random() * 0.2 - 0.1);
 
       const position = origin
         .clone()
@@ -111,7 +107,7 @@ export class ChestManager {
         .addScaledVector(right, sideOffset);
 
       coins.push({
-        value: coinDrop.value ?? 1,
+        value: coinReward.value,
         position: new THREE.Vector3(position.x, 0, position.z),
         fallbackOrigin: origin.clone(),
       });
