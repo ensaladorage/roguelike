@@ -341,8 +341,8 @@ export const ROOM_TEMPLATES = [
       },
     ],
     chestSpawns: [
-      { x: 3.5, z: 2.6, rotationY: Math.PI, gold: 24 },
-      { x: -3.7, z: 2.4, rotationY: Math.PI / 2, gold: 18 },
+      { x: 3.5, z: 2.6, rotationY: Math.PI },
+      { x: -3.7, z: 2.4, rotationY: Math.PI / 2 },
     ],
     decorativeModules: [
       { x: -2, z: 2, w: 1, d: 1, moduleId: "floorDetail" },
@@ -366,7 +366,7 @@ export const ROOM_TEMPLATES = [
       z: -1.4,
     },
     chestSpawns: [
-      { x: -2.7, z: 1.9, rotationY: Math.PI / 2, gold: 28 },
+      { x: -2.7, z: 1.9, rotationY: Math.PI / 2 },
     ],
     decorativeModules: [
       { x: 0, z: -3.7, w: 1, d: 1, moduleId: "banner" },
@@ -388,7 +388,7 @@ export const ROOM_TEMPLATES = [
       { x: 1.5, z: -2.2, w: 1, d: 1, moduleId: "stones", rotationY: Math.PI / 2 },
     ],
     chestSpawns: [
-      { x: -1.6, z: 0.8, rotationY: Math.PI / 2, gold: 22 },
+      { x: -1.6, z: 0.8, rotationY: Math.PI / 2 },
     ],
   }),
 ];

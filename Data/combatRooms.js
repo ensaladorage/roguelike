@@ -162,7 +162,6 @@ export const COMBAT_ROOM_TEMPLATES = [
         x: 3.5,
         z: -4,
         rotationY: 0,
-        gold: 26,
         optional: true,
       },
     ],

@@ -47,12 +47,6 @@ export function getCoinReward(source) {
   };
 }
 
-export function getCoinRewardTotal(source) {
-  const reward = getCoinReward(source);
-
-  return reward.count * reward.value;
-}
-
 export class CoinManager {
   constructor(scene) {
     this.scene = scene; // GameScene instance

@@ -1,7 +1,17 @@
 import * as THREE from "three";
 import * as SkeletonUtils from "three/addons/utils/SkeletonUtils.js";
 import { flatDistance } from "../Game/Utils.js";
-import { COIN_REWARD_SOURCE, getCoinReward, getCoinRewardTotal } from "./Coin.js";
+import { COIN_REWARD_SOURCE, getCoinReward } from "./Coin.js";
+
+export const CHEST_REWARD = {
+  gold: 20,
+};
+
+export function getChestReward() {
+  return {
+    gold: CHEST_REWARD.gold,
+  };
+}
 
 export class ChestManager {
   constructor(scene) {
@@ -24,10 +34,11 @@ export class ChestManager {
       model.scale.set(1, 1, 1);
 
       this.scene.levelGroup.add(model);
+      const reward = getChestReward();
 
       return {
         model,
-        gold: data.gold ?? getCoinRewardTotal(COIN_REWARD_SOURCE.CHEST),
+        gold: reward.gold,
         collected: false,
       };
     });

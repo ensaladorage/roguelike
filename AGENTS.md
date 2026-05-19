@@ -20,6 +20,7 @@ Build a simple top-down roguelike with:
 - Player logic lives in Player.js (FSM only)
 - Enemy logic lives in EnemyAI.js
 - Chest logic lives in Chest.js
+- Chest open rewards live in Chest.js, currently CHEST_REWARD.
 - Environment and global lighting live in Environment.js
 - Coin logic lives in Coin.js
 - Scene.js only manages world + rendering + wiring
@@ -131,6 +132,7 @@ Build a simple top-down roguelike with:
 - Avoid overlapping floor planes to prevent Z-fighting
 - Use separate walkable areas and collision walls for level layout
 - Chests should be distributed naturally in rooms, not all in one cluster
+- Room templates place chests only; chest rewards must not be hardcoded in room data.
 - Chest ground drops should spawn toward the chest front, away from nearby walls
 - Coin outlines/visibility helpers must not use global postprocessing or alter scene lighting
 - Coin drops should animate from their source, avoid walls, and become collectible only after landing
