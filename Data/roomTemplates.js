@@ -1,3 +1,5 @@
+import { COMBAT_ROOM_TEMPLATES } from "./combatRooms.js";
+
 const WALL_TILE_SIZE = 1;
 
 const WALL_ROTATION_BY_SIDE = {
@@ -297,51 +299,7 @@ export const ROOM_TEMPLATES = [
       { side: "south", offset: 0, width: 1 },
     ],
   }),
-  createRectRoomTemplate({
-    id: "combat_room_example",
-    name: "Sala de Combate Example",
-    dimensions: { w: 11, d: 9 },
-    doorOpenings: [
-      { side: "north", offset: 0, width: 1 },
-      { side: "south", offset: 0, width: 1 },
-    ],
-    enemySpawns: [
-      {
-        x: -2.5,
-        z: -1,
-        coinDrop: { count: 5, value: 3, radius: 0.62 },
-        patrol: [
-          { x: -2.5, z: -1 },
-          { x: 2.5, z: -1 },
-          { x: 2.5, z: 2 },
-          { x: -2.5, z: 2 },
-        ],
-      },
-      {
-        x: 3,
-        z: 2,
-        coinDrop: { count: 4, value: 4, radius: 0.58 },
-        patrol: [
-          { x: 3, z: 2 },
-          { x: 0.5, z: 2.5 },
-          { x: -3, z: -2 },
-          { x: 2.5, z: -2.2 },
-        ],
-      },
-    ],
-    chestSpawns: [
-      { x: 3.5, z: 2.5, rotationY: Math.PI, gold: 25 },
-    ],
-    decorativeModules: [
-      { x: -2, z: 2, w: 1, d: 1, moduleId: "floorDetail" },
-      { x: 2, z: -2, w: 1, d: 1, moduleId: "floorDetail" },
-      { x: -3, z: -2.5, w: 1, d: 1, moduleId: "stones" },
-      { x: 4, z: -1, w: 1, d: 1, moduleId: "stones", rotationY: Math.PI / 2 },
-    ],
-    obstacleModules: [
-      { x: 0, z: 1.4, w: 1, d: 1, moduleId: "rocks", collision: true },
-    ],
-  }),
+  ...COMBAT_ROOM_TEMPLATES,
   createRectRoomTemplate({
     id: "exit_room_example",
     name: "Sala de Salida Example",
