@@ -66,6 +66,28 @@ Build a simple top-down roguelike with:
 
 ---
 
+## Room authoring rules
+
+- New rooms must be added as reusable room templates in data files.
+- Each room template must declare:
+  - id
+  - type
+  - size
+  - openings
+  - walkable areas
+  - wall/floor modules
+  - enemy spawns
+  - chest spawns
+  - optional decorations
+  - optional obstacles
+- New rooms must not be authored directly inside Scene.js.
+- Each new room should be testable in a simple floor composition with EnterRoom and ExitRoom.
+- Prefer small, readable handcrafted layouts over overly dense geometry.
+- Openings must align cleanly with shared connectors.
+- Avoid duplicated borders on connected room sides.
+
+---
+
 ## Core Gameplay Rules
 
 - Player movement is click-to-move
