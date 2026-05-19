@@ -24,12 +24,11 @@ const CONNECTOR_STYLES = {
   openCorridor: {
     id: "openCorridor",
     length: 3,
-    depth: 1.4,
+    depth: 2,
     wallThickness: 1,
-    collisionWallThickness: 0.6
-    ,
+    collisionWallThickness: 0.6,
     sideWallOffset: 1,
-    floorModuleId: "floorDetail",
+    floorModuleId: "floor",
     sideWallModuleId: "wallCorner",
     archModuleId: "woodSupport",
   },

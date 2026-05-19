@@ -129,6 +129,17 @@ export const TILESET_DEFINITIONS = {
           color: 0x8a2531,
         },
       },
+      barrel: {
+        id: "barrel",
+        placementMode: "single",
+        assetPath: "Assets/Models/Scenario/barrel.glb",
+        preserveOriginalScale: true,
+        footprint: { w: 1, d: 1, height: 0.9 },
+        fallback: {
+          kind: "obstacle",
+          color: 0x6b4f3c,
+        },
+      },
       woodSupport: {
         id: "woodSupport",
         placementMode: "single",

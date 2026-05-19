@@ -4,7 +4,7 @@ export const HANDCRAFTED_LEVELS = [
     tileSetId: "scenarioDefault",
     name: "Test Floor: enter_room_01 + combat_obstacle_01 + exit_room_01",
     connectorStyleId: "openCorridor",
-    playerStart: { x: 0, z: -5.8 },
+    playerStart: { x: 0, z: -12 },
     floorSize: 38,
     rooms: [
       {

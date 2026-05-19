@@ -34,6 +34,7 @@ export const ENTER_ROOM_TEMPLATES = [
       {
         x: 2,
         z: -5,
+        y: 0,
         w: 1,
         d: 1,
         corner: "northEast",
@@ -67,15 +68,7 @@ export const ENTER_ROOM_TEMPLATES = [
         rotationY: 0,
         moduleId: "wallHalf",
       },
-      {
-        x: -0,
-        z: -6,
-        w: 7,
-        d: 1,
-        side: "north",
-        rotationY: 0,
-        moduleId: "dirt",
-      },
+
       {
         x: -2,
         z: 0,
@@ -85,15 +78,7 @@ export const ENTER_ROOM_TEMPLATES = [
         rotationY: Math.PI / 2,
         moduleId: "wallHalf",
       },
-      {
-        x: -3,
-        z: 0,
-        w: 1,
-        d: 11,
-        side: "west",
-        rotationY: Math.PI / 2,
-        moduleId: "dirt",
-      },
+
       {
         x: 2,
         z: 0,
@@ -108,11 +93,11 @@ export const ENTER_ROOM_TEMPLATES = [
       {
         x: 0,
         z: 5,
-        w: 1,
+        w: 3,
         d: 1,
         side: "south",
-        rotationY: 0,
-        moduleId: "wallOpening",
+        rotationY: Math.PI,
+        moduleId: "wallHalf",
       },
     ],
     doorOpenings: [
@@ -121,7 +106,16 @@ export const ENTER_ROOM_TEMPLATES = [
     enemySpawns: [],
     chestSpawns: [],
     exitMarker: null,
-    decorativeModules: [],
-    obstacleModules: [],
+    decorativeModules: [
+     
+    ],
+    obstacleModules: [
+    { x: -1.2, z: -2.5, w: 0.01, d: 0.01, moduleId: "barrel", collision: true },
+    { x: -1.2, z: -3, w: 0.01, d: 0.01, moduleId: "barrel", collision: true },
+    { x: -1.2, z: -3.5, w: 0.01, d: 0.01, moduleId: "barrel", collision: true },
+    { x: 1.2, z: -3.5, w: 0.01, d: 0.01, moduleId: "barrel", collision: true },
+    { x: 0, z: -4.2, w: 0.01, d: 0.01, moduleId: "barrel", collision: true },
+    { x: 0.3, z: -3.9, w: 0.01, d: 0.01, moduleId: "barrel", collision: true },
+    ],
   },
 ];
