@@ -18,14 +18,17 @@ const OPPOSITE_SIDE = {
   east: "west",
 };
 
+const ROCK_COLLISION_SCALE = 0.55;
+
 const CONNECTOR_STYLES = {
   openCorridor: {
     id: "openCorridor",
     length: 3,
     depth: 1.4,
     wallThickness: 1,
-    collisionWallThickness: 0.2,
-    sideWallOffset: 0.96,
+    collisionWallThickness: 0.6
+    ,
+    sideWallOffset: 1,
     floorModuleId: "floorDetail",
     sideWallModuleId: "wallCorner",
     archModuleId: "woodSupport",
@@ -64,9 +67,11 @@ export class LevelBuilder {
     };
 
     const collisionWalls = [
-      ...(levelDefinition.wallModules ?? []),
-      ...(levelDefinition.obstacleModules ?? []).filter((module) => module.collision),
-    ].map(cloneArea);
+      ...(levelDefinition.wallModules ?? []).map(cloneArea),
+      ...(levelDefinition.obstacleModules ?? [])
+        .filter((module) => module.collision)
+        .map((module) => this.createObstacleCollision(module)),
+    ];
 
     if (levelDefinition.outerBoundary) {
       const boundary = this.createOuterBoundaryModules(levelDefinition.outerBoundary);
@@ -189,7 +194,7 @@ export class LevelBuilder {
       collisionWalls.push(
         ...room.obstacleModules
           .filter((module) => module.collision)
-          .map(cloneArea)
+          .map((module) => this.createObstacleCollision(module))
       );
       chests.push(...room.chestSpawns.map((spawn) => ({ ...spawn })));
       enemies.push(
@@ -533,6 +538,24 @@ export class LevelBuilder {
       ...module,
       d: collisionWallThickness,
     };
+  }
+
+  createObstacleCollision(module) {
+    const scale = module.collisionScale ?? this.getObstacleCollisionScale(module);
+
+    return {
+      ...module,
+      w: module.w * scale,
+      d: module.d * scale,
+    };
+  }
+
+  getObstacleCollisionScale(module) {
+    if (module.moduleId === "rocks") {
+      return ROCK_COLLISION_SCALE;
+    }
+
+    return 1;
   }
 
   isHorizontalSide(side) {
