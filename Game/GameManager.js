@@ -6,6 +6,7 @@ export class GameManager {
     this.isGameOver = false;
     this.reloadTimer = null;
     this.combatStartRange = 1.55;
+    this.enemyMovementPauseReason = "playerCombat";
     this.currentLevelIndex = 0;
     this.levelExitLocked = false;
   }
@@ -19,11 +20,22 @@ export class GameManager {
   updateCombatEngagement() {
     const { player, enemies } = this.scene;
 
-    if (!player || player.hp <= 0) return;
-    if (player.currentEnemy?.alive) {
-      player.currentEnemy.startCombat(player);
+    if (!player || player.hp <= 0) {
+      this.resumeEnemyMovement(enemies);
       return;
     }
+
+    const activeEnemy = player.currentEnemy?.alive
+      ? player.currentEnemy
+      : null;
+
+    if (activeEnemy) {
+      this.pauseEnemyMovement(enemies, activeEnemy);
+      activeEnemy.startCombat(player);
+      return;
+    }
+
+    this.resumeEnemyMovement(enemies);
 
     for (const enemy of enemies) {
       if (!enemy.alive) continue;
@@ -37,7 +49,26 @@ export class GameManager {
 
       player.enterCombat(enemy);
       enemy.startCombat(player);
+      this.pauseEnemyMovement(enemies, enemy);
       return;
+    }
+  }
+
+  pauseEnemyMovement(enemies = [], activeEnemy = null) {
+    for (const enemy of enemies) {
+      if (!enemy?.alive) continue;
+      if (enemy === activeEnemy) continue;
+      if (typeof enemy.pauseMovement !== "function") continue;
+
+      enemy.pauseMovement(this.enemyMovementPauseReason);
+    }
+  }
+
+  resumeEnemyMovement(enemies = []) {
+    for (const enemy of enemies) {
+      if (typeof enemy?.resumeMovement !== "function") continue;
+
+      enemy.resumeMovement(this.enemyMovementPauseReason);
     }
   }
 

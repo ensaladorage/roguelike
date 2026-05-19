@@ -32,6 +32,7 @@ export class EnemyAI {
     this.patrolStopRange = 0.08;
     this.collisionRadius = options.collisionRadius ?? 0.32;
     this.navigation = options.navigation ?? null;
+    this.movementPauseReasons = new Set();
 
     this.attackRange = 1.6;
     this.attackDamage = 8;
@@ -106,6 +107,8 @@ export class EnemyAI {
   }
 
   updatePatrol(delta) {
+    if (this.isMovementPaused()) return;
+
     if (this.patrolMode === "waiting") {
       this.patrolPauseTimer -= delta;
 
@@ -171,6 +174,36 @@ export class EnemyAI {
     });
 
     this.target.takeDamage(this.attackDamage, this);
+  }
+
+  pauseMovement(reason = "external") {
+    const wasPaused = this.isMovementPaused();
+    this.movementPauseReasons.add(reason);
+
+    if (wasPaused) return;
+
+    this.emit({
+      type: "enemyMovementPaused",
+      enemy: this,
+      reason,
+    });
+  }
+
+  resumeMovement(reason = "external") {
+    const wasPaused = this.isMovementPaused();
+    this.movementPauseReasons.delete(reason);
+
+    if (!wasPaused || this.isMovementPaused()) return;
+
+    this.emit({
+      type: "enemyMovementResumed",
+      enemy: this,
+      reason,
+    });
+  }
+
+  isMovementPaused() {
+    return this.movementPauseReasons.size > 0;
   }
 
   chooseNextPatrolRoute() {
