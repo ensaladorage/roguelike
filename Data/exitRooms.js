@@ -1,3 +1,5 @@
+import { COIN_REWARD_SOURCE, getCoinRewardTotal } from "../World/Coin.js";
+
 export const EXIT_ROOM_TEMPLATES = [
   {
     id: "exit_room_01",
@@ -120,7 +122,12 @@ export const EXIT_ROOM_TEMPLATES = [
     ],
     enemySpawns: [],
     chestSpawns: [
-      { x: -2.8, z: -3, rotationY: 0, gold: 35 },
+      {
+        x: -2.8,
+        z: -3,
+        rotationY: 0,
+        gold: getCoinRewardTotal(COIN_REWARD_SOURCE.CHEST),
+      },
     ],
     exitMarker: {
       x: 0,

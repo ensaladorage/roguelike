@@ -32,7 +32,7 @@ export const COIN_REWARDS = {
   },
   [COIN_REWARD_SOURCE.ENEMY]: {
     count: 2,
-    value: COIN_VALUE.HEAVY,
+    value: COIN_VALUE.BASIC,
     radius: 0.7,
   },
 };
@@ -45,6 +45,12 @@ export function getCoinReward(source) {
     value: reward.value,
     radius: reward.radius,
   };
+}
+
+export function getCoinRewardTotal(source) {
+  const reward = getCoinReward(source);
+
+  return reward.count * reward.value;
 }
 
 export class CoinManager {
