@@ -337,7 +337,6 @@ export const ROOM_TEMPLATES = [
       { x: 2, z: -2, w: 1, d: 1, moduleId: "floorDetail" },
       { x: -3, z: -2.5, w: 1, d: 1, moduleId: "stones" },
       { x: 4, z: -1, w: 1, d: 1, moduleId: "stones", rotationY: Math.PI / 2 },
-      { x: 0, z: -3.2, w: 1, d: 1, moduleId: "woodSupport" },
     ],
     obstacleModules: [
       { x: 0, z: 1.4, w: 1, d: 1, moduleId: "rocks", collision: true },

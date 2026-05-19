@@ -11,6 +11,27 @@ const OUTER_WALL_ROTATION = {
   east: -Math.PI / 2,
 };
 
+const OPPOSITE_SIDE = {
+  north: "south",
+  south: "north",
+  west: "east",
+  east: "west",
+};
+
+const CONNECTOR_STYLES = {
+  openCorridor: {
+    id: "openCorridor",
+    length: 3,
+    depth: 1.4,
+    wallThickness: 1,
+    collisionWallThickness: 0.2,
+    sideWallOffset: 0.96,
+    floorModuleId: "floorDetail",
+    sideWallModuleId: "wallCorner",
+    archModuleId: "woodSupport",
+  },
+};
+
 export class LevelBuilder {
   constructor({ roomTemplateLibrary }) {
     this.roomTemplateLibrary = roomTemplateLibrary;
@@ -132,23 +153,39 @@ export class LevelBuilder {
     const chests = [];
     const enemies = [];
     let exit = levelDefinition.exit ? { ...levelDefinition.exit } : null;
+    const rooms = (levelDefinition.rooms ?? []).map((roomPlacement) =>
+      this.roomTemplateLibrary.resolveRoomPlacement(roomPlacement)
+    );
+    const connectorStyle = this.getConnectorStyle(levelDefinition.connectorStyleId);
+    const connections = this.detectRoomConnections(rooms, connectorStyle);
+    const endpointsByRoom = this.groupConnectionEndpointsByRoom(connections);
 
-    for (const roomPlacement of levelDefinition.rooms ?? []) {
-      const room = this.roomTemplateLibrary.resolveRoomPlacement(roomPlacement);
+    for (const room of rooms) {
+      const roomConnectionEndpoints = endpointsByRoom.get(room.id) ?? [];
+      const wallModules = this.clipRoomWallModulesForConnections(
+        room.wallModules,
+        roomConnectionEndpoints
+      );
+      const doorwayModules = this.filterConnectedDoorwayModules(
+        room.doorwayModules,
+        roomConnectionEndpoints
+      );
 
       environment.floorModules.push(...room.floorModules);
-      environment.wallModules.push(...room.wallModules);
-      environment.doorwayModules.push(...room.doorwayModules);
+      environment.wallModules.push(...wallModules);
+      environment.doorwayModules.push(...doorwayModules);
       environment.decorativeModules.push(...room.decorativeModules);
       environment.decorativeModules.push(...room.obstacleModules);
 
       walkableAreas.push(...room.walkableAreas.map(cloneArea));
       walkableAreas.push(
-        ...room.doorOpenings.map((opening) =>
-          this.createDoorOpeningWalkableArea(opening)
-        )
+        ...room.doorOpenings
+          .filter((opening) =>
+            !this.isOpeningConnected(room.id, opening, roomConnectionEndpoints)
+          )
+          .map((opening) => this.createDoorOpeningWalkableArea(opening))
       );
-      collisionWalls.push(...room.wallModules.map(cloneArea));
+      collisionWalls.push(...wallModules.map(cloneArea));
       collisionWalls.push(
         ...room.obstacleModules
           .filter((module) => module.collision)
@@ -172,6 +209,16 @@ export class LevelBuilder {
       }
     }
 
+    for (const connection of connections) {
+      const connector = this.createConnectionModules(connection, connectorStyle);
+
+      environment.floorModules.push(...connector.floorModules);
+      environment.wallModules.push(...connector.wallModules);
+      environment.decorativeModules.push(...connector.decorativeModules);
+      walkableAreas.push(...connector.walkableAreas);
+      collisionWalls.push(...connector.collisionWalls);
+    }
+
     if (levelDefinition.outerBoundary) {
       const boundary = this.createOuterBoundaryModules(levelDefinition.outerBoundary);
 
@@ -188,7 +235,308 @@ export class LevelBuilder {
       chests,
       enemies,
       exit,
+      connections,
     };
+  }
+
+  getConnectorStyle(connectorStyleId = "openCorridor") {
+    return CONNECTOR_STYLES[connectorStyleId] ?? CONNECTOR_STYLES.openCorridor;
+  }
+
+  detectRoomConnections(rooms, connectorStyle) {
+    const connections = [];
+    const usedOpenings = new Set();
+
+    for (let roomIndex = 0; roomIndex < rooms.length; roomIndex += 1) {
+      const room = rooms[roomIndex];
+
+      for (let otherRoomIndex = roomIndex + 1; otherRoomIndex < rooms.length; otherRoomIndex += 1) {
+        const otherRoom = rooms[otherRoomIndex];
+
+        for (const opening of room.doorOpenings) {
+          const openingKey = this.getOpeningKey(room.id, opening);
+          if (usedOpenings.has(openingKey)) continue;
+
+          const matchingOpening = otherRoom.doorOpenings.find((candidate) => {
+            const candidateKey = this.getOpeningKey(otherRoom.id, candidate);
+
+            return (
+              !usedOpenings.has(candidateKey) &&
+              this.areOpeningsConnected(opening, candidate)
+            );
+          });
+
+          if (!matchingOpening) continue;
+
+          usedOpenings.add(openingKey);
+          usedOpenings.add(this.getOpeningKey(otherRoom.id, matchingOpening));
+
+          connections.push({
+            id: `${room.id}:${opening.side}-${otherRoom.id}:${matchingOpening.side}`,
+            styleId: connectorStyle.id,
+            a: {
+              roomId: room.id,
+              opening,
+            },
+            b: {
+              roomId: otherRoom.id,
+              opening: matchingOpening,
+            },
+          });
+        }
+      }
+    }
+
+    return connections;
+  }
+
+  areOpeningsConnected(opening, otherOpening) {
+    const epsilon = 0.001;
+
+    return (
+      OPPOSITE_SIDE[opening.side] === otherOpening.side &&
+      Math.abs(opening.x - otherOpening.x) <= epsilon &&
+      Math.abs(opening.z - otherOpening.z) <= epsilon
+    );
+  }
+
+  getOpeningKey(roomId, opening) {
+    return `${roomId}:${opening.side}:${opening.x.toFixed(3)}:${opening.z.toFixed(3)}`;
+  }
+
+  groupConnectionEndpointsByRoom(connections) {
+    const endpointsByRoom = new Map();
+
+    for (const connection of connections) {
+      for (const endpoint of [connection.a, connection.b]) {
+        const endpoints = endpointsByRoom.get(endpoint.roomId) ?? [];
+
+        endpoints.push({
+          ...endpoint,
+          connectionId: connection.id,
+          connectorLength:
+            CONNECTOR_STYLES[connection.styleId]?.length ??
+            CONNECTOR_STYLES.openCorridor.length,
+        });
+        endpointsByRoom.set(endpoint.roomId, endpoints);
+      }
+    }
+
+    return endpointsByRoom;
+  }
+
+  clipRoomWallModulesForConnections(wallModules, endpoints) {
+    return wallModules.flatMap((module) => {
+      let pieces = [module];
+
+      for (const endpoint of endpoints) {
+        pieces = pieces.flatMap((piece) =>
+          this.subtractConnectionOpeningFromWall(piece, endpoint)
+        );
+      }
+
+      return pieces;
+    });
+  }
+
+  subtractConnectionOpeningFromWall(module, endpoint) {
+    if (!this.isModuleOnConnectionLine(module, endpoint)) {
+      return [module];
+    }
+
+    const isHorizontal = this.isHorizontalSide(endpoint.opening.side);
+    const moduleStart = isHorizontal
+      ? module.x - module.w / 2
+      : module.z - module.d / 2;
+    const moduleEnd = isHorizontal
+      ? module.x + module.w / 2
+      : module.z + module.d / 2;
+    const connectorWidth = endpoint.connectorLength;
+    const openingCenter = isHorizontal ? endpoint.opening.x : endpoint.opening.z;
+    const openingStart = openingCenter - connectorWidth / 2;
+    const openingEnd = openingCenter + connectorWidth / 2;
+
+    if (moduleEnd <= openingStart || moduleStart >= openingEnd) {
+      return [module];
+    }
+
+    return [
+      this.createClippedWallModule(module, moduleStart, openingStart, isHorizontal),
+      this.createClippedWallModule(module, openingEnd, moduleEnd, isHorizontal),
+    ].filter(Boolean);
+  }
+
+  createClippedWallModule(module, start, end, isHorizontal) {
+    const length = end - start;
+    if (length <= 0.05) return null;
+
+    if (isHorizontal) {
+      return {
+        ...module,
+        x: start + length / 2,
+        w: length,
+      };
+    }
+
+    return {
+      ...module,
+      z: start + length / 2,
+      d: length,
+    };
+  }
+
+  filterConnectedDoorwayModules(doorwayModules, endpoints) {
+    return doorwayModules.filter(
+      (module) =>
+        !endpoints.some((endpoint) =>
+          this.isModuleOnConnectionLine(module, endpoint)
+        )
+    );
+  }
+
+  isOpeningConnected(roomId, opening, endpoints) {
+    return endpoints.some(
+      (endpoint) =>
+        endpoint.roomId === roomId &&
+        endpoint.opening.side === opening.side &&
+        endpoint.opening.x === opening.x &&
+        endpoint.opening.z === opening.z
+    );
+  }
+
+  isModuleOnConnectionLine(module, endpoint) {
+    if (!module.side || module.side !== endpoint.opening.side) return false;
+
+    const isHorizontal = this.isHorizontalSide(endpoint.opening.side);
+    const lineCoordinate = isHorizontal ? module.z : module.x;
+    const expectedLineCoordinate = this.getWallModuleLineCoordinate(endpoint.opening);
+
+    return Math.abs(lineCoordinate - expectedLineCoordinate) <= 0.55;
+  }
+
+  getWallModuleLineCoordinate(opening) {
+    switch (opening.side) {
+      case "north":
+        return opening.z + 0.5;
+      case "south":
+        return opening.z - 0.5;
+      case "west":
+        return opening.x + 0.5;
+      case "east":
+        return opening.x - 0.5;
+      default:
+        return 0;
+    }
+  }
+
+  createConnectionModules(connection, style) {
+    const opening = connection.a.opening;
+    const isHorizontal = this.isHorizontalSide(opening.side);
+    const x = (connection.a.opening.x + connection.b.opening.x) / 2;
+    const z = (connection.a.opening.z + connection.b.opening.z) / 2;
+    const length = style.length;
+    const depth = style.depth;
+    const wallThickness = style.wallThickness;
+    const collisionWallThickness = style.collisionWallThickness ?? wallThickness;
+    const sideWallOffset = style.sideWallOffset ?? length / 2;
+    const wallRotationY = isHorizontal ? Math.PI / 2 : 0;
+    const archRotationY = isHorizontal ? 0 : Math.PI / 2;
+
+    const floorModule = {
+      x,
+      z,
+      w: isHorizontal ? length : depth,
+      d: isHorizontal ? depth : length,
+      moduleId: style.floorModuleId,
+      connectionId: connection.id,
+    };
+
+    const sideWallModules = isHorizontal
+      ? [
+          {
+            x: x - sideWallOffset,
+            z,
+            w: wallThickness,
+            d: depth,
+            rotationY: wallRotationY,
+            moduleId: style.sideWallModuleId,
+            connectionId: connection.id,
+          },
+          {
+            x: x + sideWallOffset,
+            z,
+            w: wallThickness,
+            d: depth,
+            rotationY: wallRotationY,
+            moduleId: style.sideWallModuleId,
+            connectionId: connection.id,
+          },
+        ]
+      : [
+          {
+            x,
+            z: z - sideWallOffset,
+            w: depth,
+            d: wallThickness,
+            rotationY: wallRotationY,
+            moduleId: style.sideWallModuleId,
+            connectionId: connection.id,
+          },
+          {
+            x,
+            z: z + sideWallOffset,
+            w: depth,
+            d: wallThickness,
+            rotationY: wallRotationY,
+            moduleId: style.sideWallModuleId,
+            connectionId: connection.id,
+          },
+        ];
+
+    const archModule = {
+      x,
+      z,
+      w: 1,
+      d: 1,
+      rotationY: archRotationY,
+      moduleId: style.archModuleId,
+      connectionId: connection.id,
+    };
+
+    return {
+      floorModules: [floorModule],
+      wallModules: sideWallModules,
+      decorativeModules: [archModule],
+      walkableAreas: [
+        {
+          x,
+          z,
+          w: floorModule.w,
+          d: floorModule.d,
+        },
+      ],
+      collisionWalls: sideWallModules.map((module) =>
+        this.createConnectorWallCollision(module, collisionWallThickness, isHorizontal)
+      ),
+    };
+  }
+
+  createConnectorWallCollision(module, collisionWallThickness, isHorizontal) {
+    if (isHorizontal) {
+      return {
+        ...module,
+        w: collisionWallThickness,
+      };
+    }
+
+    return {
+      ...module,
+      d: collisionWallThickness,
+    };
+  }
+
+  isHorizontalSide(side) {
+    return side === "north" || side === "south";
   }
 
   createDoorOpeningWalkableArea(opening) {

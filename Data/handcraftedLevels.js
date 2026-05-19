@@ -3,6 +3,7 @@ export const HANDCRAFTED_LEVELS = [
     kind: "assembled",
     tileSetId: "scenarioDefault",
     name: "Test Floor: EnterRoom + CombatRoom + ExitRoom",
+    connectorStyleId: "openCorridor",
     playerStart: { x: 0, z: -5.8 },
     floorSize: 34,
     rooms: [
