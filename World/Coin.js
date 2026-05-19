@@ -1,7 +1,6 @@
 import * as THREE from "three";
-import { GLTFLoader } from "three/addons/loaders/GLTFLoader.js";
-import * as SkeletonUtils from "three/addons/utils/SkeletonUtils.js";
 import { flatDistance } from "../Game/Utils.js";
+import { DEFAULT_COIN_MODEL_ID } from "../Data/modelDefinitions.js";
 
 const COIN_OCCLUSION_RING_RADIUS = 0.15;
 const COIN_OCCLUSION_RING_THICKNESS = 0.018;
@@ -51,42 +50,17 @@ export class CoinManager {
   constructor(scene) {
     this.scene = scene; // GameScene instance
     this.coinDrops = [];
-    this.models = {};
-    this.loader = new GLTFLoader();
     this.raycaster = new THREE.Raycaster();
     this.rayDirection = new THREE.Vector3();
     this.coinWorldPosition = new THREE.Vector3();
-
-    this.loadModel();
-  }
-
-  async loadModel() {
-    try {
-      const modelPath = (name) => `Assets/Models/${name}.glb`;
-      const gltf = await this.loader.loadAsync(modelPath("coin"));
-      this.models.coin = gltf;
-      // no immediate processing needed; future clones will use it
-    } catch (e) {
-      // silently ignore
-    }
   }
 
   createCoinModel() {
     let coinRoot = null;
 
-    if (this.models?.coin) {
+    if (typeof this.scene.cloneGameModel === "function") {
       try {
-        coinRoot = SkeletonUtils.clone(this.models.coin.scene);
-        coinRoot.traverse((child) => {
-          if (!child.isMesh) return;
-          child.castShadow = true;
-          child.receiveShadow = true;
-          if (child.material?.map) child.material.map.colorSpace = THREE.SRGBColorSpace;
-          if (child.material?.isMeshStandardMaterial || child.material?.isMeshPhysicalMaterial) {
-            child.material.metalness = 0;
-            child.material.roughness = 0.8;
-          }
-        });
+        coinRoot = this.scene.cloneGameModel(DEFAULT_COIN_MODEL_ID);
       } catch (e) {
         coinRoot = null;
       }

@@ -1,6 +1,6 @@
 import * as THREE from "three";
-import * as SkeletonUtils from "three/addons/utils/SkeletonUtils.js";
 import { flatDistance } from "../Game/Utils.js";
+import { DEFAULT_CHEST_MODEL_ID } from "../Data/modelDefinitions.js";
 import { COIN_REWARD_SOURCE, getCoinReward } from "./Coin.js";
 
 export const CHEST_REWARD = {
@@ -27,7 +27,7 @@ export class ChestManager {
     this.clear();
 
     this.chests = level.chests.map((data) => {
-      const model = this.createChestModel();
+      const model = this.createChestModel(data.modelId);
 
       model.position.set(data.x, 0, data.z);
       model.rotation.y = data.rotationY;
@@ -140,36 +140,17 @@ export class ChestManager {
   // =========================
   // CREATE CHEST MODEL
   // =========================
-  createChestModel() {
-    if (this.scene.models && this.scene.models.loaded && this.scene.models.chest) {
+  createChestModel(modelId = DEFAULT_CHEST_MODEL_ID) {
+    if (typeof this.scene.cloneGameModel === "function") {
       try {
-        const cloned = SkeletonUtils.clone(this.scene.models.chest.scene);
-        cloned.traverse((child) => {
-          if (!child.isMesh) return;
-
-          child.castShadow = true;
-          child.receiveShadow = true;
-
-          if (child.material) {
-            // Ensure texture uses sRGB color space
-            if (child.material.map) {
-              child.material.map.colorSpace = THREE.SRGBColorSpace;
-            }
-            // Optimize material
-            if (child.material.isMeshStandardMaterial || child.material.isMeshPhysicalMaterial) {
-              child.material.metalness = 0;
-              child.material.roughness = Math.max(child.material.roughness ?? 1, 0.7);
-              child.material.needsUpdate = true;
-            }
-          }
-        });
-        return cloned;
+        const cloned = this.scene.cloneGameModel(modelId);
+        if (cloned) return cloned;
       } catch (e) {
-        console.warn("Final chest model clone failed:", e);
+        console.warn(`Chest model ${modelId} clone failed:`, e);
       }
     }
 
-    console.warn("Final chest model is not loaded. Check Assets/Models/chest.glb.");
+    console.warn(`Chest model ${modelId} is not loaded. Using fallback.`);
     return new THREE.Group();
   }
 

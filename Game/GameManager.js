@@ -5,7 +5,7 @@ export class GameManager {
     this.scene = scene;
     this.isGameOver = false;
     this.reloadTimer = null;
-    this.combatStartRange = 1.55;
+    this.combatStartRange = 1;
     this.enemyMovementPauseReason = "playerCombat";
     this.currentLevelIndex = 0;
     this.levelExitLocked = false;

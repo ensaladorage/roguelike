@@ -141,6 +141,7 @@ export const COMBAT_ROOM_TEMPLATES = [
       {
         x: -3,
         z: -2.2,
+        modelId: "enemy_orc_01",
         patrol: [
           { x: -3, z: -2.2 },
           { x: -3.4, z: 1.6 },
@@ -150,6 +151,7 @@ export const COMBAT_ROOM_TEMPLATES = [
       {
         x: 3,
         z: 2.2,
+        modelId: "enemy_orc_01",
         patrol: [
           { x: 3, z: 2.2 },
           { x: 3.4, z: -1.6 },
@@ -162,6 +164,7 @@ export const COMBAT_ROOM_TEMPLATES = [
         x: 3.5,
         z: -4,
         rotationY: 0,
+        modelId: "chest_01",
         optional: true,
       },
     ],

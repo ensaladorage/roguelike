@@ -124,6 +124,7 @@ export const EXIT_ROOM_TEMPLATES = [
         x: -2.8,
         z: -3,
         rotationY: 0,
+        modelId: "chest_01",
       },
     ],
     exitMarker: {

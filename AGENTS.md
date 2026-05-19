@@ -23,12 +23,15 @@ Build a simple top-down roguelike with:
 - Chest open rewards live in Chest.js, currently CHEST_REWARD.
 - Environment and global lighting live in Environment.js
 - Coin logic lives in Coin.js
+- Coin reward counts/values live in Coin.js, currently COIN_REWARDS and getCoinReward.
 - Scene.js only manages world + rendering + wiring
 - UI (HUD/log/audio) lives in Scene or UI helpers only
 - Game rules must NOT be inside input handlers
 - Game information and logic lives in GameManager.js
 - Level progression logic lives in GameManager.js
 - Level geometry data must stay out of Scene.js and live in data files or builder-owned definitions
+- Model asset definitions must live in Data/modelDefinitions.js, not hardcoded in Scene.js
+- Scene.js may preload and clone models from model definitions, but should not own model ids or asset paths
 - Enemy loot drop decisions live in EnemyAI.js and must be emitted as events
 - Scene.js renders dropped loot and handles pickup wiring only
 
@@ -46,6 +49,8 @@ Build a simple top-down roguelike with:
 - A floor can contain multiple reusable room instances placed together in world space.
 - Room instances must support world position and optional rotation.
 - Room templates define local openings, spawns, walls, walkable areas, decorations, and obstacles.
+- Room type collections live in Data files by category: enterRooms.js, combatRooms.js, exitRooms.js, treasureRooms.js, etc.
+- Data/roomTemplates.js is the room template registry; it imports room collections and exports ROOM_TEMPLATES.
 - LevelBuilder decides how placed room instances become one combined floor.
 - Do not treat EnterRoom, CombatRoom, ExitRoom, or other rooms as separate levels connected by nextLevel.
 - Scene.js must build all rooms of the current floor into the same levelGroup.
@@ -73,19 +78,38 @@ Build a simple top-down roguelike with:
 - Each room template must declare:
   - id
   - type
-  - size
+  - dimensions
   - openings
   - walkable areas
   - wall/floor modules
   - enemy spawns
   - chest spawns
+  - modelId on enemy/chest spawns when a non-default model is required
   - optional decorations
   - optional obstacles
 - New rooms must not be authored directly inside Scene.js.
-- Each new room should be testable in a simple floor composition with EnterRoom and ExitRoom.
+- Each new room should be testable in a simple floor composition with enter_room_01 and exit_room_01.
 - Prefer small, readable handcrafted layouts over overly dense geometry.
 - Openings must align cleanly with shared connectors.
 - Avoid duplicated borders on connected room sides.
+
+---
+
+## Model and asset rules
+
+- Gameplay model definitions live in Data/modelDefinitions.js.
+- Use MODEL_DEFINITIONS to register player, enemy, NPC, interactable, and collectible models.
+- Use semantic model ids such as player_human_01, enemy_orc_01, chest_01, and coin_01.
+- New .glb model files should be referenced through assetPath in Data/modelDefinitions.js.
+- Default model ids live in Data/modelDefinitions.js: DEFAULT_PLAYER_MODEL_ID, DEFAULT_ENEMY_MODEL_ID, DEFAULT_CHEST_MODEL_ID, and DEFAULT_COIN_MODEL_ID.
+- Scene.js loads model definitions with loadGameModels and stores them in models.byId.
+- Scene.js clones models through cloneGameModel(modelId); other systems should ask Scene for clones instead of loading GLBs directly.
+- Enemy room spawns can specify modelId to choose a specific enemy model.
+- Chest spawns can specify modelId to choose a specific chest model.
+- CoinManager uses DEFAULT_COIN_MODEL_ID and must not load coin.glb directly.
+- ChestManager uses DEFAULT_CHEST_MODEL_ID or chest spawn modelId and must not load chest.glb directly.
+- Character, enemy, NPC, chest, and coin asset paths must not be hardcoded in Scene.js.
+- Environment/tile assets are separate from gameplay model definitions and remain in Data/tileSetDefinitions.js.
 
 ---
 
@@ -96,6 +120,7 @@ Build a simple top-down roguelike with:
 - Player should not run directly into walls when the destination is reachable by a doorway
 - Player cannot move during combat
 - Enemy initiates combat via proximity detection
+- Combat start proximity currently lives in GameManager.js as combatStartRange; future per-enemy ranges should come from enemy data and fall back to this default.
 - Combat is turn-based cooldown (not real-time spam)
 - Only FSM controls state transitions
 - Exit buttons are in-floor gameplay elements unless a future floor progression feature explicitly uses them for level loading
@@ -113,6 +138,9 @@ Build a simple top-down roguelike with:
 - Enemy movement should resolve collisions each step and may slide along valid axes, but must stop/repath when blocked.
 - Enemy patrol timing defaults currently live in EnemyAI.js: movement duration 2-4 seconds and pause duration 0.5 or 1 second.
 - Enemy collision radius is configured from Scene.js when creating EnemyAI, currently ENEMY_COLLISION_RADIUS.
+- When the player is in combat, GameManager.js must pause movement for all non-active enemies with pauseMovement("playerCombat").
+- EnemyAI.js owns pauseMovement/resumeMovement/isMovementPaused so future enemy behaviors such as chase can also be stopped by combat rules.
+- The active combat enemy must not be paused by the playerCombat movement lock.
 
 ---
 
@@ -133,6 +161,7 @@ Build a simple top-down roguelike with:
 - Use separate walkable areas and collision walls for level layout
 - Chests should be distributed naturally in rooms, not all in one cluster
 - Room templates place chests only; chest rewards must not be hardcoded in room data.
+- Room templates place enemies only; enemy coin reward values must not be hardcoded in room data.
 - Chest ground drops should spawn toward the chest front, away from nearby walls
 - Coin outlines/visibility helpers must not use global postprocessing or alter scene lighting
 - Coin drops should animate from their source, avoid walls, and become collectible only after landing

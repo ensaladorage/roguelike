@@ -13,6 +13,12 @@ import { CoinManager } from "./Coin.js";
 import { Environment } from "./Environment.js";
 import { HANDCRAFTED_LEVELS } from "../Data/handcraftedLevels.js";
 import { ROOM_TEMPLATES } from "../Data/roomTemplates.js";
+import {
+  DEFAULT_ENEMY_MODEL_ID,
+  DEFAULT_PLAYER_MODEL_ID,
+  MODEL_TEXTURE_DEFINITIONS,
+  getModelDefinitionsToPreload,
+} from "../Data/modelDefinitions.js";
 import { RoomTemplateLibrary } from "./RoomTemplateLibrary.js";
 import { LevelBuilder } from "./LevelBuilder.js";
 import { ModularTileBuilder } from "./ModularTileBuilder.js";
@@ -88,7 +94,7 @@ export class GameScene {
 
     try {
       await Promise.all([
-        this.loadCharacterModels(),
+        this.loadGameModels(),
         this.preloadEnvironmentTileSets(),
       ]);
     } catch (err) {
@@ -141,49 +147,39 @@ export class GameScene {
     );
   }
 
-  async loadCharacterModels() {
+  async loadGameModels() {
     const loader = new GLTFLoader();
     const texLoader = new THREE.TextureLoader();
-
-    const modelPath = (name) => `Assets/Models/${name}.glb`;
-    const texPathPrimary = (name) => `Assets/Models/Textures/${name}.png`;
-    const texPathFallback = (name) => `Assets/Textures/${name}.png`;
 
     const loadTextureAsync = (url) =>
       new Promise((resolve, reject) => {
         texLoader.load(url, (tex) => resolve(tex), undefined, (err) => reject(err));
       });
 
-    const loadTextureWithFallback = async (name) => {
+    const loadTextureWithFallback = async (textureDefinition) => {
       try {
-        return await loadTextureAsync(texPathPrimary(name));
+        return await loadTextureAsync(textureDefinition.primaryPath);
       } catch (primaryError) {
         try {
-          return await loadTextureAsync(texPathFallback(name));
+          return await loadTextureAsync(textureDefinition.fallbackPath);
         } catch (fallbackError) {
           throw fallbackError;
         }
       }
     };
 
-    const [playerGltf, enemyGltf, chestGltf, colormap, variationA] =
-      await Promise.all([
-        loader.loadAsync(modelPath("character-human")),
-        loader.loadAsync(modelPath("character-orc")),
-        loader.loadAsync(modelPath("chest")),
-        loadTextureWithFallback("colormap"),
-        loadTextureWithFallback("variation-a"),
-      ]);
+    const textureEntries = await Promise.all(
+      Object.values(MODEL_TEXTURE_DEFINITIONS).map(async (textureDefinition) => {
+        const texture = await loadTextureWithFallback(textureDefinition);
 
-    try {
-      colormap.flipY = false;
-      colormap.encoding = THREE.sRGBEncoding;
-    } catch (error) {}
+        texture.flipY = false;
+        texture.colorSpace = THREE.SRGBColorSpace;
 
-    try {
-      variationA.flipY = false;
-      variationA.encoding = THREE.sRGBEncoding;
-    } catch (error) {}
+        return [textureDefinition.id, texture];
+      })
+    );
+
+    const textures = Object.fromEntries(textureEntries);
 
     const applyTexture = (gltf, tex) => {
       if (!gltf?.scene) return;
@@ -210,43 +206,55 @@ export class GameScene {
       });
     };
 
-    applyTexture(playerGltf, colormap);
-    applyTexture(enemyGltf, colormap);
-    applyTexture(chestGltf, colormap);
+    const modelEntries = await Promise.all(
+      getModelDefinitionsToPreload().map(async (modelDefinition) => {
+        const gltf = await loader.loadAsync(modelDefinition.assetPath);
+        const texture = textures[modelDefinition.textureId];
 
-    const prepareForScene = (gltf) => {
-      if (!gltf?.scene) return;
+        if (texture) applyTexture(gltf, texture);
+        this.prepareModelForScene(gltf.scene);
 
-      gltf.scene.traverse((node) => {
-        if (!node.isMesh) return;
+        return [modelDefinition.id, { definition: modelDefinition, gltf }];
+      })
+    );
 
-        node.castShadow = true;
-        node.receiveShadow = true;
-
-        if (node.material?.map) {
-          node.material.map.colorSpace = THREE.SRGBColorSpace;
-        }
-
-        if (node.material?.isMeshStandardMaterial || node.material?.isMeshPhysicalMaterial) {
-          node.material.metalness = 0;
-          node.material.roughness = Math.max(node.material.roughness ?? 1, 0.7);
-          node.material.needsUpdate = true;
-        }
-      });
-    };
-
-    prepareForScene(playerGltf);
-    prepareForScene(enemyGltf);
-    prepareForScene(chestGltf);
-
-    this.models.player = playerGltf;
-    this.models.enemy = enemyGltf;
-    this.models.chest = chestGltf;
-    this.models.textures = {
-      colormap,
-      "variation-a": variationA,
-    };
+    this.models.byId = Object.fromEntries(modelEntries);
+    this.models.textures = textures;
     this.models.loaded = true;
+  }
+
+  prepareModelForScene(model) {
+    if (!model) return;
+
+    model.traverse((node) => {
+      if (!node.isMesh) return;
+
+      node.castShadow = true;
+      node.receiveShadow = true;
+
+      if (node.material?.map) {
+        node.material.map.colorSpace = THREE.SRGBColorSpace;
+      }
+
+      if (node.material?.isMeshStandardMaterial || node.material?.isMeshPhysicalMaterial) {
+        node.material.metalness = 0;
+        node.material.roughness = Math.max(node.material.roughness ?? 1, 0.7);
+        node.material.needsUpdate = true;
+      }
+    });
+  }
+
+  cloneGameModel(modelId) {
+    const modelEntry = this.models.byId?.[modelId];
+    if (!this.models.loaded || !modelEntry?.gltf?.scene) return null;
+
+    const cloned = SkeletonUtils.clone(modelEntry.gltf.scene);
+    const scale = modelEntry.definition.scale ?? 1;
+
+    cloned.scale.set(scale, scale, scale);
+    this.prepareModelForScene(cloned);
+
+    return cloned;
   }
 
   addFloor() {
@@ -275,29 +283,13 @@ export class GameScene {
 
   async createPlayer() {
     let playerModel = null;
+    const playerModelId = DEFAULT_PLAYER_MODEL_ID;
 
-    if (this.models?.loaded && this.models.player) {
+    if (this.models?.loaded) {
       try {
-        playerModel = SkeletonUtils.clone(this.models.player.scene);
-        playerModel.traverse((child) => {
-          if (!child.isMesh) return;
-
-          child.castShadow = true;
-          child.receiveShadow = true;
-
-          if (child.material?.map) {
-            child.material.map.colorSpace = THREE.SRGBColorSpace;
-          }
-
-          if (child.material?.isMeshStandardMaterial || child.material?.isMeshPhysicalMaterial) {
-            child.material.metalness = 0;
-            child.material.roughness = Math.max(child.material.roughness ?? 1, 0.7);
-            child.material.needsUpdate = true;
-          }
-        });
-        playerModel.scale.set(1, 1, 1);
+        playerModel = this.cloneGameModel(playerModelId);
       } catch (error) {
-        console.warn("Failed to clone player model:", error);
+        console.warn(`Failed to clone player model ${playerModelId}:`, error);
       }
     }
 
@@ -418,27 +410,14 @@ export class GameScene {
 
   createEnemy(data) {
     let enemyModel = null;
+    const enemyModelId = data.modelId ?? DEFAULT_ENEMY_MODEL_ID;
 
-    if (this.models.loaded && this.models.enemy) {
-      enemyModel = SkeletonUtils.clone(this.models.enemy.scene);
-      enemyModel.traverse((child) => {
-        if (!child.isMesh) return;
+    if (this.models.loaded) {
+      enemyModel = this.cloneGameModel(enemyModelId);
+    }
 
-        child.castShadow = true;
-        child.receiveShadow = true;
-
-        if (child.material?.map) {
-          child.material.map.colorSpace = THREE.SRGBColorSpace;
-        }
-
-        if (child.material?.isMeshStandardMaterial || child.material?.isMeshPhysicalMaterial) {
-          child.material.metalness = 0;
-          child.material.roughness = Math.max(child.material.roughness ?? 1, 0.7);
-          child.material.needsUpdate = true;
-        }
-      });
-      enemyModel.scale.set(1, 1, 1);
-    } else {
+    if (!enemyModel) {
+      console.warn(`Enemy model ${enemyModelId} is not loaded. Using fallback.`);
       enemyModel = new THREE.Mesh(
         new THREE.BoxGeometry(0.8, 1.2, 0.8),
         new THREE.MeshStandardMaterial({ color: 0xb74343 })
