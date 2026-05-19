@@ -11,13 +11,26 @@ export class EnemyAI {
     this.model = model;
 
     this.state = ENEMY_STATES.PATROL;
+    this.spawnPosition = model.position.clone();
     this.patrolPoints = patrolPoints.length > 0
       ? patrolPoints.map((point) => point.clone())
       : [model.position.clone()];
     this.currentPatrolIndex = 0;
+    this.patrolPath = [];
+    this.patrolMode = "moving";
+    this.patrolMoveTimer = 0;
+    this.patrolPauseTimer = 0;
+    this.patrolMoveDuration = {
+      min: options.patrolMoveDuration?.min ?? 2,
+      max: options.patrolMoveDuration?.max ?? 4,
+    };
+    this.patrolPauseDurations = options.patrolPauseDurations ?? [0.5, 1];
+    this.patrolAreas = (options.patrolAreas ?? []).map((area) => ({ ...area }));
 
     this.speed = 1.35;
     this.patrolStopRange = 0.08;
+    this.collisionRadius = options.collisionRadius ?? 0.32;
+    this.navigation = options.navigation ?? null;
 
     this.attackRange = 1.6;
     this.attackDamage = 8;
@@ -37,6 +50,8 @@ export class EnemyAI {
     };
     this.healthBar = this.createHealthBar();
     this.model.add(this.healthBar);
+
+    this.chooseNextPatrolRoute();
   }
 
   update(delta, camera) {
@@ -85,6 +100,7 @@ export class EnemyAI {
     this.target = null;
     this.state = ENEMY_STATES.PATROL;
     this.healthBar.visible = false;
+    this.startPatrolPause();
 
     this.emit({
       type: "enemyStateChanged",
@@ -94,14 +110,42 @@ export class EnemyAI {
   }
 
   updatePatrol(delta) {
-    if (this.patrolPoints.length === 0) return;
+    if (this.patrolMode === "waiting") {
+      this.patrolPauseTimer -= delta;
 
-    const target = this.patrolPoints[this.currentPatrolIndex];
-    const arrived = this.moveTo(target, delta, this.patrolStopRange);
+      if (this.patrolPauseTimer <= 0) {
+        this.chooseNextPatrolRoute();
+      }
 
-    if (arrived) {
-      this.currentPatrolIndex =
-        (this.currentPatrolIndex + 1) % this.patrolPoints.length;
+      return;
+    }
+
+    this.patrolMoveTimer -= delta;
+
+    if (this.patrolMoveTimer <= 0) {
+      this.startPatrolPause();
+      return;
+    }
+
+    if (this.patrolPath.length === 0) {
+      this.chooseNextPatrolRoute();
+      return;
+    }
+
+    const target = this.patrolPath[0];
+    const movement = this.moveTo(target, delta, this.patrolStopRange);
+
+    if (movement.blocked) {
+      this.startPatrolPause();
+      return;
+    }
+
+    if (movement.arrived) {
+      this.patrolPath.shift();
+
+      if (this.patrolPath.length === 0) {
+        this.startPatrolPause();
+      }
     }
   }
 
@@ -133,6 +177,98 @@ export class EnemyAI {
     this.target.takeDamage(this.attackDamage, this);
   }
 
+  chooseNextPatrolRoute() {
+    for (let i = 0; i < 8; i += 1) {
+      const target = this.pickRandomPatrolTarget();
+
+      if (!target) break;
+
+      const path = this.getNavigationPath(this.model.position, target);
+
+      if (path.length === 0) continue;
+
+      this.patrolPath = path;
+      this.patrolMoveTimer = this.randomRange(
+        this.patrolMoveDuration.min,
+        this.patrolMoveDuration.max
+      );
+      this.patrolMode = "moving";
+      return;
+    }
+
+    this.useAuthoredPatrolFallback();
+  }
+
+  pickRandomPatrolTarget() {
+    if (this.navigation?.getRandomWalkablePoint) {
+      const point = this.navigation.getRandomWalkablePoint(
+        this.patrolAreas,
+        this.collisionRadius,
+        this.model.position
+      );
+
+      if (point) return point;
+    }
+
+    return this.pickRandomAuthoredPatrolPoint();
+  }
+
+  pickRandomAuthoredPatrolPoint() {
+    if (this.patrolPoints.length === 0) return null;
+
+    const target =
+      this.patrolPoints[Math.floor(Math.random() * this.patrolPoints.length)];
+
+    return target.clone();
+  }
+
+  getNavigationPath(from, to) {
+    if (this.navigation?.findPath) {
+      const path = this.navigation.findPath(from, to, this.collisionRadius);
+
+      if (path.length > 0) {
+        return path.map((point) => this.toGroundPoint(point));
+      }
+    }
+
+    if (this.canMoveBetween(from, to)) {
+      return [this.toGroundPoint(to)];
+    }
+
+    return [];
+  }
+
+  useAuthoredPatrolFallback() {
+    if (this.patrolPoints.length === 0) return;
+
+    const target = this.patrolPoints[this.currentPatrolIndex];
+    this.currentPatrolIndex =
+      (this.currentPatrolIndex + 1) % this.patrolPoints.length;
+
+    const path = this.getNavigationPath(this.model.position, target);
+
+    if (path.length === 0) {
+      this.startPatrolPause();
+      return;
+    }
+
+    this.patrolPath = path;
+    this.patrolMoveTimer = this.randomRange(
+      this.patrolMoveDuration.min,
+      this.patrolMoveDuration.max
+    );
+    this.patrolMode = "moving";
+  }
+
+  startPatrolPause() {
+    this.patrolPath = [];
+    this.patrolMode = "waiting";
+    this.patrolPauseTimer =
+      this.patrolPauseDurations[
+        Math.floor(Math.random() * this.patrolPauseDurations.length)
+      ] ?? 0.5;
+  }
+
   moveTo(target, delta, stopRange) {
     const dir = new THREE.Vector3().subVectors(target, this.model.position);
     dir.y = 0;
@@ -142,16 +278,71 @@ export class EnemyAI {
     if (distance <= stopRange) {
       this.model.position.x = target.x;
       this.model.position.z = target.z;
-      return true;
+      return { arrived: true, blocked: false };
     }
 
     dir.normalize();
 
     const step = Math.min(distance, this.speed * delta);
-    this.model.position.addScaledVector(dir, step);
+    const previousPosition = this.model.position.clone();
+    const desiredPosition = previousPosition.clone().addScaledVector(dir, step);
+    const nextPosition = this.resolveMovement(previousPosition, desiredPosition);
+
+    if (!nextPosition) {
+      return { arrived: false, blocked: true };
+    }
+
+    this.model.position.copy(nextPosition);
     this.face(target);
 
-    return false;
+    return { arrived: false, blocked: false };
+  }
+
+  resolveMovement(previousPosition, desiredPosition) {
+    if (this.canMoveBetween(previousPosition, desiredPosition)) {
+      return desiredPosition;
+    }
+
+    const candidates = [
+      new THREE.Vector3(
+        desiredPosition.x,
+        previousPosition.y,
+        previousPosition.z
+      ),
+      new THREE.Vector3(
+        previousPosition.x,
+        previousPosition.y,
+        desiredPosition.z
+      ),
+    ];
+
+    const validCandidates = candidates.filter((candidate) =>
+      this.canMoveBetween(previousPosition, candidate)
+    );
+
+    if (validCandidates.length === 0) return null;
+
+    validCandidates.sort(
+      (a, b) =>
+        a.distanceToSquared(desiredPosition) -
+        b.distanceToSquared(desiredPosition)
+    );
+
+    return validCandidates[0];
+  }
+
+  canMoveBetween(from, to) {
+    if (!this.navigation?.canMoveBetween) return true;
+
+    return this.navigation.canMoveBetween(from, to, this.collisionRadius);
+  }
+
+  toGroundPoint(point) {
+    return new THREE.Vector3(point.x, this.model.position.y, point.z);
+  }
+
+  randomRange(min, max) {
+    return min + Math.random() * (max - min);
   }
 
   takeDamage(amount, source) {

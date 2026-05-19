@@ -79,6 +79,20 @@ Build a simple top-down roguelike with:
 
 ---
 
+## Enemy navigation and patrol rules
+
+- Enemy movement must use the same walkable/collision navigation rules as the player; enemies must not move directly through collision walls, rocks, obstacles, or non-walkable space.
+- EnemyAI.js owns enemy patrol behavior and movement decisions, but Scene.js injects navigation callbacks and world collision data access.
+- Scene.js must stay orchestration-only for enemy navigation: provide canMoveBetween, findPath, and random walkable point helpers; do not put enemy decision logic in Scene.js.
+- LevelBuilder must pass room walkable areas to enemy spawn data as patrolAreas so enemies can patrol naturally inside their combat room.
+- Enemy patrol should be natural/random by default: choose a random reachable walkable target, follow a navigation path for a random movement duration, pause briefly, then choose a new route.
+- Enemy patrol routes must validate reachability through pathfinding before movement and should retry random targets before falling back or pausing.
+- Enemy movement should resolve collisions each step and may slide along valid axes, but must stop/repath when blocked.
+- Enemy patrol timing defaults currently live in EnemyAI.js: movement duration 2-4 seconds and pause duration 0.5 or 1 second.
+- Enemy collision radius is configured from Scene.js when creating EnemyAI, currently ENEMY_COLLISION_RADIUS.
+
+---
+
 ## Combat Rules
 
 - Player attack cooldown = source of truth

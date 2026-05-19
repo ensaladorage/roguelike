@@ -19,6 +19,7 @@ import { ModularTileBuilder } from "./ModularTileBuilder.js";
 
 const PLAYER_GROUND_Y = 0;
 const PLAYER_COLLISION_RADIUS = 0.32;
+const ENEMY_COLLISION_RADIUS = 0.32;
 const NAV_GRID_SIZE = 0.7;
 
 export class GameScene {
@@ -459,7 +460,21 @@ export class GameScene {
 
     return new EnemyAI(enemyRoot, patrolPoints, {
       coinDrop: data.coinDrop,
+      collisionRadius: ENEMY_COLLISION_RADIUS,
+      patrolAreas: data.patrolAreas,
+      navigation: this.createEnemyNavigation(),
     });
+  }
+
+  createEnemyNavigation() {
+    return {
+      canMoveBetween: (from, to, radius) =>
+        this.canMoveBetween(from, to, radius),
+      findPath: (from, to, radius) =>
+        this.findNavigationPath(from, to, radius),
+      getRandomWalkablePoint: (areas, radius, origin) =>
+        this.getRandomWalkablePoint(areas, radius, origin),
+    };
   }
 
   createClickFeedback(position) {
@@ -509,18 +524,18 @@ export class GameScene {
     );
   }
 
-  findNavigationPath(from, to) {
+  findNavigationPath(from, to, radius = PLAYER_COLLISION_RADIUS) {
     if (!this.navBounds) return [];
 
-    if (this.canMoveBetween(from, to)) {
+    if (this.canMoveBetween(from, to, radius)) {
       return [to.clone()];
     }
 
     const start = this.worldToNavCell(from);
     const goal = this.worldToNavCell(to);
 
-    if (!this.isNavCellWalkable(start)) return [];
-    if (!this.isNavCellWalkable(goal)) return [];
+    if (!this.isNavCellWalkable(start, radius)) return [];
+    if (!this.isNavCellWalkable(goal, radius)) return [];
 
     const open = [start];
     const cameFrom = new Map();
@@ -542,13 +557,15 @@ export class GameScene {
 
       if (current.x === goal.x && current.z === goal.z) {
         return this.simplifyNavigationPath(
-          this.reconstructNavigationPath(cameFrom, current).concat(to.clone())
+          this.reconstructNavigationPath(cameFrom, current).concat(to.clone()),
+          from,
+          radius
         );
       }
 
       closed.add(currentKey);
 
-      for (const neighbor of this.getNavNeighbors(current)) {
+      for (const neighbor of this.getNavNeighbors(current, radius)) {
         const neighborKey = this.navCellKey(neighbor);
         if (closed.has(neighborKey)) continue;
 
@@ -591,12 +608,12 @@ export class GameScene {
     );
   }
 
-  isNavCellWalkable(cell) {
+  isNavCellWalkable(cell, radius = PLAYER_COLLISION_RADIUS) {
     const position = this.navCellToWorld(cell);
-    return this.isWalkablePosition(position, PLAYER_COLLISION_RADIUS);
+    return this.isWalkablePosition(position, radius);
   }
 
-  getNavNeighbors(cell) {
+  getNavNeighbors(cell, radius = PLAYER_COLLISION_RADIUS) {
     const neighbors = [];
     const directions = [
       { x: 1, z: 0 },
@@ -616,18 +633,18 @@ export class GameScene {
       };
 
       if (!this.isNavCellInBounds(neighbor)) continue;
-      if (!this.isNavCellWalkable(neighbor)) continue;
+      if (!this.isNavCellWalkable(neighbor, radius)) continue;
 
       const currentWorld = this.navCellToWorld(cell);
       const neighborWorld = this.navCellToWorld(neighbor);
 
-      if (!this.canMoveBetween(currentWorld, neighborWorld)) continue;
+      if (!this.canMoveBetween(currentWorld, neighborWorld, radius)) continue;
 
       if (
         dir.x !== 0 &&
         dir.z !== 0 &&
-        (!this.isNavCellWalkable({ x: cell.x + dir.x, z: cell.z }) ||
-          !this.isNavCellWalkable({ x: cell.x, z: cell.z + dir.z }))
+        (!this.isNavCellWalkable({ x: cell.x + dir.x, z: cell.z }, radius) ||
+          !this.isNavCellWalkable({ x: cell.x, z: cell.z + dir.z }, radius))
       ) {
         continue;
       }
@@ -676,18 +693,18 @@ export class GameScene {
     return cells.slice(1).map((cell) => this.navCellToWorld(cell));
   }
 
-  simplifyNavigationPath(points) {
+  simplifyNavigationPath(points, from, radius = PLAYER_COLLISION_RADIUS) {
     if (points.length <= 2) return points;
 
     const simplified = [];
-    let anchor = this.player.model.position.clone();
+    let anchor = from.clone();
     let index = 0;
 
     while (index < points.length) {
       let nextIndex = index;
 
       for (let i = points.length - 1; i >= index; i -= 1) {
-        if (this.canMoveBetween(anchor, points[i])) {
+        if (this.canMoveBetween(anchor, points[i], radius)) {
           nextIndex = i;
           break;
         }
@@ -758,16 +775,41 @@ export class GameScene {
     return validCandidates[0];
   }
 
-  canMoveBetween(from, to) {
+  canMoveBetween(from, to, radius = PLAYER_COLLISION_RADIUS) {
     const target = {
       x: to.x,
       z: to.z,
     };
 
     return (
-      this.isWalkablePosition(target, PLAYER_COLLISION_RADIUS) &&
-      !this.movementHitsWall(from, to, PLAYER_COLLISION_RADIUS)
+      this.isWalkablePosition(target, radius) &&
+      !this.movementHitsWall(from, to, radius)
     );
+  }
+
+  getRandomWalkablePoint(areas = [], radius = PLAYER_COLLISION_RADIUS, origin = null) {
+    const sourceAreas = areas.length > 0 ? areas : this.walkableAreas;
+    const validAreas = sourceAreas.filter(
+      (area) => area.w > radius * 2 && area.d > radius * 2
+    );
+
+    if (validAreas.length === 0) return null;
+
+    for (let i = 0; i < 48; i += 1) {
+      const area = validAreas[Math.floor(Math.random() * validAreas.length)];
+      const x =
+        area.x - area.w / 2 + radius + Math.random() * (area.w - radius * 2);
+      const z =
+        area.z - area.d / 2 + radius + Math.random() * (area.d - radius * 2);
+      const point = new THREE.Vector3(x, PLAYER_GROUND_Y, z);
+
+      if (!this.isWalkablePosition(point, radius)) continue;
+      if (origin && flatDistance(origin, point) < radius * 3) continue;
+
+      return point;
+    }
+
+    return null;
   }
 
   isWalkablePosition(position, radius = 0) {

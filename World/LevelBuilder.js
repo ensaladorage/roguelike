@@ -90,6 +90,7 @@ export class LevelBuilder {
       enemies: (levelDefinition.enemies ?? []).map((enemy) => ({
         ...enemy,
         patrol: (enemy.patrol ?? []).map((point) => ({ ...point })),
+        patrolAreas: (enemy.patrolAreas ?? []).map(cloneArea),
         coinDrop: enemy.coinDrop ? { ...enemy.coinDrop } : undefined,
       })),
       exit: levelDefinition.exit ? { ...levelDefinition.exit } : null,
@@ -138,6 +139,7 @@ export class LevelBuilder {
       enemies: (levelDefinition.enemies ?? []).map((enemy) => ({
         ...enemy,
         patrol: (enemy.patrol ?? []).map((point) => ({ ...point })),
+        patrolAreas: (enemy.patrolAreas ?? []).map(cloneArea),
         coinDrop: enemy.coinDrop ? { ...enemy.coinDrop } : undefined,
       })),
       exit: levelDefinition.exit ? { ...levelDefinition.exit } : null,
@@ -201,6 +203,7 @@ export class LevelBuilder {
         ...room.enemySpawns.map((spawn) => ({
           ...spawn,
           patrol: (spawn.patrol ?? []).map((point) => ({ ...point })),
+          patrolAreas: room.walkableAreas.map(cloneArea),
           coinDrop: spawn.coinDrop ? { ...spawn.coinDrop } : undefined,
         }))
       );
