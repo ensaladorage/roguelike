@@ -26,12 +26,12 @@ export const COIN_REWARD_SOURCE = {
 
 export const COIN_REWARDS = {
   [COIN_REWARD_SOURCE.CHEST]: {
-    count: 3,
+    count: 6,
     value: COIN_VALUE.BASIC,
     radius: 0.62,
   },
   [COIN_REWARD_SOURCE.ENEMY]: {
-    count: 4,
+    count: 2,
     value: COIN_VALUE.HEAVY,
     radius: 0.7,
   },

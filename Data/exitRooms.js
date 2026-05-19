@@ -120,7 +120,7 @@ export const EXIT_ROOM_TEMPLATES = [
     ],
     enemySpawns: [],
     chestSpawns: [
-      { x: -2.5, z: -1.8, rotationY: 0, gold: 35 },
+      { x: -2.8, z: -3, rotationY: 0, gold: 35 },
     ],
     exitMarker: {
       x: 0,
