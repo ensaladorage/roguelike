@@ -28,7 +28,7 @@ export class EnemyAI {
     this.patrolPauseDurations = options.patrolPauseDurations ?? [0.5, 1];
     this.patrolAreas = (options.patrolAreas ?? []).map((area) => ({ ...area }));
 
-    this.speed = 1.35;
+    this.speed = 1.2;
     this.patrolStopRange = 0.08;
     this.collisionRadius = options.collisionRadius ?? 0.32;
     this.navigation = options.navigation ?? null;

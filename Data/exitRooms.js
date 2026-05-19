@@ -132,8 +132,8 @@ export const EXIT_ROOM_TEMPLATES = [
       z: 1.7,
     },
     decorativeModules: [
-      { x: -1, z: -3.5, w: 1, d: 1, moduleId: "banner", rotationY: -Math.PI },
-      { x: 1, z: -3.5, w: 1, d: 1, moduleId: "banner", rotationY: -Math.PI },
+      { x: -1, z: -3.48, w: 1, d: 1, moduleId: "banner", rotationY: -Math.PI },
+      { x: 1, z: -3.48, w: 1, d: 1, moduleId: "banner", rotationY: -Math.PI },
       { x: -1, z: 2.5, w: 1, d: 1, moduleId: "floorDetail" },
       { x: 2.5, z: -2, w: 1, d: 1, moduleId: "stones", rotationY: Math.PI },
     ],

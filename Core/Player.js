@@ -21,7 +21,7 @@ export class Player {
     this.target = null;
     this.path = [];
 
-    this.speed = 4.2;
+    this.speed = 3.5;
 
     this.maxHp = 100;
     this.hp = this.maxHp;

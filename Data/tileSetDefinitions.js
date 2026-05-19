@@ -27,7 +27,7 @@ export const TILESET_DEFINITIONS = {
           kind: "floor",
           color: 0x3b4140,
         },
-        positionY: 0.012,
+        positionY: 0,
       },
       wallNarrow: {
         id: "wallNarrow",
@@ -128,6 +128,7 @@ export const TILESET_DEFINITIONS = {
           kind: "decor",
           color: 0x8a2531,
         },
+        positionY: 0.2,
       },
       barrel: {
         id: "barrel",
