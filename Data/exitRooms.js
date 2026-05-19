@@ -58,24 +58,7 @@ export const EXIT_ROOM_TEMPLATES = [
         rotationY: -Math.PI / 2,
         moduleId: "wallCorner",
       },
-      {
-        x: -2,
-        z: -4,
-        w: 3,
-        d: 1,
-        side: "north",
-        rotationY: 0,
-        moduleId: "wallNarrow",
-      },
-      {
-        x: 2,
-        z: -4,
-        w: 3,
-        d: 1,
-        side: "north",
-        rotationY: 0,
-        moduleId: "wallNarrow",
-      },
+
       {
         x: 0,
         z: 4,

@@ -42,7 +42,7 @@ export const COMBAT_ROOM_TEMPLATES = [
       },
       {
         x: 5,
-        z: 6,
+        z: 5,
         w: 1,
         d: 1,
         corner: "southEast",
@@ -51,12 +51,30 @@ export const COMBAT_ROOM_TEMPLATES = [
       },
       {
         x: -5,
-        z: 6,
+        z: 5,
         w: 1,
         d: 1,
         corner: "southWest",
         rotationY: -Math.PI / 2,
         moduleId: "wallCorner",
+      },
+      {
+        x: -2.5,
+        z: 5,
+        w: 4,
+        d: 1,
+        side: "south",
+        rotationY: 0,
+        moduleId: "wallNarrow",
+      },
+      {
+        x: 2.5,
+        z: 5,
+        w: 4,
+        d: 1,
+        side: "south",
+        rotationY: 0,
+        moduleId: "wallNarrow",
       },
       {
         x: -2.5,
@@ -120,24 +138,25 @@ export const COMBAT_ROOM_TEMPLATES = [
       { side: "south", offset: 0, width: 1 },
     ],
     enemySpawns: [
-      {
-        x: -3,
-        z: -2.2,
-        patrol: [
-          { x: -3, z: -2.2 },
-          { x: -3.4, z: 1.6 },
-          { x: -1.3, z: 3.1 },
-        ],
-      },
-      {
-        x: 3,
-        z: 2.2,
-        patrol: [
-          { x: 3, z: 2.2 },
-          { x: 3.4, z: -1.6 },
-          { x: 1.3, z: -3.1 },
-        ],
-      },
+      //{
+        //x: -3,
+        //z: -2.2,
+        //patrol: [
+          //{ x: -3, z: -2.2 },
+          //{ x: -3.4, z: 1.6 },
+          //{ x: -1.3, z: 3.1 },
+        //],
+      //},
+      //{
+        //x: 3,
+        //z: 2.2,
+        //patrol: [
+          //{ x: 3, z: 2.2 },
+         // //{ x: 3.4, z: -1.6 },
+          //{ x: 1.3, z: -3.1 },
+        //],
+      //},
+      //},
     ],
     chestSpawns: [
       {
