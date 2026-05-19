@@ -74,18 +74,20 @@ export class ModularTileBuilder {
     const definition = tileSet.modules[piece.moduleId];
     if (!definition) return;
 
-    switch (definition.placementMode) {
-      case "grid":
-        this.buildGridModules(piece, definition);
-        return;
+    for (const stackPiece of this.createVerticalStackPieces(piece, definition)) {
+      switch (definition.placementMode) {
+        case "grid":
+          this.buildGridModules(stackPiece, definition);
+          break;
 
-      case "linear":
-        this.buildLinearModules(piece, definition, wallMeshes);
-        return;
+        case "linear":
+          this.buildLinearModules(stackPiece, definition, wallMeshes);
+          break;
 
-      case "single":
-      default:
-        this.buildSingleModule(piece, definition, wallMeshes);
+        case "single":
+        default:
+          this.buildSingleModule(stackPiece, definition, wallMeshes);
+      }
     }
   }
 
@@ -230,6 +232,7 @@ export class ModularTileBuilder {
 
   createFallbackWall(piece, fallback) {
     const height = piece.height ?? 1;
+    const baseY = piece.y ?? 0;
     const mesh = new THREE.Mesh(
       new THREE.BoxGeometry(piece.w, height, piece.d),
       new THREE.MeshStandardMaterial({
@@ -239,7 +242,7 @@ export class ModularTileBuilder {
       })
     );
 
-    mesh.position.set(piece.x, height / 2, piece.z);
+    mesh.position.set(piece.x, baseY + height / 2, piece.z);
     mesh.castShadow = true;
     mesh.receiveShadow = true;
 
@@ -248,6 +251,7 @@ export class ModularTileBuilder {
 
   createFallbackDecor(piece, fallback, definition) {
     const height = piece.height ?? definition.footprint?.height ?? 0.35;
+    const baseY = piece.y ?? 0;
     const mesh = new THREE.Mesh(
       new THREE.BoxGeometry(piece.w ?? 1, height, piece.d ?? 1),
       new THREE.MeshStandardMaterial({
@@ -257,7 +261,7 @@ export class ModularTileBuilder {
       })
     );
 
-    mesh.position.set(piece.x, height / 2, piece.z);
+    mesh.position.set(piece.x, baseY + height / 2, piece.z);
     mesh.rotation.y = piece.rotationY ?? 0;
     mesh.castShadow = true;
     mesh.receiveShadow = true;
@@ -311,7 +315,7 @@ export class ModularTileBuilder {
     group.add(rightPost);
     group.add(lintel);
 
-    group.position.set(piece.x, 0, piece.z);
+    group.position.set(piece.x, piece.y ?? 0, piece.z);
     group.rotation.y = this.getModuleRotationY(piece, {
       placementMode: "linear",
       fallback: { kind: "doorway" },
@@ -376,6 +380,34 @@ export class ModularTileBuilder {
   blocksSight(definition) {
     const kind = definition.fallback?.kind;
     return kind === "wall" || kind === "doorway" || kind === "obstacle";
+  }
+
+  createVerticalStackPieces(piece, definition) {
+    const count = this.getVerticalStackCount(piece);
+    if (count <= 1) return [piece];
+
+    const step = this.getVerticalStackStep(piece, definition);
+    const baseY = piece.y ?? definition.positionY ?? 0;
+
+    return Array.from({ length: count }, (_, index) => ({
+      ...piece,
+      y: baseY + index * step,
+    }));
+  }
+
+  getVerticalStackCount(piece) {
+    return Math.max(1, Math.round(piece.stackY ?? piece.countY ?? 1));
+  }
+
+  getVerticalStackStep(piece, definition) {
+    const step = (
+      piece.stackStepY ??
+      piece.height ??
+      definition.footprint?.height ??
+      1
+    );
+
+    return Math.max(0.0001, step);
   }
 
   getModuleAxis(piece) {
