@@ -115,9 +115,10 @@ export class ModularTileBuilder {
   }
 
   buildLinearModules(piece, definition, wallMeshes) {
-    const isHorizontal = piece.w >= piece.d;
-    const length = Math.max(piece.w, piece.d);
-    const thickness = Math.min(piece.w, piece.d);
+    const axis = this.getModuleAxis(piece);
+    const isHorizontal = axis === "x";
+    const length = isHorizontal ? piece.w : piece.d;
+    const thickness = isHorizontal ? piece.d : piece.w;
     const footprintLength = definition.footprint?.length ?? length;
     const count = Math.max(1, Math.round(length / footprintLength));
     const segmentLength = length / count;
@@ -142,13 +143,15 @@ export class ModularTileBuilder {
   }
 
   buildSingleModule(piece, definition, wallMeshes) {
-    const object = this.createModuleObject(piece, definition);
-    if (!object) return;
+    for (const modulePiece of this.createRepeatedSingleModulePieces(piece, definition)) {
+      const object = this.createModuleObject(modulePiece, definition);
+      if (!object) continue;
 
-    this.scene.levelGroup.add(object);
+      this.scene.levelGroup.add(object);
 
-    if (this.blocksSight(definition)) {
-      wallMeshes.push(object);
+      if (this.blocksSight(definition)) {
+        wallMeshes.push(object);
+      }
     }
   }
 
@@ -327,7 +330,7 @@ export class ModularTileBuilder {
     }
 
     if (definition.placementMode === "linear" || definition.fallback?.kind === "doorway") {
-      return piece.w >= piece.d ? 0 : Math.PI / 2;
+      return this.getModuleAxis(piece) === "x" ? 0 : Math.PI / 2;
     }
 
     return 0;
@@ -354,8 +357,9 @@ export class ModularTileBuilder {
         );
 
       case "linear": {
-        const length = Math.max(piece.w, piece.d);
-        const thickness = Math.min(piece.w, piece.d);
+        const axis = this.getModuleAxis(piece);
+        const length = axis === "x" ? piece.w : piece.d;
+        const thickness = axis === "x" ? piece.d : piece.w;
 
         return new THREE.Vector3(
           length / safeSize.x,
@@ -372,6 +376,57 @@ export class ModularTileBuilder {
   blocksSight(definition) {
     const kind = definition.fallback?.kind;
     return kind === "wall" || kind === "doorway" || kind === "obstacle";
+  }
+
+  getModuleAxis(piece) {
+    switch (piece.side) {
+      case "north":
+      case "south":
+        return "x";
+
+      case "east":
+      case "west":
+        return "z";
+
+      default:
+        return piece.w >= piece.d ? "x" : "z";
+    }
+  }
+
+  createRepeatedSingleModulePieces(piece, definition) {
+    const axis = this.getSingleModuleRepeatAxis(piece, definition);
+    if (!axis) return [piece];
+
+    const footprint = definition.footprint ?? { w: 1, d: 1 };
+    const tileLength = axis === "x" ? footprint.w ?? 1 : footprint.d ?? 1;
+    const length = axis === "x" ? piece.w : piece.d;
+    const count = Math.max(1, Math.round(length / tileLength));
+    if (count <= 1) return [piece];
+
+    const startOffset = -((count - 1) * tileLength) / 2;
+
+    return Array.from({ length: count }, (_, index) => {
+      const offset = startOffset + index * tileLength;
+
+      return {
+        ...piece,
+        x: axis === "x" ? piece.x + offset : piece.x,
+        z: axis === "z" ? piece.z + offset : piece.z,
+        w: footprint.w ?? 1,
+        d: footprint.d ?? 1,
+      };
+    });
+  }
+
+  getSingleModuleRepeatAxis(piece, definition) {
+    if (!piece.side) return null;
+
+    const footprint = definition.footprint ?? { w: 1, d: 1 };
+    const axis = this.getModuleAxis(piece);
+    const length = axis === "x" ? piece.w : piece.d;
+    const tileLength = axis === "x" ? footprint.w ?? 1 : footprint.d ?? 1;
+
+    return length > tileLength + 0.05 ? axis : null;
   }
 
   prepareAsset(root) {
