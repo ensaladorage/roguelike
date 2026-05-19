@@ -27,7 +27,7 @@ Build a simple top-down roguelike with:
 - Game rules must NOT be inside input handlers
 - Game information and logic lives in GameManager.js
 - Level progression logic lives in GameManager.js
-- Level geometry data can live in Scene.js, but should stay declarative and easy to replace
+- Level geometry data must stay out of Scene.js and live in data files or builder-owned definitions
 - Enemy loot drop decisions live in EnemyAI.js and must be emitted as events
 - Scene.js renders dropped loot and handles pickup wiring only
 
@@ -42,6 +42,27 @@ Build a simple top-down roguelike with:
 - Keep handcrafted room templates as the main workflow.
 - Do not implement full procedural generation until room templates and level assembly are stable.
 - Preserve compatibility with current gameplay systems: player, enemies, chests, coins, exit, collisions, navigation.
+- A floor can contain multiple reusable room instances placed together in world space.
+- Room instances must support world position and optional rotation.
+- Room templates define local openings, spawns, walls, walkable areas, decorations, and obstacles.
+- LevelBuilder decides how placed room instances become one combined floor.
+- Do not treat EnterRoom, CombatRoom, ExitRoom, or other rooms as separate levels connected by nextLevel.
+- Scene.js must build all rooms of the current floor into the same levelGroup.
+- Room-to-room movement happens through walkable connected geometry, not level loading.
+
+---
+
+## Room connection rules
+
+- Detect shared room borders in LevelBuilder by matching opposite room openings at the same world-space center.
+- Connected room borders must be handled once; do not render duplicated wall or doorway modules from both rooms.
+- Room templates should keep declaring openings, but LevelBuilder decides whether an opening becomes a standalone doorway or part of a shared connector.
+- Shared connectors are not standalone levels and should not be standalone room templates unless explicitly redesigned later.
+- Connector styles live in builder-owned data, currently CONNECTOR_STYLES in LevelBuilder.js.
+- The current openCorridor connector uses a 3-tile floor strip, side wall pieces, a central woodSupport arch, and a walkable connector area.
+- Connector visual meshes and collision boxes may differ when needed for gameplay feel.
+- Keep connector collision narrow enough that click-to-move pathfinding can pass through the corridor.
+- Tune connector side wall spacing with sideWallOffset in the connector style.
 
 ---
 
@@ -54,7 +75,7 @@ Build a simple top-down roguelike with:
 - Enemy initiates combat via proximity detection
 - Combat is turn-based cooldown (not real-time spam)
 - Only FSM controls state transitions
-- Exit buttons activate when the player stands on them and ask GameManager to load the next level
+- Exit buttons are in-floor gameplay elements unless a future floor progression feature explicitly uses them for level loading
 
 ---
 
@@ -78,6 +99,10 @@ Build a simple top-down roguelike with:
 - Coin outlines/visibility helpers must not use global postprocessing or alter scene lighting
 - Coin drops should animate from their source, avoid walls, and become collectible only after landing
 - Enemy patrol routes may pass through doors and enter rooms
+- Wall module rotation must follow the side of the room: north/south use one Y rotation, east/west use the perpendicular Y rotation.
+- Corner wall modules must be oriented explicitly per corner.
+- Visual obstacle size and collision size can differ when needed for navigation.
+- Rocks use reduced collision through ROCK_COLLISION_SCALE in LevelBuilder.js; tune that constant before resizing the visual mesh.
 
 ---
 
