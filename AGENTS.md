@@ -59,6 +59,7 @@ Build a simple top-down roguelike with:
 - Potion means energyDrink unless explicitly stated otherwise.
 - energyDrink is a ground drop only when dropped by enemies or chests. It should not be auto-added from the normal chest item pool.
 - energyDrink ground drops use World/ItemDrop.js and should behave like coin drops: launch from source, avoid walls, land on walkable ground, become collectible after landing, and remain on the ground if not collectible.
+- The current energyDrink ground drop visual is a simple 3D debug bottle/cylinder. Do not place the EnergyDrink.png image as a billboard or label on top of the 3D drop.
 - The energyDrink inventory max stack is Data/itemDefinitions.js -> ITEM_DEFINITIONS.energyDrink.inventory.maxStack, currently 3.
 - If the player already has max energyDrink count, the potion cannot be picked up and must remain on the floor.
 - Enemy energyDrink drop chance lives in World/EnemyAI.js -> ENEMY_POTION_DROP.chance, currently 0.05.

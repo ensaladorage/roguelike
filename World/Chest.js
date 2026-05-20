@@ -13,7 +13,7 @@ export const CHEST_REWARD = {
     "purpleShroom",
   ],
   potionDropItemId: "energyDrink",
-  potionDropChance: 0.05,
+  potionDropChance: 100,
   potionDropRadius: 0.9,
 };
 

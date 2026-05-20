@@ -65,7 +65,7 @@ export const ITEM_DEFINITIONS = {
     id: "purpleShroom",
     name: "Seta morada",
     type: ITEM_TYPES.CONSUMABLE,
-    imagePath: "Assets/Images/PurpleShroom.pmg.png",
+    imagePath: "Assets/Images/PurpleShroom.png",
     effect: ITEM_EFFECTS.STUN_ENEMY,
     consumable: {
       stunDuration: 3,

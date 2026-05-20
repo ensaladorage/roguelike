@@ -16,8 +16,6 @@ export class ItemDropManager {
   constructor(scene) {
     this.scene = scene;
     this.itemDrops = [];
-    this.textureLoader = new THREE.TextureLoader();
-    this.textures = new Map();
   }
 
   addItemDrops(items) {
@@ -94,22 +92,6 @@ export class ItemDropManager {
     cap.castShadow = true;
     group.add(cap);
 
-    const texture = this.getTexture(definition.imagePath);
-    if (texture) {
-      const label = new THREE.Mesh(
-        new THREE.PlaneGeometry(0.38, 0.38),
-        new THREE.MeshBasicMaterial({
-          map: texture,
-          transparent: true,
-          side: THREE.DoubleSide,
-        })
-      );
-      label.name = "itemDropLabel";
-      label.position.set(0, 0.42, 0.02);
-      label.userData.ignoreFlash = true;
-      group.add(label);
-    }
-
     group.userData.pulse = {
       baseScale: 1,
       t: Math.random() * Math.PI * 2,
@@ -118,27 +100,6 @@ export class ItemDropManager {
     };
 
     return group;
-  }
-
-  getTexture(imagePath) {
-    if (!imagePath) return null;
-    if (this.textures.has(imagePath)) return this.textures.get(imagePath);
-
-    const texture = this.textureLoader.load(
-      imagePath,
-      (loadedTexture) => {
-        loadedTexture.colorSpace = THREE.SRGBColorSpace;
-        loadedTexture.needsUpdate = true;
-      },
-      undefined,
-      () => {
-        this.textures.set(imagePath, null);
-      }
-    );
-
-    texture.colorSpace = THREE.SRGBColorSpace;
-    this.textures.set(imagePath, texture);
-    return texture;
   }
 
   update(delta) {
@@ -151,11 +112,6 @@ export class ItemDropManager {
       this.updatePulse(itemDrop, delta);
       this.updateLaunch(itemDrop, delta);
       itemDrop.model.rotation.y += delta * itemDrop.spinSpeed;
-
-      const label = itemDrop.model.getObjectByName("itemDropLabel");
-      if (label && this.scene.camera) {
-        label.quaternion.copy(this.scene.camera.quaternion);
-      }
 
       if (itemDrop.blockedPickupTimer > 0) {
         itemDrop.blockedPickupTimer -= delta;
