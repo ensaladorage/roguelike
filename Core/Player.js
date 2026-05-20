@@ -179,6 +179,21 @@ export class Player {
     });
   }
 
+  leaveCombat(enemy = this.currentEnemy) {
+    if (this.state === PLAYER_STATES.DEAD) return;
+    if (this.state !== PLAYER_STATES.COMBAT && !this.currentEnemy) return;
+
+    this.currentEnemy = null;
+    this.target = null;
+    this.path = [];
+    this.state = PLAYER_STATES.IDLE;
+
+    this.emit({
+      type: "combatEnd",
+      enemy,
+    });
+  }
+
   addGold(amount) {
     if (this.state === PLAYER_STATES.DEAD) return;
 

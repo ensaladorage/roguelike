@@ -3,6 +3,9 @@ export class HUD {
     this.hpText = document.querySelector("#hpText");
     this.hpBar = document.querySelector("#hpBar");
     this.goldText = document.querySelector("#goldText");
+    this.damageText = document.querySelector("#damageText");
+    this.attackSpeedText = document.querySelector("#attackSpeedText");
+    this.itemText = document.querySelector("#itemText");
     this.logElement = document.querySelector("#log");
     this.logEntries = [];
   }
@@ -22,6 +25,59 @@ export class HUD {
     if (this.goldText) {
       this.goldText.textContent = player.gold.toString();
     }
+
+    if (this.damageText) {
+      this.damageText.textContent = player.attackDamage.toString();
+    }
+
+    if (this.attackSpeedText) {
+      const attacksPerSecond =
+        player.attackCooldown > 0 ? 1 / player.attackCooldown : 0;
+
+      this.attackSpeedText.textContent = `${attacksPerSecond.toFixed(2)}/s`;
+    }
+  }
+
+  updateInventory(inventory) {
+    if (!this.itemText) return;
+
+    const consumables = inventory.getConsumableEntries();
+    const entries = [
+      ...consumables,
+      ...inventory.getPassiveEntries(),
+    ];
+
+    this.itemText.innerHTML = "";
+
+    if (entries.length === 0) {
+      this.itemText.textContent = "Vacio";
+      return;
+    }
+
+    const list = document.createElement("span");
+    list.className = "inventory-items";
+
+    entries.forEach((entry, index) => {
+      const item = document.createElement("span");
+      item.className = "inventory-item";
+      item.title =
+        index < consumables.length
+          ? `${index + 1}: ${entry.item.name}`
+          : entry.item.name;
+
+      const image = document.createElement("img");
+      image.src = entry.item.imagePath;
+      image.alt = entry.item.name;
+
+      const count = document.createElement("span");
+      count.textContent = `x${entry.count}`;
+
+      item.appendChild(image);
+      item.appendChild(count);
+      list.appendChild(item);
+    });
+
+    this.itemText.appendChild(list);
   }
 
   addLog(message) {

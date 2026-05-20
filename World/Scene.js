@@ -3,13 +3,16 @@ import { GLTFLoader } from "three/addons/loaders/GLTFLoader.js";
 import * as SkeletonUtils from "three/addons/utils/SkeletonUtils.js";
 import { EnemyAI } from "./EnemyAI.js";
 import { Player } from "../Core/Player.js";
-import { setupInput } from "../Core/Input.js";
+import { setupInput, setupInventoryInput } from "../Core/Input.js";
+import { Inventory } from "../Core/Inventory.js";
+import { ItemEffects } from "../Core/ItemEffects.js";
 import { GameManager } from "../Game/GameManager.js";
 import { flatDistance } from "../Game/Utils.js";
 import { HUD } from "../UI/HUD.js";
 import { SFX } from "../UI/SFX.js";
 import { ChestManager } from "./Chest.js";
 import { CoinManager } from "./Coin.js";
+import { ItemDropManager } from "./ItemDrop.js";
 import { Environment } from "./Environment.js";
 import { HANDCRAFTED_LEVELS } from "../Data/handcraftedLevels.js";
 import { ROOM_TEMPLATES } from "../Data/roomTemplates.js";
@@ -38,6 +41,7 @@ export class GameScene {
     this.environment = new Environment(this);
     this.chestManager = new ChestManager(this);
     this.coinManager = new CoinManager(this);
+    this.itemDropManager = new ItemDropManager(this);
     this.models = {};
     this.levelDefinitions = HANDCRAFTED_LEVELS;
     this.roomTemplateLibrary = new RoomTemplateLibrary(ROOM_TEMPLATES);
@@ -84,6 +88,8 @@ export class GameScene {
     this.hud = new HUD();
     this.sfx = new SFX();
     this.gameManager = new GameManager(this);
+    this.itemEffects = new ItemEffects();
+    this.inventory = null;
 
     this.init();
   }
@@ -104,6 +110,10 @@ export class GameScene {
 
     try {
       await this.createPlayer();
+      this.inventory = new Inventory({
+        player: this.player,
+        itemEffects: this.itemEffects,
+      });
     } catch (err) {
       console.error("createPlayer failed", err);
       this.addLog("Error creando player: " + (err.message || err));
@@ -125,6 +135,10 @@ export class GameScene {
       if (path.length > 0) {
         this.player.setPath(path);
       }
+    });
+
+    setupInventoryInput((slotIndex) => {
+      this.useInventorySlot(slotIndex);
     });
 
     window.addEventListener("resize", () => this.onResize());
@@ -323,6 +337,7 @@ export class GameScene {
     this.enemies = [];
     this.chests = [];
     if (this.coinManager) this.coinManager.clear();
+    if (this.itemDropManager) this.itemDropManager.clear();
     this.walkableAreas = [];
     this.collisionWalls = [];
     this.wallMeshes = [];
@@ -899,6 +914,7 @@ export class GameScene {
     }
 
     if (this.coinManager) this.coinManager.update(delta);
+    if (this.itemDropManager) this.itemDropManager.update(delta);
 
     const previousPlayerPosition = this.player.model.position.clone();
     this.player.update(delta);
@@ -907,6 +923,7 @@ export class GameScene {
     const events = [
       ...this.player.consumeEvents(),
       ...this.enemies.flatMap((enemy) => enemy.consumeEvents()),
+      ...(this.inventory ? this.inventory.consumeEvents() : []),
     ];
 
     this.handleGameEvents(events);
@@ -919,6 +936,22 @@ export class GameScene {
     this.renderer.render(this.scene, this.camera);
 
     requestAnimationFrame(() => this.animate());
+  }
+
+  useInventorySlot(slotIndex) {
+    if (!this.inventory) return;
+
+    this.inventory.useConsumableSlot(slotIndex, {
+      enemies: this.enemies,
+      scene: this,
+    });
+
+    const events = this.inventory.consumeEvents();
+    if (events.length > 0) {
+      this.handleGameEvents(events);
+    }
+
+    this.updateHud();
   }
 
   checkExitButton() {
@@ -973,6 +1006,10 @@ export class GameScene {
           this.addLog("Combate iniciado.");
           break;
 
+        case "combatEnd":
+          this.addLog("Combate interrumpido.");
+          break;
+
         case "playerAttack":
           this.addLog(`-${event.damage} HP enemigo.`);
           this.sfx.play("playerAttack");
@@ -1000,9 +1037,41 @@ export class GameScene {
           this.coinManager.addCoinDrops(event.coins);
           break;
 
+        case "enemyItemsDropped":
+          this.itemDropManager.addItemDrops(event.items);
+          break;
+
         case "enemyDefeated":
           this.addLog("Enemigo derrotado.");
           this.sfx.play("enemyDefeated");
+          break;
+
+        case "enemyStunned":
+          this.addLog(`Enemigo aturdido ${event.duration.toFixed(1)}s.`);
+          this.flashModel(event.enemy.model, 0x9c61ff, 0.22);
+          break;
+
+        case "itemPickedUp":
+          this.addLog(`Item recogido: ${event.item.name}.`);
+          this.updateHud();
+          break;
+
+        case "passiveItemApplied":
+          this.addLog(`Pasiva aplicada: ${event.item.name}.`);
+          this.updateHud();
+          break;
+
+        case "itemUsed":
+          this.addLog(`Item usado: ${event.item.name}.`);
+          this.updateHud();
+          break;
+
+        case "itemUseFailed":
+          this.addLog(this.getItemUseFailedMessage(event));
+          break;
+
+        case "itemPickupBlocked":
+          this.addLog(this.getItemPickupBlockedMessage(event));
           break;
 
         case "playerDefeated":
@@ -1080,6 +1149,35 @@ export class GameScene {
 
   updateHud() {
     this.hud.updatePlayer(this.player);
+    if (this.inventory) {
+      this.hud.updateInventory(this.inventory);
+    }
+  }
+
+  getItemUseFailedMessage(event) {
+    switch (event.reason) {
+      case "fullHp":
+        return "No necesitas curarte ahora.";
+
+      case "noEnemyInRange":
+        return "No hay enemigo cerca para aturdir.";
+
+      case "missingItem":
+        return "No tienes ese consumible.";
+
+      default:
+        return "No se pudo usar el item.";
+    }
+  }
+
+  getItemPickupBlockedMessage(event) {
+    switch (event.reason) {
+      case "inventoryFull":
+        return `Inventario lleno: no puedes recoger ${event.item.name}.`;
+
+      default:
+        return "No se pudo recoger el item.";
+    }
   }
 
   addLog(message) {

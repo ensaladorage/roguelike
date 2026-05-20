@@ -5,11 +5,32 @@ import { COIN_REWARD_SOURCE, getCoinReward } from "./Coin.js";
 
 export const CHEST_REWARD = {
   gold: 20,
+  itemChance: 1,
+  itemPool: [
+    "steak",
+    "chili",
+    "ramen",
+    "purpleShroom",
+  ],
+  potionDropItemId: "energyDrink",
+  potionDropChance: 0.05,
+  potionDropRadius: 0.9,
 };
 
 export function getChestReward() {
+  const itemPool = CHEST_REWARD.itemPool ?? [];
+  const itemId =
+    itemPool.length > 0 && Math.random() <= CHEST_REWARD.itemChance
+      ? itemPool[Math.floor(Math.random() * itemPool.length)]
+      : null;
+
   return {
     gold: CHEST_REWARD.gold,
+    itemId,
+    potionItemId:
+      Math.random() <= CHEST_REWARD.potionDropChance
+        ? CHEST_REWARD.potionDropItemId
+        : null,
   };
 }
 
@@ -39,6 +60,8 @@ export class ChestManager {
       return {
         model,
         gold: reward.gold,
+        itemId: reward.itemId,
+        potionItemId: reward.potionItemId,
         collected: false,
       };
     });
@@ -82,11 +105,49 @@ export class ChestManager {
     if (lid) lid.rotation.x = -0.85;
 
     this.spawnCoins(chest);
+    this.spawnPotionDrop(chest);
+    this.collectChestItem(chest);
 
     this.scene.updateHud();
     this.scene.addLog(`Cofre abierto: +${collectedGold} oro.`);
 
     this.scene.sfx.play("chest");
+  }
+
+  collectChestItem(chest) {
+    if (!chest.itemId || !this.scene.inventory) return;
+
+    this.scene.inventory.pickupItem(chest.itemId, {
+      source: "chest",
+      chest,
+      enemies: this.scene.enemies,
+    });
+  }
+
+  spawnPotionDrop(chest) {
+    if (!chest.potionItemId || !this.scene.itemDropManager) return;
+
+    const origin = chest.model.position.clone();
+    const forward = new THREE.Vector3(0, 0, 1)
+      .applyAxisAngle(new THREE.Vector3(0, 1, 0), chest.model.rotation.y)
+      .normalize();
+
+    const position = origin
+      .clone()
+      .addScaledVector(forward, CHEST_REWARD.potionDropRadius);
+
+    this.scene.itemDropManager.addItemDrops([
+      {
+        itemId: chest.potionItemId,
+        position: new THREE.Vector3(position.x, 0, position.z),
+        fallbackOrigin: origin,
+      },
+    ]);
+
+    console.log("chestPotionDropped", {
+      itemId: chest.potionItemId,
+      chance: CHEST_REWARD.potionDropChance,
+    });
   }
 
   // =========================
@@ -164,6 +225,10 @@ export class ChestManager {
 
     if (this.scene.coinManager) {
       this.scene.coinManager.clear();
+    }
+
+    if (this.scene.itemDropManager) {
+      this.scene.itemDropManager.clear();
     }
 
     this.chests = [];

@@ -70,6 +70,34 @@
       line-height: 1.2;
     }
 
+    .inventory-items {
+      display: flex;
+      flex-wrap: wrap;
+      justify-content: flex-end;
+      gap: 6px;
+      max-width: 190px;
+    }
+
+    .inventory-item {
+      display: inline-flex;
+      align-items: center;
+      gap: 4px;
+      min-width: 38px;
+      padding: 2px 5px 2px 3px;
+      border: 1px solid rgba(244, 241, 232, 0.15);
+      border-radius: 6px;
+      background: rgba(244, 241, 232, 0.08);
+      font-size: 12px;
+      line-height: 1;
+    }
+
+    .inventory-item img {
+      width: 20px;
+      height: 20px;
+      object-fit: contain;
+      image-rendering: auto;
+    }
+
     .bar {
       position: relative;
       height: 9px;
@@ -144,6 +172,14 @@
       <div class="stats-row">
         <span>Oro</span>
         <strong id="goldText">0</strong>
+      </div>
+      <div class="stats-row">
+        <span>Dano</span>
+        <strong id="damageText">10</strong>
+      </div>
+      <div class="stats-row">
+        <span>Ataques</span>
+        <strong id="attackSpeedText">1.43/s</strong>
       </div>
       <div class="stats-row">
         <span>Inventario</span>

@@ -26,6 +26,7 @@ export class GameManager {
     }
 
     const activeEnemy = player.currentEnemy?.alive
+      && !player.currentEnemy.isStunned?.()
       ? player.currentEnemy
       : null;
 
@@ -39,6 +40,7 @@ export class GameManager {
 
     for (const enemy of enemies) {
       if (!enemy.alive) continue;
+      if (enemy.isStunned?.()) continue;
 
       const distance = flatDistance(
         player.model.position,

@@ -1,9 +1,16 @@
 import * as THREE from "three";
 import { COIN_REWARD_SOURCE, getCoinReward } from "./Coin.js";
 
+export const ENEMY_POTION_DROP = {
+  itemId: "energyDrink",
+  chance: 0.05,
+  radius: 0.82,
+};
+
 export const ENEMY_STATES = {
   PATROL: "patrol",
   COMBAT: "combat",
+  STUNNED: "stunned",
   DEAD: "dead",
 };
 
@@ -38,6 +45,7 @@ export class EnemyAI {
     this.attackDamage = 8;
     this.attackCooldown = 1.2;
     this.attackTimer = 0;
+    this.stunTimer = 0;
 
     this.hp = 50;
     this.maxHp = this.hp;
@@ -63,6 +71,10 @@ export class EnemyAI {
         this.updateCombat(delta);
         break;
 
+      case ENEMY_STATES.STUNNED:
+        this.updateStunned(delta);
+        break;
+
       case ENEMY_STATES.DEAD:
         break;
     }
@@ -72,6 +84,7 @@ export class EnemyAI {
 
   startCombat(target) {
     if (!this.alive) return;
+    if (this.isStunned()) return;
     if (!target || target.hp <= 0) return;
 
     const alreadyInCombat = this.state === ENEMY_STATES.COMBAT;
@@ -104,6 +117,44 @@ export class EnemyAI {
       enemy: this,
       state: this.state,
     });
+  }
+
+  applyStun(duration = 3, source = null) {
+    if (!this.alive) return;
+
+    this.target = null;
+    this.patrolPath = [];
+    this.attackTimer = 0;
+    this.stunTimer = Math.max(this.stunTimer, duration);
+    this.state = ENEMY_STATES.STUNNED;
+    this.healthBar.visible = false;
+
+    this.emit({
+      type: "enemyStunned",
+      enemy: this,
+      source,
+      duration: this.stunTimer,
+    });
+  }
+
+  updateStunned(delta) {
+    this.stunTimer -= delta;
+
+    if (this.stunTimer > 0) return;
+
+    this.stunTimer = 0;
+    this.state = ENEMY_STATES.PATROL;
+    this.startPatrolPause();
+
+    this.emit({
+      type: "enemyStunEnded",
+      enemy: this,
+      state: this.state,
+    });
+  }
+
+  isStunned() {
+    return this.state === ENEMY_STATES.STUNNED || this.stunTimer > 0;
   }
 
   updatePatrol(delta) {
@@ -420,6 +471,15 @@ export class EnemyAI {
       coins: this.createCoinDrops(),
     });
 
+    const potionDrops = this.createPotionDrops();
+    if (potionDrops.length > 0) {
+      this.emit({
+        type: "enemyItemsDropped",
+        enemy: this,
+        items: potionDrops,
+      });
+    }
+
     this.emit({
       type: "enemyDefeated",
       enemy: this,
@@ -464,6 +524,33 @@ export class EnemyAI {
     });
 
     return coins;
+  }
+
+  createPotionDrops() {
+    if (Math.random() > ENEMY_POTION_DROP.chance) return [];
+
+    const origin = this.model.position.clone();
+
+    const forward = new THREE.Vector3(0, 0, 1)
+      .applyAxisAngle(new THREE.Vector3(0, 1, 0), this.model.rotation.y)
+      .normalize();
+
+    const position = origin
+      .clone()
+      .addScaledVector(forward, ENEMY_POTION_DROP.radius);
+
+    console.log("enemyPotionDropped", {
+      itemId: ENEMY_POTION_DROP.itemId,
+      chance: ENEMY_POTION_DROP.chance,
+    });
+
+    return [
+      {
+        itemId: ENEMY_POTION_DROP.itemId,
+        position: new THREE.Vector3(position.x, 0, position.z),
+        fallbackOrigin: origin.clone(),
+      },
+    ];
   }
 
   face(target) {

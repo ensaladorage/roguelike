@@ -18,3 +18,14 @@ export function setupInput(renderer, camera, floor, onClick) {
     }
   });
 }
+
+export function setupInventoryInput(onUseSlot) {
+  window.addEventListener("keydown", (event) => {
+    if (event.repeat) return;
+
+    const slotIndex = Number(event.key) - 1;
+    if (!Number.isInteger(slotIndex) || slotIndex < 0 || slotIndex > 8) return;
+
+    onUseSlot(slotIndex);
+  });
+}

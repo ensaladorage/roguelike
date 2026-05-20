@@ -24,6 +24,10 @@ Build a simple top-down roguelike with:
 - Environment and global lighting live in Environment.js
 - Coin logic lives in Coin.js
 - Coin reward counts/values live in Coin.js, currently COIN_REWARDS and getCoinReward.
+- Item definitions live in Data/itemDefinitions.js.
+- Inventory state lives in Core/Inventory.js.
+- Item effect logic lives in Core/ItemEffects.js.
+- Ground item drop visuals and pickup wiring live in World/ItemDrop.js.
 - Scene.js only manages world + rendering + wiring
 - UI (HUD/log/audio) lives in Scene or UI helpers only
 - Game rules must NOT be inside input handlers
@@ -34,6 +38,34 @@ Build a simple top-down roguelike with:
 - Scene.js may preload and clone models from model definitions, but should not own model ids or asset paths
 - Enemy loot drop decisions live in EnemyAI.js and must be emitted as events
 - Scene.js renders dropped loot and handles pickup wiring only
+
+---
+
+## Item and potion rules
+
+- Items are data-driven through Data/itemDefinitions.js.
+- Do not create one script per item.
+- Passive item effects are applied through Core/ItemEffects.js.
+- Consumable inventory storage and stack limits are owned by Core/Inventory.js.
+- Item pickup/use must emit events such as itemPickedUp, passiveItemApplied, itemUsed, itemUseFailed, or itemPickupBlocked.
+- Scene.js must only orchestrate item events, HUD updates, and manager wiring.
+- Food-themed passive items currently include:
+  - steak: damage up
+  - chili: attack speed up
+  - ramen: max HP up
+- Consumable items currently include:
+  - energyDrink: heal
+  - purpleShroom: stun nearby/current enemy, disengage combat, and allow player movement again
+- Potion means energyDrink unless explicitly stated otherwise.
+- energyDrink is a ground drop only when dropped by enemies or chests. It should not be auto-added from the normal chest item pool.
+- energyDrink ground drops use World/ItemDrop.js and should behave like coin drops: launch from source, avoid walls, land on walkable ground, become collectible after landing, and remain on the ground if not collectible.
+- The energyDrink inventory max stack is Data/itemDefinitions.js -> ITEM_DEFINITIONS.energyDrink.inventory.maxStack, currently 3.
+- If the player already has max energyDrink count, the potion cannot be picked up and must remain on the floor.
+- Enemy energyDrink drop chance lives in World/EnemyAI.js -> ENEMY_POTION_DROP.chance, currently 0.05.
+- Chest energyDrink drop chance lives in World/Chest.js -> CHEST_REWARD.potionDropChance, currently 0.05.
+- Normal chest item rewards live in World/Chest.js -> CHEST_REWARD.itemChance and CHEST_REWARD.itemPool.
+- Keep enemy potion drop decisions in EnemyAI.js and emit events. Scene.js renders dropped items through ItemDropManager only.
+- Keep chest potion drop decisions in Chest.js. Chest room data must not hardcode potion rewards.
 
 ---
 
@@ -165,6 +197,7 @@ Build a simple top-down roguelike with:
 - Chest ground drops should spawn toward the chest front, away from nearby walls
 - Coin outlines/visibility helpers must not use global postprocessing or alter scene lighting
 - Coin drops should animate from their source, avoid walls, and become collectible only after landing
+- Potion drops should follow the same ground drop behavior as coins and should be managed by World/ItemDrop.js.
 - Enemy patrol routes may pass through doors and enter rooms
 - Wall module rotation must follow the side of the room: north/south use one Y rotation, east/west use the perpendicular Y rotation.
 - Corner wall modules must be oriented explicitly per corner.
@@ -197,3 +230,20 @@ When player dies:
 
 - Use console logs for events
 - Never remove logs during debugging phase
+
+---
+
+## Local browser verification
+
+- The in-app browser can be used to verify the game at http://127.0.0.1:5500/index.html when the user has the local server running.
+- Prefer the Browser plugin / in-app browser for visual checks instead of OS browser commands.
+- If the in-app browser is already open to http://127.0.0.1:5500/index.html, reuse the selected tab and reload it after code changes.
+- Browser setup that worked in Codex uses the Node REPL browser client:
+  - import setupBrowserRuntime from C:/Users/Javi/.codex/plugins/cache/openai-bundled/browser/0.1.0-alpha2/scripts/browser-client.mjs
+  - get the in-app browser with agent.browsers.get("iab")
+  - use browser.tabs.selected() or browser.tabs.new()
+  - call tab.reload() or tab.goto("http://127.0.0.1:5500/index.html")
+  - read errors with tab.dev.logs({ levels: ["error", "warning"], limit: 20 })
+- Do not waste time trying file:// URLs for this project in the in-app browser; they are blocked by browser policy.
+- If http://localhost or another port is blocked, try the known working URL: http://127.0.0.1:5500/index.html.
+- A successful smoke check should reload the page, confirm the title is Roguelike, and confirm there are 0 browser warning/error logs.
