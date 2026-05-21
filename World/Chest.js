@@ -5,7 +5,7 @@ import { COIN_REWARD_SOURCE, getCoinReward } from "./Coin.js";
 
 export const CHEST_REWARD = {
   gold: 20,
-  itemChance: 1,
+  itemChance: 100,
   itemPool: [
     "steak",
     "chili",
@@ -13,14 +13,14 @@ export const CHEST_REWARD = {
     "purpleShroom",
   ],
   potionDropItemId: "energyDrink",
-  potionDropChancePercent: 5,
+  potionDropChancePercent: 100,
   potionDropRadius: 0.9,
 };
 
 export function getChestReward() {
   const itemPool = CHEST_REWARD.itemPool ?? [];
   const itemId =
-    itemPool.length > 0 && Math.random() <= CHEST_REWARD.itemChance
+    itemPool.length > 4 && Math.random() <= CHEST_REWARD.itemChance
       ? itemPool[Math.floor(Math.random() * itemPool.length)]
       : null;
 
