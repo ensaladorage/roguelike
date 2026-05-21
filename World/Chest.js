@@ -5,7 +5,7 @@ import { COIN_REWARD_SOURCE, getCoinReward } from "./Coin.js";
 
 export const CHEST_REWARD = {
   gold: 20,
-  itemChancePercent: 10,
+  itemChancePercent: 80,
   itemRollCount: 1,
   itemPool: [
     "steak",
@@ -14,7 +14,7 @@ export const CHEST_REWARD = {
     "purpleShroom",
   ],
   potionDropItemId: "energyDrink",
-  potionDropChancePercent: 100,
+  potionDropChancePercent: 20,
   potionDropRadius: 0.9,
 };
 
