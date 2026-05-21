@@ -32,8 +32,11 @@ export class HUD {
     }
 
     if (this.attackSpeedText) {
-      const attacksPerSecond =
-        player.attackCooldown > 0 ? 1 / player.attackCooldown : 0;
+      const attacksPerSecond = Number.isFinite(player.attackSpeed)
+        ? player.attackSpeed
+        : player.attackCooldown > 0
+          ? 1 / player.attackCooldown
+          : 0;
 
       this.attackSpeedText.textContent = `${attacksPerSecond.toFixed(2)}/s`;
     }

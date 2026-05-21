@@ -10,6 +10,7 @@ export const PLAYER_STATES = {
 const OCCLUSION_RING_INNER_RADIUS = 0.42;
 const OCCLUSION_RING_OUTER_RADIUS = 0.5;
 const OCCLUSION_RING_Y = 0.06;
+const MIN_ATTACK_SPEED = 0.1;
 
 export class Player {
   constructor(model) {
@@ -29,7 +30,8 @@ export class Player {
 
     this.attackDamage = 10;
     this.attackRange = 1.65;
-    this.attackCooldown = 0.7;
+    this.attackSpeed = 1.2;
+    this.attackCooldown = this.getAttackCooldownFromSpeed(this.attackSpeed);
     this.attackTimer = 0;
 
     this.currentEnemy = null;
@@ -46,6 +48,16 @@ export class Player {
     this.occlusionSample = new THREE.Vector3();
     this.occlusionMarker = this.createOcclusionMarker();
     this.model.add(this.occlusionMarker);
+  }
+
+  getAttackCooldownFromSpeed(attackSpeed) {
+    return 1 / Math.max(MIN_ATTACK_SPEED, attackSpeed);
+  }
+
+  setAttackSpeed(attackSpeed) {
+    this.attackSpeed = Math.max(MIN_ATTACK_SPEED, attackSpeed);
+    this.attackCooldown = this.getAttackCooldownFromSpeed(this.attackSpeed);
+    this.attackTimer = Math.min(this.attackTimer, this.attackCooldown);
   }
 
   createOcclusionMarker() {

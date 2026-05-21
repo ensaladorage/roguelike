@@ -185,7 +185,8 @@ Build a simple top-down roguelike with:
 
 ## Combat Rules
 
-- Player attack cooldown = source of truth
+- Player attackSpeed is configured in Player.js and is the player-facing attack rate stat shown in the HUD.
+- Player attackCooldown is derived from attackSpeed in Player.js and used internally for combat timing.
 - Enemy attack cooldown = independent timer
 - Damage must be event-driven
 - Damage flash effects must be triggered only by real damage events, not by combat start or attack intent events
@@ -232,6 +233,7 @@ When player dies:
 - No direct DOM access inside Player or Enemy
 - All player-facing game text must be in English: HUD labels, item names, logs, debug/log window messages, aria labels, hints, and level names shown on screen.
 - Spanish is allowed only for programmer-facing text such as code comments, internal notes, or developer documentation.
+- HUD stat numbers must be read from player/game state, not from static placeholder text in index.html.
 
 ---
 

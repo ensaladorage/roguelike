@@ -58,21 +58,26 @@ export class ItemEffects {
   applyAttackSpeedUp(definition, { player } = {}) {
     if (!player) return this.missingPlayerResult();
 
-    const multiplier = definition.modifiers?.attackCooldownMultiplier ?? 1;
-    const minAttackCooldown = definition.modifiers?.minAttackCooldown ?? 0.2;
-    const previousValue = player.attackCooldown;
+    const multiplier = definition.modifiers?.attackSpeedMultiplier ?? 1;
+    const maxAttackSpeed = definition.modifiers?.maxAttackSpeed ?? Infinity;
+    const previousValue =
+      player.attackSpeed ?? (player.attackCooldown > 0 ? 1 / player.attackCooldown : 1);
+    const nextValue = Math.min(maxAttackSpeed, previousValue * multiplier);
 
-    player.attackCooldown = Math.max(
-      minAttackCooldown,
-      player.attackCooldown * multiplier
-    );
+    if (typeof player.setAttackSpeed === "function") {
+      player.setAttackSpeed(nextValue);
+    } else {
+      player.attackSpeed = nextValue;
+      player.attackCooldown = 1 / nextValue;
+    }
 
     return {
       applied: true,
       consumed: true,
-      stat: "attackCooldown",
-      amount: previousValue - player.attackCooldown,
-      value: player.attackCooldown,
+      stat: "attackSpeed",
+      amount: player.attackSpeed - previousValue,
+      value: player.attackSpeed,
+      attackCooldown: player.attackCooldown,
     };
   }
 
