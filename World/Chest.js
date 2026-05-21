@@ -5,7 +5,7 @@ import { COIN_REWARD_SOURCE, getCoinReward } from "./Coin.js";
 
 export const CHEST_REWARD = {
   gold: 20,
-  itemChance: 100,
+  itemChancePercent: 100,
   itemPool: [
     "steak",
     "chili",
@@ -19,14 +19,31 @@ export const CHEST_REWARD = {
 
 export function getChestReward() {
   const itemPool = CHEST_REWARD.itemPool ?? [];
+  const itemDropRoll = rollPercentChance(CHEST_REWARD.itemChancePercent);
   const itemId =
-    itemPool.length > 0 && Math.random() <= CHEST_REWARD.itemChance
+    itemPool.length > 0 && itemDropRoll.success
       ? itemPool[Math.floor(Math.random() * itemPool.length)]
       : null;
+
+  console.log("chestItemDropRoll", {
+    itemId,
+    chancePercent: CHEST_REWARD.itemChancePercent,
+    roll: itemDropRoll.value,
+    spawned: Boolean(itemId),
+  });
 
   return {
     gold: CHEST_REWARD.gold,
     itemId,
+  };
+}
+
+function rollPercentChance(chancePercent) {
+  const value = Math.random() * 100;
+
+  return {
+    value: Number(value.toFixed(2)),
+    success: value < chancePercent,
   };
 }
 
@@ -154,12 +171,7 @@ export class ChestManager {
   }
 
   rollPotionDrop() {
-    const value = Math.random() * 100;
-
-    return {
-      value: Number(value.toFixed(2)),
-      success: value < CHEST_REWARD.potionDropChancePercent,
-    };
+    return rollPercentChance(CHEST_REWARD.potionDropChancePercent);
   }
 
   // =========================

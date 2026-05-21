@@ -70,7 +70,8 @@ Build a simple top-down roguelike with:
 - Enemy energyDrink drop chance lives in World/EnemyAI.js -> ENEMY_POTION_DROP.chancePercent, currently 5. This is a 1-100 percent value, not a 0-1 fraction.
 - Chest energyDrink drop chance lives in World/Chest.js -> CHEST_REWARD.potionDropChancePercent, currently 5. This is a 1-100 percent value, not a 0-1 fraction.
 - Potion drop rolls must log debug output whether they spawn or fail. Current debug log names are enemyPotionDropRoll and chestPotionDropRoll.
-- Normal chest item rewards live in World/Chest.js -> CHEST_REWARD.itemChance and CHEST_REWARD.itemPool.
+- Normal chest item rewards live in World/Chest.js -> CHEST_REWARD.itemChancePercent and CHEST_REWARD.itemPool. itemChancePercent is a 0-100 percent value.
+- Normal chest item drop rolls should log debug output whether they spawn or fail. Current debug log name is chestItemDropRoll.
 - Keep enemy potion drop decisions in EnemyAI.js and emit events. Scene.js renders dropped items through ItemDropManager only.
 - Keep chest potion drop decisions in Chest.js. Chest room data must not hardcode potion rewards.
 
