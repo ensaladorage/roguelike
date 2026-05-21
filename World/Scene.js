@@ -10,6 +10,7 @@ import { GameManager } from "../Game/GameManager.js";
 import { flatDistance } from "../Game/Utils.js";
 import { HUD } from "../UI/HUD.js";
 import { SFX } from "../UI/SFX.js";
+import { VFX } from "../UI/VFX.js";
 import { ChestManager } from "./Chest.js";
 import { CoinManager } from "./Coin.js";
 import { ItemDropManager } from "./ItemDrop.js";
@@ -87,6 +88,7 @@ export class GameScene {
 
     this.hud = new HUD();
     this.sfx = new SFX();
+    this.vfx = new VFX({ root: this.levelGroup });
     this.gameManager = new GameManager(this);
     this.itemEffects = new ItemEffects();
     this.inventory = null;
@@ -332,6 +334,7 @@ export class GameScene {
     if (!level) return;
 
     this.levelIndex = levelIndex;
+    if (this.vfx) this.vfx.clear();
     this.levelGroup.clear();
     this.enemy = null;
     this.enemies = [];
@@ -915,6 +918,7 @@ export class GameScene {
 
     if (this.coinManager) this.coinManager.update(delta);
     if (this.itemDropManager) this.itemDropManager.update(delta);
+    if (this.vfx) this.vfx.update(delta, this.camera);
 
     const previousPlayerPosition = this.player.model.position.clone();
     this.player.update(delta);
@@ -1064,6 +1068,7 @@ export class GameScene {
 
         case "itemUsed":
           this.addLog(`Item used: ${event.item.name}.`);
+          this.playItemUseFeedback(event);
           this.highlightItemStat(event.result);
           this.updateHud();
           break;
@@ -1160,6 +1165,16 @@ export class GameScene {
     if (!result?.stat) return;
 
     this.hud.highlightStat(result.stat);
+  }
+
+  playItemUseFeedback(event) {
+    if (event.itemId !== "purpleShroom") return;
+
+    const target = event.result?.enemy;
+    if (!target) return;
+
+    this.vfx.playPurpleGasCloud(target);
+    this.sfx.play("purpleShroom");
   }
 
   getItemUseFailedMessage(event) {

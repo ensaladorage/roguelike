@@ -22,6 +22,14 @@ export class SFX {
         frequency: 760,
         duration: 0.12,
       },
+
+      purpleShroom: {
+        frequency: 260,
+        endFrequency: 90,
+        duration: 0.28,
+        type: "sawtooth",
+        gain: 0.06,
+      },
     };
   }
 
@@ -43,9 +51,17 @@ export class SFX {
     const osc = this.audioContext.createOscillator();
     const gain = this.audioContext.createGain();
 
-    osc.frequency.value = tone.frequency;
+    osc.type = tone.type ?? "sine";
+    osc.frequency.setValueAtTime(tone.frequency, now);
 
-    gain.gain.setValueAtTime(0.05, now);
+    if (tone.endFrequency) {
+      osc.frequency.exponentialRampToValueAtTime(
+        tone.endFrequency,
+        now + tone.duration
+      );
+    }
+
+    gain.gain.setValueAtTime(tone.gain ?? 0.05, now);
     gain.gain.exponentialRampToValueAtTime(
       0.001,
       now + tone.duration
