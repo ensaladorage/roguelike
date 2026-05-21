@@ -230,6 +230,8 @@ When player dies:
 - Avoid mixing UI + game logic
 - Prefer event-driven communication
 - No direct DOM access inside Player or Enemy
+- All player-facing game text must be in English: HUD labels, item names, logs, debug/log window messages, aria labels, hints, and level names shown on screen.
+- Spanish is allowed only for programmer-facing text such as code comments, internal notes, or developer documentation.
 
 ---
 

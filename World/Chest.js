@@ -104,7 +104,7 @@ export class ChestManager {
     this.collectChestItem(chest);
 
     this.scene.updateHud();
-    this.scene.addLog(`Cofre abierto: +${collectedGold} oro.`);
+    this.scene.addLog(`Chest opened: +${collectedGold} gold.`);
 
     this.scene.sfx.play("chest");
   }

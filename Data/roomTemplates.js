@@ -298,7 +298,7 @@ export const ROOM_TEMPLATES = [
   ...EXIT_ROOM_TEMPLATES,
   createRectRoomTemplate({
     id: "corridor_straight",
-    name: "Corredor Recto",
+    name: "Straight Corridor",
     dimensions: { w: 5, d: 10 },
     doorOpenings: [
       { side: "north", offset: 0, width: 1 },
@@ -312,7 +312,7 @@ export const ROOM_TEMPLATES = [
   }),
   createRectRoomTemplate({
     id: "combat_room_basic",
-    name: "Sala de Combate",
+    name: "Combat Room",
     dimensions: { w: 11, d: 9 },
     doorOpenings: [
       { side: "north", offset: 0, width: 1 },
@@ -356,7 +356,7 @@ export const ROOM_TEMPLATES = [
   }),
   createRectRoomTemplate({
     id: "exit_room_basic",
-    name: "Sala de Salida",
+    name: "Exit Room",
     dimensions: { w: 9, d: 9 },
     doorOpenings: [
       { side: "south", offset: 0, width: 1 },
@@ -376,7 +376,7 @@ export const ROOM_TEMPLATES = [
   }),
   createRectRoomTemplate({
     id: "half_wall_alcove",
-    name: "Alcoba Lateral",
+    name: "Side Alcove",
     dimensions: { w: 7, d: 7 },
     wallModuleId: "wallNarrow",
     cornerModuleId: "wallCorner",

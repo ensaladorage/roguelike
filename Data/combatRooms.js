@@ -2,7 +2,7 @@ export const COMBAT_ROOM_TEMPLATES = [
   {
     id: "combat_obstacle_01",
     type: "combat",
-    name: "Sala de Combate Obstaculo 01",
+    name: "Obstacle Combat Room 01",
     dimensions: { w: 11, d: 11 },
     floorModules: [
       {

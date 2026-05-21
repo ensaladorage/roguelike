@@ -105,7 +105,7 @@ export class GameScene {
       ]);
     } catch (err) {
       console.error("initial asset load failed", err);
-      this.addLog("Assets de entorno o personajes con fallback activo.");
+      this.addLog("Environment or character assets are using fallback visuals.");
     }
 
     try {
@@ -116,7 +116,7 @@ export class GameScene {
       });
     } catch (err) {
       console.error("createPlayer failed", err);
-      this.addLog("Error creando player: " + (err.message || err));
+      this.addLog("Error creating player: " + (err.message || err));
     }
 
     this.loadLevel(0);
@@ -354,7 +354,7 @@ export class GameScene {
 
     this.gameManager.setLevel(levelIndex);
     this.updateHud();
-    this.addLog(`${level.name} cargado.`);
+    this.addLog(`${level.name} loaded.`);
     console.log("levelLoaded", { level: levelIndex + 1, name: level.name });
   }
 
@@ -969,7 +969,7 @@ export class GameScene {
     this.exitButton.button.position.y = 0.08;
     this.exitButton.button.material.color.setHex(0x65d67c);
     this.exitButton.button.material.emissive.setHex(0x143d1d);
-    this.addLog("Salida activada.");
+    this.addLog("Exit activated.");
     console.log("levelExitActivated", {
       from: this.levelIndex + 1,
     });
@@ -1003,20 +1003,20 @@ export class GameScene {
 
       switch (event.type) {
         case "combatStart":
-          this.addLog("Combate iniciado.");
+          this.addLog("Combat started.");
           break;
 
         case "combatEnd":
-          this.addLog("Combate interrumpido.");
+          this.addLog("Combat interrupted.");
           break;
 
         case "playerAttack":
-          this.addLog(`-${event.damage} HP enemigo.`);
+          this.addLog(`Enemy takes ${event.damage} damage.`);
           this.sfx.play("playerAttack");
           break;
 
         case "enemyAttack":
-          this.addLog(`Enemigo ataca: -${event.damage} PV.`);
+          this.addLog(`Enemy attacks: -${event.damage} HP.`);
           this.sfx.play("enemyAttack");
           break;
 
@@ -1042,28 +1042,28 @@ export class GameScene {
           break;
 
         case "enemyDefeated":
-          this.addLog("Enemigo derrotado.");
+          this.addLog("Enemy defeated.");
           this.sfx.play("enemyDefeated");
           break;
 
         case "enemyStunned":
-          this.addLog(`Enemigo aturdido ${event.duration.toFixed(1)}s.`);
+          this.addLog(`Enemy stunned for ${event.duration.toFixed(1)}s.`);
           this.flashModel(event.enemy.model, 0x9c61ff, 0.22);
           break;
 
         case "itemPickedUp":
-          this.addLog(`Item recogido: ${event.item.name}.`);
+          this.addLog(`Item picked up: ${event.item.name}.`);
           this.updateHud();
           break;
 
         case "passiveItemApplied":
-          this.addLog(`Pasiva aplicada: ${event.item.name}.`);
+          this.addLog(`Passive applied: ${event.item.name}.`);
           this.highlightItemStat(event.result);
           this.updateHud();
           break;
 
         case "itemUsed":
-          this.addLog(`Item usado: ${event.item.name}.`);
+          this.addLog(`Item used: ${event.item.name}.`);
           this.highlightItemStat(event.result);
           this.updateHud();
           break;
@@ -1165,26 +1165,26 @@ export class GameScene {
   getItemUseFailedMessage(event) {
     switch (event.reason) {
       case "fullHp":
-        return "No necesitas curarte ahora.";
+        return "You do not need healing right now.";
 
       case "noEnemyInRange":
-        return "No hay enemigo cerca para aturdir.";
+        return "No enemy is close enough to stun.";
 
       case "missingItem":
-        return "No tienes ese consumible.";
+        return "You do not have that consumable.";
 
       default:
-        return "No se pudo usar el item.";
+        return "Could not use that item.";
     }
   }
 
   getItemPickupBlockedMessage(event) {
     switch (event.reason) {
       case "inventoryFull":
-        return `Inventario lleno: no puedes recoger ${event.item.name}.`;
+        return `Inventory full: you cannot pick up ${event.item.name}.`;
 
       default:
-        return "No se pudo recoger el item.";
+        return "Could not pick up that item.";
     }
   }
 

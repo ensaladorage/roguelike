@@ -344,7 +344,7 @@ export class CoinManager {
     coin.model.visible = false;
     try { this.scene.player.addGold(coin.value); } catch (e) {}
     try { this.scene.updateHud(); } catch (e) {}
-    try { this.scene.addLog(`Moneda recogida: +${coin.value} oro.`); } catch (e) {}
+    try { this.scene.addLog(`Coin picked up: +${coin.value} gold.`); } catch (e) {}
     try { this.scene.sfx.play("chest"); } catch (e) {}
   }
 

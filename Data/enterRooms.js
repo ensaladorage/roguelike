@@ -2,7 +2,7 @@ export const ENTER_ROOM_TEMPLATES = [
   {
     id: "enter_room_01",
     type: "enter",
-    name: "Entrada 01",
+    name: "Entrance 01",
     dimensions: { w: 5, d: 11 },
     floorModules: [
       {

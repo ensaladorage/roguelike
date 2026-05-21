@@ -14,7 +14,7 @@ export class HUD {
   updatePlayer(player) {
     if (this.hpText) {
       this.hpText.textContent =
-        `${player.hp} / ${player.maxHp} PV`;
+        `${player.hp} / ${player.maxHp} HP`;
     }
 
     if (this.hpBar) {
@@ -51,7 +51,7 @@ export class HUD {
     this.itemText.innerHTML = "";
 
     if (entries.length === 0) {
-      this.itemText.textContent = "Vacio";
+      this.itemText.textContent = "Empty";
       return;
     }
 

@@ -14,7 +14,7 @@ export const ITEM_EFFECTS = {
 export const ITEM_DEFINITIONS = {
   steak: {
     id: "steak",
-    name: "Bistec",
+    name: "Steak",
     type: ITEM_TYPES.PASSIVE,
     imagePath: "Assets/Images/Steak.png",
     effect: ITEM_EFFECTS.DAMAGE_UP,
@@ -25,7 +25,7 @@ export const ITEM_DEFINITIONS = {
 
   chili: {
     id: "chili",
-    name: "Chile",
+    name: "Chili",
     type: ITEM_TYPES.PASSIVE,
     imagePath: "Assets/Images/Chili.png",
     effect: ITEM_EFFECTS.ATTACK_SPEED_UP,
@@ -49,7 +49,7 @@ export const ITEM_DEFINITIONS = {
 
   energyDrink: {
     id: "energyDrink",
-    name: "Bebida energetica",
+    name: "Energy Drink",
     type: ITEM_TYPES.CONSUMABLE,
     imagePath: "Assets/Images/EnergyDrink.png",
     effect: ITEM_EFFECTS.HEAL,
@@ -63,7 +63,7 @@ export const ITEM_DEFINITIONS = {
 
   purpleShroom: {
     id: "purpleShroom",
-    name: "Seta morada",
+    name: "Purple Shroom",
     type: ITEM_TYPES.CONSUMABLE,
     imagePath: "Assets/Images/PurpleShroom.png",
     effect: ITEM_EFFECTS.STUN_ENEMY,

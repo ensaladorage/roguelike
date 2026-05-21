@@ -97,7 +97,7 @@ export class GameManager {
     if (this.isGameOver) return;
 
     this.isGameOver = true;
-    this.scene.addLog("Has muerto. Reiniciando...");
+    this.scene.addLog("You died. Restarting...");
 
     this.reloadTimer = window.setTimeout(() => {
       this.restart();

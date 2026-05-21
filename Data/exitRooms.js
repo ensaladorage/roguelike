@@ -2,7 +2,7 @@ export const EXIT_ROOM_TEMPLATES = [
   {
     id: "exit_room_01",
     type: "exit",
-    name: "Salida 01",
+    name: "Exit 01",
     dimensions: { w: 9, d: 9 },
     floorModules: [
       {
