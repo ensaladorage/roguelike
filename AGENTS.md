@@ -52,6 +52,8 @@ Build a simple top-down roguelike with:
 - Consumable HUD icons appear only after the player has received that consumable at least once.
 - After a discovered consumable is used, its HUD icon must remain visible and show count 0.
 - When a consumable stack reaches its max, the HUD count should display "Max.".
+- HUD item order is data-driven by Data/itemDefinitions.js -> hudSlot. Current order is 1 energyDrink, 2 purpleShroom, 3 ramen, 4 steak, 5 chili.
+- Consumable keyboard use is data-driven by Data/itemDefinitions.js -> useSlot. Current usable slots are 1 energyDrink and 2 purpleShroom.
 - Stats modified by item effects should visually highlight in red for about 3 seconds so the player notices the changed stat.
 - Food-themed passive items currently include:
   - steak: damage up

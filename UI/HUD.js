@@ -64,10 +64,9 @@ export class HUD {
     entries.forEach((entry, index) => {
       const item = document.createElement("span");
       item.className = "inventory-item";
-      item.title =
-        index < consumables.length
-          ? `${index + 1}: ${entry.item.name}`
-          : entry.item.name;
+      item.title = entry.item.useSlot
+        ? `${entry.item.useSlot}: ${entry.item.name}`
+        : `${entry.item.hudSlot}: ${entry.item.name}`;
 
       const image = document.createElement("img");
       image.src = entry.item.imagePath;

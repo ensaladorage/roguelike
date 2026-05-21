@@ -1,5 +1,6 @@
 import {
   ITEM_TYPES,
+  getItemDefinitionByUseSlot,
   getItemDefinition,
   getItemMaxStack,
 } from "../Data/itemDefinitions.js";
@@ -110,10 +111,11 @@ export class Inventory {
   }
 
   useConsumableSlot(slotIndex, context = {}) {
-    const entry = this.getConsumableEntries()[slotIndex];
-    if (!entry) return false;
+    const useSlot = slotIndex + 1;
+    const definition = getItemDefinitionByUseSlot(useSlot);
+    if (!definition || definition.type !== ITEM_TYPES.CONSUMABLE) return false;
 
-    return this.useConsumable(entry.item.id, context);
+    return this.useConsumable(definition.id, context);
   }
 
   getConsumableEntries() {
@@ -124,11 +126,12 @@ export class Inventory {
 
     return [...itemIds]
       .map((itemId) => this.createEntry(itemId, this.getConsumableCount(itemId)))
-      .filter((entry) => entry.item);
+      .filter((entry) => entry.item)
+      .sort(this.sortEntriesByHudSlot);
   }
 
   getPassiveEntries() {
-    return this.getEntries(this.passives);
+    return this.getEntries(this.passives).sort(this.sortEntriesByHudSlot);
   }
 
   getConsumableCount(itemId) {
@@ -160,6 +163,10 @@ export class Inventory {
       maxStack,
       isMax: Number.isFinite(maxStack) && count >= maxStack,
     };
+  }
+
+  sortEntriesByHudSlot(a, b) {
+    return (a.item.hudSlot ?? 999) - (b.item.hudSlot ?? 999);
   }
 
   addItemCount(source, itemId, amount) {

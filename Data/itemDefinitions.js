@@ -16,6 +16,7 @@ export const ITEM_DEFINITIONS = {
     id: "steak",
     name: "Steak",
     type: ITEM_TYPES.PASSIVE,
+    hudSlot: 4,
     imagePath: "Assets/Images/Steak.png",
     effect: ITEM_EFFECTS.DAMAGE_UP,
     modifiers: {
@@ -27,6 +28,7 @@ export const ITEM_DEFINITIONS = {
     id: "chili",
     name: "Chili",
     type: ITEM_TYPES.PASSIVE,
+    hudSlot: 5,
     imagePath: "Assets/Images/Chili.png",
     effect: ITEM_EFFECTS.ATTACK_SPEED_UP,
     modifiers: {
@@ -39,6 +41,7 @@ export const ITEM_DEFINITIONS = {
     id: "ramen",
     name: "Ramen",
     type: ITEM_TYPES.PASSIVE,
+    hudSlot: 3,
     imagePath: "Assets/Images/Ramen.png",
     effect: ITEM_EFFECTS.MAX_HP_UP,
     modifiers: {
@@ -51,6 +54,8 @@ export const ITEM_DEFINITIONS = {
     id: "energyDrink",
     name: "Energy Drink",
     type: ITEM_TYPES.CONSUMABLE,
+    hudSlot: 1,
+    useSlot: 1,
     imagePath: "Assets/Images/EnergyDrink.png",
     effect: ITEM_EFFECTS.HEAL,
     inventory: {
@@ -65,6 +70,8 @@ export const ITEM_DEFINITIONS = {
     id: "purpleShroom",
     name: "Purple Shroom",
     type: ITEM_TYPES.CONSUMABLE,
+    hudSlot: 2,
+    useSlot: 2,
     imagePath: "Assets/Images/PurpleShroom.png",
     effect: ITEM_EFFECTS.STUN_ENEMY,
     inventory: {
@@ -83,6 +90,12 @@ export function getItemDefinition(itemId) {
 
 export function getItemMaxStack(itemId) {
   return getItemDefinition(itemId)?.inventory?.maxStack ?? Infinity;
+}
+
+export function getItemDefinitionByUseSlot(useSlot) {
+  return Object.values(ITEM_DEFINITIONS).find(
+    (definition) => definition.useSlot === useSlot
+  ) ?? null;
 }
 
 export function getItemDefinitionsByType(type) {
