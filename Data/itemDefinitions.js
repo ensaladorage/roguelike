@@ -32,7 +32,7 @@ export const ITEM_DEFINITIONS = {
     imagePath: "Assets/Images/Chili.png",
     effect: ITEM_EFFECTS.ATTACK_SPEED_UP,
     modifiers: {
-      attackSpeedMultiplier: 1.14,
+      attackSpeedMultiplier: 1.2,
       maxAttackSpeed: 4,
     },
   },
