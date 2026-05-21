@@ -67,6 +67,9 @@ export const ITEM_DEFINITIONS = {
     type: ITEM_TYPES.CONSUMABLE,
     imagePath: "Assets/Images/PurpleShroom.png",
     effect: ITEM_EFFECTS.STUN_ENEMY,
+    inventory: {
+      maxStack: 3,
+    },
     consumable: {
       stunDuration: 3,
       radius: 3,

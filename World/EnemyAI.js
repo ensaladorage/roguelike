@@ -3,7 +3,7 @@ import { COIN_REWARD_SOURCE, getCoinReward } from "./Coin.js";
 
 export const ENEMY_POTION_DROP = {
   itemId: "energyDrink",
-  chance: 0.05,
+  chancePercent: 5,
   radius: 0.82,
 };
 
@@ -527,7 +527,15 @@ export class EnemyAI {
   }
 
   createPotionDrops() {
-    if (Math.random() > ENEMY_POTION_DROP.chance) return [];
+    const roll = this.rollPercentChance(ENEMY_POTION_DROP.chancePercent);
+    console.log("enemyPotionDropRoll", {
+      itemId: ENEMY_POTION_DROP.itemId,
+      chancePercent: ENEMY_POTION_DROP.chancePercent,
+      roll: roll.value,
+      spawned: roll.success,
+    });
+
+    if (!roll.success) return [];
 
     const origin = this.model.position.clone();
 
@@ -541,7 +549,7 @@ export class EnemyAI {
 
     console.log("enemyPotionDropped", {
       itemId: ENEMY_POTION_DROP.itemId,
-      chance: ENEMY_POTION_DROP.chance,
+      chancePercent: ENEMY_POTION_DROP.chancePercent,
     });
 
     return [
@@ -551,6 +559,15 @@ export class EnemyAI {
         fallbackOrigin: origin.clone(),
       },
     ];
+  }
+
+  rollPercentChance(chancePercent) {
+    const value = Math.random() * 100;
+
+    return {
+      value: Number(value.toFixed(2)),
+      success: value < chancePercent,
+    };
   }
 
   face(target) {

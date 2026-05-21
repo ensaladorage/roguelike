@@ -13,7 +13,7 @@ export const CHEST_REWARD = {
     "purpleShroom",
   ],
   potionDropItemId: "energyDrink",
-  potionDropChance: 100,
+  potionDropChancePercent: 5,
   potionDropRadius: 0.9,
 };
 
@@ -27,10 +27,6 @@ export function getChestReward() {
   return {
     gold: CHEST_REWARD.gold,
     itemId,
-    potionItemId:
-      Math.random() <= CHEST_REWARD.potionDropChance
-        ? CHEST_REWARD.potionDropItemId
-        : null,
   };
 }
 
@@ -61,7 +57,6 @@ export class ChestManager {
         model,
         gold: reward.gold,
         itemId: reward.itemId,
-        potionItemId: reward.potionItemId,
         collected: false,
       };
     });
@@ -125,7 +120,15 @@ export class ChestManager {
   }
 
   spawnPotionDrop(chest) {
-    if (!chest.potionItemId || !this.scene.itemDropManager) return;
+    const roll = this.rollPotionDrop();
+    console.log("chestPotionDropRoll", {
+      itemId: CHEST_REWARD.potionDropItemId,
+      chancePercent: CHEST_REWARD.potionDropChancePercent,
+      roll: roll.value,
+      spawned: roll.success,
+    });
+
+    if (!roll.success || !this.scene.itemDropManager) return;
 
     const origin = chest.model.position.clone();
     const forward = new THREE.Vector3(0, 0, 1)
@@ -138,16 +141,25 @@ export class ChestManager {
 
     this.scene.itemDropManager.addItemDrops([
       {
-        itemId: chest.potionItemId,
+        itemId: CHEST_REWARD.potionDropItemId,
         position: new THREE.Vector3(position.x, 0, position.z),
         fallbackOrigin: origin,
       },
     ]);
 
     console.log("chestPotionDropped", {
-      itemId: chest.potionItemId,
-      chance: CHEST_REWARD.potionDropChance,
+      itemId: CHEST_REWARD.potionDropItemId,
+      chancePercent: CHEST_REWARD.potionDropChancePercent,
     });
+  }
+
+  rollPotionDrop() {
+    const value = Math.random() * 100;
+
+    return {
+      value: Number(value.toFixed(2)),
+      success: value < CHEST_REWARD.potionDropChancePercent,
+    };
   }
 
   // =========================

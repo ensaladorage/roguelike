@@ -10,6 +10,7 @@ export class Inventory {
     this.itemEffects = itemEffects;
     this.passives = new Map();
     this.consumables = new Map();
+    this.knownConsumables = new Set();
     this.events = [];
   }
 
@@ -44,6 +45,8 @@ export class Inventory {
     }
 
     if (definition.type === ITEM_TYPES.CONSUMABLE) {
+      this.knownConsumables.add(definition.id);
+
       if (!this.canPickupItem(definition.id)) {
         this.emit({
           type: "itemPickupBlocked",
@@ -114,7 +117,14 @@ export class Inventory {
   }
 
   getConsumableEntries() {
-    return this.getEntries(this.consumables);
+    const itemIds = new Set([
+      ...this.knownConsumables,
+      ...this.consumables.keys(),
+    ]);
+
+    return [...itemIds]
+      .map((itemId) => this.createEntry(itemId, this.getConsumableCount(itemId)))
+      .filter((entry) => entry.item);
   }
 
   getPassiveEntries() {
@@ -137,11 +147,19 @@ export class Inventory {
   getEntries(source) {
     return [...source.entries()]
       .filter(([, count]) => count > 0)
-      .map(([itemId, count]) => ({
-        item: getItemDefinition(itemId),
-        count,
-      }))
+      .map(([itemId, count]) => this.createEntry(itemId, count))
       .filter((entry) => entry.item);
+  }
+
+  createEntry(itemId, count) {
+    const maxStack = getItemMaxStack(itemId);
+
+    return {
+      item: getItemDefinition(itemId),
+      count,
+      maxStack,
+      isMax: Number.isFinite(maxStack) && count >= maxStack,
+    };
   }
 
   addItemCount(source, itemId, amount) {

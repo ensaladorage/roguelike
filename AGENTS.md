@@ -49,6 +49,10 @@ Build a simple top-down roguelike with:
 - Consumable inventory storage and stack limits are owned by Core/Inventory.js.
 - Item pickup/use must emit events such as itemPickedUp, passiveItemApplied, itemUsed, itemUseFailed, or itemPickupBlocked.
 - Scene.js must only orchestrate item events, HUD updates, and manager wiring.
+- Consumable HUD icons appear only after the player has received that consumable at least once.
+- After a discovered consumable is used, its HUD icon must remain visible and show count 0.
+- When a consumable stack reaches its max, the HUD count should display "Max.".
+- Stats modified by item effects should visually highlight in red for about 3 seconds so the player notices the changed stat.
 - Food-themed passive items currently include:
   - steak: damage up
   - chili: attack speed up
@@ -61,9 +65,11 @@ Build a simple top-down roguelike with:
 - energyDrink ground drops use World/ItemDrop.js and should behave like coin drops: launch from source, avoid walls, land on walkable ground, become collectible after landing, and remain on the ground if not collectible.
 - The current energyDrink ground drop visual is a simple 3D debug bottle/cylinder. Do not place the EnergyDrink.png image as a billboard or label on top of the 3D drop.
 - The energyDrink inventory max stack is Data/itemDefinitions.js -> ITEM_DEFINITIONS.energyDrink.inventory.maxStack, currently 3.
+- The purpleShroom inventory max stack is Data/itemDefinitions.js -> ITEM_DEFINITIONS.purpleShroom.inventory.maxStack, currently 3.
 - If the player already has max energyDrink count, the potion cannot be picked up and must remain on the floor.
-- Enemy energyDrink drop chance lives in World/EnemyAI.js -> ENEMY_POTION_DROP.chance, currently 0.05.
-- Chest energyDrink drop chance lives in World/Chest.js -> CHEST_REWARD.potionDropChance, currently 0.05.
+- Enemy energyDrink drop chance lives in World/EnemyAI.js -> ENEMY_POTION_DROP.chancePercent, currently 5. This is a 1-100 percent value, not a 0-1 fraction.
+- Chest energyDrink drop chance lives in World/Chest.js -> CHEST_REWARD.potionDropChancePercent, currently 5. This is a 1-100 percent value, not a 0-1 fraction.
+- Potion drop rolls must log debug output whether they spawn or fail. Current debug log names are enemyPotionDropRoll and chestPotionDropRoll.
 - Normal chest item rewards live in World/Chest.js -> CHEST_REWARD.itemChance and CHEST_REWARD.itemPool.
 - Keep enemy potion drop decisions in EnemyAI.js and emit events. Scene.js renders dropped items through ItemDropManager only.
 - Keep chest potion drop decisions in Chest.js. Chest room data must not hardcode potion rewards.
@@ -240,7 +246,9 @@ When player dies:
 - Prefer the Browser plugin / in-app browser for visual checks instead of OS browser commands.
 - If the in-app browser is already open to http://127.0.0.1:5500/index.html, reuse the selected tab and reload it after code changes.
 - Browser setup that worked in Codex uses the Node REPL browser client:
-  - import setupBrowserRuntime from C:/Users/Javi/.codex/plugins/cache/openai-bundled/browser/0.1.0-alpha2/scripts/browser-client.mjs
+  - locate browser-client.mjs under C:/Users/Javi/.codex/plugins/cache/openai-bundled/browser/*/scripts/browser-client.mjs
+  - current known working path: C:/Users/Javi/.codex/plugins/cache/openai-bundled/browser/26.519.21041/scripts/browser-client.mjs
+  - import setupBrowserRuntime from that browser-client.mjs path
   - get the in-app browser with agent.browsers.get("iab")
   - use browser.tabs.selected() or browser.tabs.new()
   - call tab.reload() or tab.goto("http://127.0.0.1:5500/index.html")

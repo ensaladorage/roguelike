@@ -1058,11 +1058,13 @@ export class GameScene {
 
         case "passiveItemApplied":
           this.addLog(`Pasiva aplicada: ${event.item.name}.`);
+          this.highlightItemStat(event.result);
           this.updateHud();
           break;
 
         case "itemUsed":
           this.addLog(`Item usado: ${event.item.name}.`);
+          this.highlightItemStat(event.result);
           this.updateHud();
           break;
 
@@ -1152,6 +1154,12 @@ export class GameScene {
     if (this.inventory) {
       this.hud.updateInventory(this.inventory);
     }
+  }
+
+  highlightItemStat(result) {
+    if (!result?.stat) return;
+
+    this.hud.highlightStat(result.stat);
   }
 
   getItemUseFailedMessage(event) {

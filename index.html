@@ -98,6 +98,35 @@
       image-rendering: auto;
     }
 
+    .inventory-count.is-max {
+      color: #ff6b6b;
+      font-weight: 800;
+    }
+
+    .stat-highlight {
+      animation: statPulseRed 3s ease-in-out;
+    }
+
+    @keyframes statPulseRed {
+      0%,
+      100% {
+        color: inherit;
+      }
+
+      12%,
+      36%,
+      60%,
+      84% {
+        color: #ff4c4c;
+      }
+
+      24%,
+      48%,
+      72% {
+        color: #f4f1e8;
+      }
+    }
+
     .bar {
       position: relative;
       height: 9px;

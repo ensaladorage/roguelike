@@ -8,6 +8,7 @@ export class HUD {
     this.itemText = document.querySelector("#itemText");
     this.logElement = document.querySelector("#log");
     this.logEntries = [];
+    this.statHighlightTimers = new Map();
   }
 
   updatePlayer(player) {
@@ -70,7 +71,11 @@ export class HUD {
       image.alt = entry.item.name;
 
       const count = document.createElement("span");
-      count.textContent = `x${entry.count}`;
+      count.className = "inventory-count";
+      if (entry.isMax) {
+        count.classList.add("is-max");
+      }
+      count.textContent = entry.isMax ? "Max." : `x${entry.count}`;
 
       item.appendChild(image);
       item.appendChild(count);
@@ -78,6 +83,44 @@ export class HUD {
     });
 
     this.itemText.appendChild(list);
+  }
+
+  highlightStat(statName, duration = 3000) {
+    const target = this.getStatElement(statName);
+    if (!target) return;
+
+    target.classList.remove("stat-highlight");
+    void target.offsetWidth;
+    target.classList.add("stat-highlight");
+
+    if (this.statHighlightTimers.has(statName)) {
+      window.clearTimeout(this.statHighlightTimers.get(statName));
+    }
+
+    const timer = window.setTimeout(() => {
+      target.classList.remove("stat-highlight");
+      this.statHighlightTimers.delete(statName);
+    }, duration);
+
+    this.statHighlightTimers.set(statName, timer);
+  }
+
+  getStatElement(statName) {
+    switch (statName) {
+      case "hp":
+      case "maxHp":
+        return this.hpText;
+
+      case "attackDamage":
+        return this.damageText;
+
+      case "attackCooldown":
+      case "attackSpeed":
+        return this.attackSpeedText;
+
+      default:
+        return null;
+    }
   }
 
   addLog(message) {
