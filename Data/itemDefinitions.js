@@ -62,7 +62,7 @@ export const ITEM_DEFINITIONS = {
       maxStack: 3,
     },
     consumable: {
-      heal: 35,
+      heal: 30,
     },
   },
 

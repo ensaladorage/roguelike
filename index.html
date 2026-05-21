@@ -172,6 +172,16 @@
       pointer-events: none;
     }
 
+    .footer-hintleft {
+      position: fixed;
+      left: 16px;
+      bottom: 14px;
+      color: rgba(244, 241, 232, 0.7);
+      font-size: 13px;
+      text-shadow: 0 1px 8px rgba(0, 0, 0, 0.55);
+      pointer-events: none;
+    }
+
     @media (max-width: 640px) {
       .hud {
         top: 10px;
@@ -184,6 +194,12 @@
         bottom: 10px;
         max-width: calc(100vw - 20px);
         text-align: right;
+      }
+      .footer-hintleft {
+        left: 10px;
+        bottom: 10px;
+        max-width: calc(100vw - 20px);
+        text-align: left;
       }
     }
   </style>
@@ -220,6 +236,7 @@
   </section>
 
   <div class="footer-hint">Right click to move. Interact automatically.</div>
+  <div class="footer-hintleft">1: Energy Drink 2:Stun Shroom</div>
 
   <script type="importmap">
     {
