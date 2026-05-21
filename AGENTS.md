@@ -57,7 +57,7 @@ Build a simple top-down roguelike with:
 - Stats modified by item effects should visually highlight in red for about 3 seconds so the player notices the changed stat.
 - Food-themed passive items currently include:
   - steak: damage up
-  - chili: attack speed up
+  - chili: attack speed up by adding a flat float value from Data/itemDefinitions.js -> ITEM_DEFINITIONS.chili.modifiers.attackSpeed, currently 0.2
   - ramen: max HP up
 - Consumable items currently include:
   - energyDrink: heal
@@ -256,7 +256,7 @@ When player dies:
 - If the in-app browser is already open to http://127.0.0.1:5500/index.html, reuse the selected tab and reload it after code changes.
 - Browser setup that worked in Codex uses the Node REPL browser client:
   - locate browser-client.mjs under C:/Users/Javi/.codex/plugins/cache/openai-bundled/browser/*/scripts/browser-client.mjs
-  - current known working path: C:/Users/Javi/.codex/plugins/cache/openai-bundled/browser/26.519.21041/scripts/browser-client.mjs
+  - current known working path: C:/Users/Javi/.codex/plugins/cache/openai-bundled/browser/26.519.22136/scripts/browser-client.mjs
   - import setupBrowserRuntime from that browser-client.mjs path
   - get the in-app browser with agent.browsers.get("iab")
   - use browser.tabs.selected() or browser.tabs.new()

@@ -58,11 +58,11 @@ export class ItemEffects {
   applyAttackSpeedUp(definition, { player } = {}) {
     if (!player) return this.missingPlayerResult();
 
-    const multiplier = definition.modifiers?.attackSpeedMultiplier ?? 1;
+    const amount = definition.modifiers?.attackSpeed ?? 0;
     const maxAttackSpeed = definition.modifiers?.maxAttackSpeed ?? Infinity;
     const previousValue =
       player.attackSpeed ?? (player.attackCooldown > 0 ? 1 / player.attackCooldown : 1);
-    const nextValue = Math.min(maxAttackSpeed, previousValue * multiplier);
+    const nextValue = Math.min(maxAttackSpeed, previousValue + amount);
 
     if (typeof player.setAttackSpeed === "function") {
       player.setAttackSpeed(nextValue);
