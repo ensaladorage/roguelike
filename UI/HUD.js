@@ -85,7 +85,7 @@ export class HUD {
     this.itemText.appendChild(list);
   }
 
-  highlightStat(statName, duration = 3000) {
+  highlightStat(statName, duration = 3500) {
     const target = this.getStatElement(statName);
     if (!target) return;
 
