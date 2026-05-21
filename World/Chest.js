@@ -20,7 +20,7 @@ export const CHEST_REWARD = {
 export function getChestReward() {
   const itemPool = CHEST_REWARD.itemPool ?? [];
   const itemId =
-    itemPool.length > 4 && Math.random() <= CHEST_REWARD.itemChance
+    itemPool.length > 0 && Math.random() <= CHEST_REWARD.itemChance
       ? itemPool[Math.floor(Math.random() * itemPool.length)]
       : null;
 
