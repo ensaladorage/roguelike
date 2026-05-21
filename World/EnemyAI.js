@@ -3,7 +3,7 @@ import { COIN_REWARD_SOURCE, getCoinReward } from "./Coin.js";
 
 export const ENEMY_POTION_DROP = {
   itemId: "energyDrink",
-  chancePercent: 100,
+  chancePercent: 5,
   radius: 0.82,
 };
 
