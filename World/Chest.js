@@ -6,6 +6,7 @@ import { COIN_REWARD_SOURCE, getCoinReward } from "./Coin.js";
 export const CHEST_REWARD = {
   gold: 20,
   itemChancePercent: 100,
+  itemRollCount: 1,
   itemPool: [
     "steak",
     "chili",
@@ -17,25 +18,45 @@ export const CHEST_REWARD = {
   potionDropRadius: 0.9,
 };
 
-export function getChestReward() {
-  const itemPool = CHEST_REWARD.itemPool ?? [];
-  const itemDropRoll = rollPercentChance(CHEST_REWARD.itemChancePercent);
-  const itemId =
-    itemPool.length > 0 && itemDropRoll.success
-      ? itemPool[Math.floor(Math.random() * itemPool.length)]
-      : null;
-
-  console.log("chestItemDropRoll", {
-    itemId,
-    chancePercent: CHEST_REWARD.itemChancePercent,
-    roll: itemDropRoll.value,
-    spawned: Boolean(itemId),
-  });
+export function getChestReward(overrides = {}) {
+  const rewardConfig = {
+    ...CHEST_REWARD,
+    ...overrides,
+  };
+  const itemIds = rollChestItems(rewardConfig);
 
   return {
-    gold: CHEST_REWARD.gold,
-    itemId,
+    gold: rewardConfig.gold,
+    itemIds,
   };
+}
+
+function rollChestItems(rewardConfig) {
+  const itemPool = rewardConfig.itemPool ?? [];
+  const rollCount = Math.max(0, Math.floor(rewardConfig.itemRollCount ?? 0));
+  const itemIds = [];
+
+  for (let rollIndex = 0; rollIndex < rollCount; rollIndex += 1) {
+    const itemDropRoll = rollPercentChance(rewardConfig.itemChancePercent);
+    const itemId =
+      itemPool.length > 0 && itemDropRoll.success
+        ? itemPool[Math.floor(Math.random() * itemPool.length)]
+        : null;
+
+    console.log("chestItemDropRoll", {
+      rollIndex,
+      itemId,
+      chancePercent: rewardConfig.itemChancePercent,
+      roll: itemDropRoll.value,
+      spawned: Boolean(itemId),
+    });
+
+    if (itemId) {
+      itemIds.push(itemId);
+    }
+  }
+
+  return itemIds;
 }
 
 function rollPercentChance(chancePercent) {
@@ -68,12 +89,12 @@ export class ChestManager {
       model.scale.set(1, 1, 1);
 
       this.scene.levelGroup.add(model);
-      const reward = getChestReward();
+      const reward = getChestReward(data.rewardOverrides);
 
       return {
         model,
         gold: reward.gold,
-        itemId: reward.itemId,
+        itemIds: reward.itemIds,
         collected: false,
       };
     });
@@ -127,13 +148,17 @@ export class ChestManager {
   }
 
   collectChestItem(chest) {
-    if (!chest.itemId || !this.scene.inventory) return;
+    if (!this.scene.inventory) return;
 
-    this.scene.inventory.pickupItem(chest.itemId, {
-      source: "chest",
-      chest,
-      enemies: this.scene.enemies,
-    });
+    const itemIds = chest.itemIds ?? [];
+
+    for (const itemId of itemIds) {
+      this.scene.inventory.pickupItem(itemId, {
+        source: "chest",
+        chest,
+        enemies: this.scene.enemies,
+      });
+    }
   }
 
   spawnPotionDrop(chest) {
