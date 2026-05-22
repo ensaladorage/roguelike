@@ -27,6 +27,7 @@ const EXIT_STAIRS_FLOOR_HOLE_SIZE = 1;
 const EXIT_STAIRS_DIRT_SIDE_OFFSET = 1;
 const EXIT_STAIRS_DIRT_FRONT_OFFSET = 1;
 const EXIT_STAIRS_DIRT_Y = -0.95;
+const EXIT_STAIRS_WOOD_STRUCTURE_Y = EXIT_STAIRS_Y;
 const ENTRY_STAIRS_ROTATION_TOWARD_WALL_BY_SIDE = {
   north: Math.PI,
   south: 0,
@@ -207,6 +208,9 @@ export class LevelBuilder {
       if (stairsModule) {
         environment.decorativeModules.push(stairsModule);
         if (stairsModule.role === "exitStairs") {
+          environment.decorativeModules.push(
+            this.createExitStairsWoodStructureModule(stairsModule)
+          );
           environment.decorativeModules.push(
             ...this.createExitStairsDirtModules(stairsModule)
           );
@@ -724,6 +728,20 @@ export class LevelBuilder {
         role: "exitStairsFrontDirt",
       },
     ];
+  }
+
+  createExitStairsWoodStructureModule(stairsModule) {
+    return {
+      x: stairsModule.x,
+      y: EXIT_STAIRS_WOOD_STRUCTURE_Y,
+      z: stairsModule.z,
+      w: 1,
+      d: 1,
+      moduleId: "woodStructure",
+      rotationY: stairsModule.rotationY,
+      generated: true,
+      role: "exitStairsWoodStructure",
+    };
   }
 
   getSideVectorForSide(side) {

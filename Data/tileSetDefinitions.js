@@ -164,6 +164,17 @@ export const TILESET_DEFINITIONS = {
           color: 0xb56f42,
         },
       },
+      woodStructure: {
+        id: "woodStructure",
+        placementMode: "single",
+        assetPath: "Assets/Models/Scenario/wood-structure.glb",
+        preserveOriginalScale: true,
+        footprint: { w: 1, d: 1, height: 1 },
+        fallback: {
+          kind: "decor",
+          color: 0x8a5a36,
+        },
+      },
     },
   },
 };
