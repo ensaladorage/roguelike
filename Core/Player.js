@@ -259,14 +259,12 @@ export class Player {
   }
 
   collectChest(chest) {
-    if (this.state === PLAYER_STATES.DEAD) return 0;
-    if (chest.collected) return 0;
+    if (this.state === PLAYER_STATES.DEAD) return false;
+    if (chest.collected) return false;
 
     chest.collected = true;
 
-    this.addGold(chest.gold);
-
-    return chest.gold;
+    return true;
   }
 
   clearTarget() {

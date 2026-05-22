@@ -1,10 +1,8 @@
 import * as THREE from "three";
 import { flatDistance } from "../Game/Utils.js";
 import { DEFAULT_CHEST_MODEL_ID } from "../Data/modelDefinitions.js";
-import { COIN_REWARD_SOURCE, getCoinReward } from "./Coin.js";
 
 export const CHEST_REWARD = {
-  gold: 20,
   itemChancePercent: 80,
   itemRollCount: 1,
   itemPool: [
@@ -18,6 +16,13 @@ export const CHEST_REWARD = {
   potionDropRadius: 0.9,
 };
 
+export const CHEST_COIN_DROP = {
+  countMin: 20,
+  countMax: 30,
+  value: 1,
+  radius: 0.62,
+};
+
 export function getChestReward(overrides = {}) {
   const rewardConfig = {
     ...CHEST_REWARD,
@@ -26,7 +31,6 @@ export function getChestReward(overrides = {}) {
   const itemIds = rollChestItems(rewardConfig);
 
   return {
-    gold: rewardConfig.gold,
     itemIds,
   };
 }
@@ -68,6 +72,13 @@ function rollPercentChance(chancePercent) {
   };
 }
 
+function rollIntegerRange(min, max) {
+  const safeMin = Math.ceil(Math.min(min, max));
+  const safeMax = Math.floor(Math.max(min, max));
+
+  return safeMin + Math.floor(Math.random() * (safeMax - safeMin + 1));
+}
+
 export class ChestManager {
   constructor(scene) {
     this.scene = scene;
@@ -93,7 +104,6 @@ export class ChestManager {
 
       return {
         model,
-        gold: reward.gold,
         itemIds: reward.itemIds,
         collected: false,
       };
@@ -128,9 +138,7 @@ export class ChestManager {
   // COLLECT CHEST
   // =========================
   collectChest(chest) {
-    const collectedGold = this.scene.player.collectChest(chest);
-
-    if (collectedGold <= 0) return;
+    if (chest.collected) return;
 
     chest.collected = true;
 
@@ -142,7 +150,7 @@ export class ChestManager {
     this.collectChestItem(chest);
 
     this.scene.updateHud();
-    this.scene.addLog(`Chest opened: +${collectedGold} gold.`);
+    this.scene.addLog("Chest opened.");
 
     this.scene.sfx.play("chest");
   }
@@ -204,8 +212,10 @@ export class ChestManager {
   // =========================
   spawnCoins(chest) {
     const coins = [];
-    const coinReward = getCoinReward(COIN_REWARD_SOURCE.CHEST);
-    const count = Math.max(0, coinReward.count ?? 0);
+    const count = rollIntegerRange(
+      CHEST_COIN_DROP.countMin,
+      CHEST_COIN_DROP.countMax
+    );
 
     const origin = chest.model.position;
 
@@ -220,7 +230,7 @@ export class ChestManager {
 
       const sideOffset = centered * 0.42 + (Math.random() * 0.18 - 0.09);
       const forwardOffset =
-        coinReward.radius + 0.45 + (Math.abs(centered) % 2) * 0.14 + (Math.random() * 0.2 - 0.1);
+        CHEST_COIN_DROP.radius + 0.45 + (Math.abs(centered) % 2) * 0.14 + (Math.random() * 0.2 - 0.1);
 
       const position = origin
         .clone()
@@ -228,11 +238,18 @@ export class ChestManager {
         .addScaledVector(right, sideOffset);
 
       coins.push({
-        value: coinReward.value,
+        value: CHEST_COIN_DROP.value,
         position: new THREE.Vector3(position.x, 0, position.z),
         fallbackOrigin: origin.clone(),
       });
     }
+
+    console.log("chestCoinsDropped", {
+      count: coins.length,
+      value: CHEST_COIN_DROP.value,
+      countMin: CHEST_COIN_DROP.countMin,
+      countMax: CHEST_COIN_DROP.countMax,
+    });
 
     if (this.scene.coinManager) {
       this.scene.coinManager.addCoinDrops(coins);

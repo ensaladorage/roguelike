@@ -12,40 +12,6 @@ const COIN_LANDING_MIN_DISTANCE = 0.62;
 const COIN_LANDING_MAX_DISTANCE = 1.35;
 const COIN_LANDING_ANGLE_SPREAD = Math.PI * 0.95;
 
-export const COIN_VALUE = {
-  BASIC: 1,
-  HEAVY: 3,
-  LARGE: 5,
-};
-
-export const COIN_REWARD_SOURCE = {
-  CHEST: "chest",
-  ENEMY: "enemy",
-};
-
-export const COIN_REWARDS = {
-  [COIN_REWARD_SOURCE.CHEST]: {
-    count: 6,
-    value: COIN_VALUE.BASIC,
-    radius: 0.62,
-  },
-  [COIN_REWARD_SOURCE.ENEMY]: {
-    count: 2,
-    value: COIN_VALUE.BASIC,
-    radius: 0.7,
-  },
-};
-
-export function getCoinReward(source) {
-  const reward = COIN_REWARDS[source] ?? COIN_REWARDS[COIN_REWARD_SOURCE.CHEST];
-
-  return {
-    count: reward.count,
-    value: reward.value,
-    radius: reward.radius,
-  };
-}
-
 export class CoinManager {
   constructor(scene) {
     this.scene = scene; // GameScene instance
@@ -155,7 +121,7 @@ export class CoinManager {
 
       this.coinDrops.push({
         model,
-        value: c.value ?? COIN_VALUE.BASIC,
+        value: c.value ?? 1,
         collected: false,
         collectable: false,
         spinSpeed: 1.6 + this.coinDrops.length * 0.13,

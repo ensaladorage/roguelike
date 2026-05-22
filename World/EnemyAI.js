@@ -1,10 +1,16 @@
 import * as THREE from "three";
-import { COIN_REWARD_SOURCE, getCoinReward } from "./Coin.js";
 
 export const ENEMY_POTION_DROP = {
   itemId: "energyDrink",
   chancePercent: 10,
   radius: 0.82,
+};
+
+export const ENEMY_COIN_DROP = {
+  countMin: 2,
+  countMax: 5,
+  value: 1,
+  radius: 0.7,
 };
 
 export const ENEMY_STATES = {
@@ -488,8 +494,10 @@ export class EnemyAI {
 
   createCoinDrops() {
     const coins = [];
-    const coinReward = getCoinReward(COIN_REWARD_SOURCE.ENEMY);
-    const count = Math.max(0, coinReward.count);
+    const count = this.rollIntegerRange(
+      ENEMY_COIN_DROP.countMin,
+      ENEMY_COIN_DROP.countMax
+    );
     if (count === 0) return coins;
 
     const origin = this.model.position.clone();
@@ -504,7 +512,7 @@ export class EnemyAI {
       const centered = i - (count - 1) / 2;
       const sideOffset = centered * 0.42 + (Math.random() * 0.18 - 0.09);
       const ringOffset = Math.abs(centered) % 2 === 0 ? 0 : 0.16;
-      const distance = coinReward.radius + 0.45 + ringOffset + (Math.random() * 0.18 - 0.09);
+      const distance = ENEMY_COIN_DROP.radius + 0.45 + ringOffset + (Math.random() * 0.18 - 0.09);
 
       const position = origin
         .clone()
@@ -512,7 +520,7 @@ export class EnemyAI {
         .addScaledVector(right, sideOffset);
 
       coins.push({
-        value: coinReward.value,
+        value: ENEMY_COIN_DROP.value,
         position: new THREE.Vector3(position.x, 0, position.z),
         fallbackOrigin: origin.clone(),
       });
@@ -520,7 +528,9 @@ export class EnemyAI {
 
     console.log("enemyCoinsDropped", {
       count: coins.length,
-      value: coinReward.value,
+      value: ENEMY_COIN_DROP.value,
+      countMin: ENEMY_COIN_DROP.countMin,
+      countMax: ENEMY_COIN_DROP.countMax,
     });
 
     return coins;
@@ -568,6 +578,13 @@ export class EnemyAI {
       value: Number(value.toFixed(2)),
       success: value < chancePercent,
     };
+  }
+
+  rollIntegerRange(min, max) {
+    const safeMin = Math.ceil(Math.min(min, max));
+    const safeMax = Math.floor(Math.max(min, max));
+
+    return safeMin + Math.floor(Math.random() * (safeMax - safeMin + 1));
   }
 
   face(target) {

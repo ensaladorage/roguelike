@@ -20,7 +20,9 @@ Build a simple top-down 3D roguelike with:
 - Player logic lives in `Core/Player.js`.
 - Enemy logic lives in `World/EnemyAI.js`.
 - Chest logic lives in `World/Chest.js`.
-- Coin logic lives in `World/Coin.js`.
+- Coin physical rendering, landing, pickup, and collection behavior lives in `World/Coin.js`.
+- Enemy coin reward counts/values live in `World/EnemyAI.js`, currently `ENEMY_COIN_DROP`.
+- Chest coin reward counts/values live in `World/Chest.js`, currently `CHEST_COIN_DROP`.
 - Item definitions live in `Data/itemDefinitions.js`.
 - Inventory state lives in `Core/Inventory.js`.
 - Item effect logic lives in `Core/ItemEffects.js`.
@@ -158,11 +160,16 @@ Rules:
 
 ## Chest, Coin, and Drop Rules
 
-- Chests may give gold, coins, items, or consumables.
+- Chests may drop physical coins, items, or consumables.
+- Chests must not grant instant gold directly; chest gold comes from physical coin drops collected by the player.
 - Chest rewards should be controlled by `World/Chest.js` or reward config, not hardcoded in room templates.
 - Room templates place chests; they should not define default reward values unless using explicit overrides.
 - Enemy loot decisions live in `EnemyAI.js` and must be emitted as events.
 - Scene renders dropped loot and handles pickup wiring only.
+- Enemy coin drop parameters live in `World/EnemyAI.js` -> `ENEMY_COIN_DROP`.
+- Chest coin drop parameters live in `World/Chest.js` -> `CHEST_COIN_DROP`.
+- Coin drop counts should be random integer rolls within configurable min/max ranges.
+- `World/Coin.js` must not own enemy/chest coin reward counts or reward source tables.
 - Coin and item drops should:
   - launch from source
   - avoid walls
