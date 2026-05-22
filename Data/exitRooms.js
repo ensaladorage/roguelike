@@ -1,6 +1,6 @@
 export const EXIT_ROOM_TEMPLATES = [
   {
-    id: "exit_room_01",
+    id: "exit_room_north_south_01",
     type: "exit",
     name: "North/South Exit 01",
     dimensions: { w: 9, d: 9 },

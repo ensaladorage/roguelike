@@ -82,7 +82,7 @@ New rooms must be reusable room templates and must declare:
 
 Rules:
 - New rooms must not be authored directly inside `Scene.js`.
-- Each new room should be testable in a simple floor composition with `enter_room_01` and `exit_room_01`.
+- Each new room should be testable in a simple floor composition with `enter_room_01` and `exit_room_north_south_01`.
 - Prefer readable handcrafted layouts over dense geometry.
 - Openings must align cleanly with shared connectors.
 - Avoid duplicated room borders on connected sides.

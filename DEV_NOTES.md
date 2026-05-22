@@ -132,7 +132,7 @@ Build a simple top-down roguelike with:
   - optional decorations
   - optional obstacles
 - New rooms must not be authored directly inside Scene.js.
-- Each new room should be testable in a simple floor composition with enter_room_01 and exit_room_01.
+- Each new room should be testable in a simple floor composition with enter_room_01 and exit_room_north_south_01.
 - Prefer small, readable handcrafted layouts over overly dense geometry.
 - Openings must align cleanly with shared connectors.
 - Avoid duplicated borders on connected room sides.
