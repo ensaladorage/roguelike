@@ -138,6 +138,7 @@ export class RoomTemplateLibrary {
     return {
       id: placement.id ?? placement.templateId,
       templateId: template.id,
+      type: template.type,
       name: template.name,
       dimensions: quarterTurns % 2 === 1
         ? { w: template.dimensions.d, d: template.dimensions.w }

@@ -7,8 +7,6 @@ export class GameManager {
     this.reloadTimer = null;
     this.combatStartRange = 1;
     this.enemyMovementPauseReason = "playerCombat";
-    this.currentLevelIndex = 0;
-    this.levelExitLocked = false;
   }
 
   update() {
@@ -78,19 +76,6 @@ export class GameManager {
     if (event.type === "playerDefeated") {
       this.onPlayerDeath();
     }
-  }
-
-  setLevel(levelIndex) {
-    this.currentLevelIndex = levelIndex;
-    this.levelExitLocked = false;
-  }
-
-  activateLevelExit() {
-    if (this.isGameOver) return;
-    if (this.levelExitLocked) return;
-
-    this.levelExitLocked = true;
-    console.log("floorExitActivated", { floor: this.currentLevelIndex + 1 });
   }
 
   onPlayerDeath() {

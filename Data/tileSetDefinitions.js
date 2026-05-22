@@ -141,6 +141,18 @@ export const TILESET_DEFINITIONS = {
           color: 0x6b4f3c,
         },
       },
+      stairs: {
+        id: "stairs",
+        placementMode: "single",
+        assetPath: "Assets/Models/Scenario/stairs.glb",
+        preserveOriginalScale: true,
+        footprint: { w: 1, d: 1, height: 0.5 },
+        fallback: {
+          kind: "decor",
+          color: 0x4f5550,
+        },
+        positionY: 0,
+      },
       woodSupport: {
         id: "woodSupport",
         placementMode: "single",

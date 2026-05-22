@@ -148,13 +148,14 @@ export const EXIT_ROOM_TEMPLATES = [
     ],
     exitMarker: {
       x: 0,
-      z: 1.7,
+      z: 0,
     },
     decorativeModules: [
       { x: -3.48, z: 0, w: 1, d: 1, moduleId: "banner", rotationY: Math.PI / 2 },
       { x: 3.48, z: 0, w: 1, d: 1, moduleId: "banner", rotationY: -Math.PI / 2 },
       { x: -1, z: 2.5, w: 1, d: 1, moduleId: "floorDetail" },
       { x: 2.5, z: -2, w: 1, d: 1, moduleId: "stones", rotationY: Math.PI },
+      { x: 0, z: 0, w: 1, d: 1, moduleId: "stairs", rotationY: 0 },
     ],
     obstacleModules: [],
   },
@@ -306,7 +307,7 @@ export const EXIT_ROOM_TEMPLATES = [
       },
     ],
     exitMarker: {
-      x: 1.8,
+      x: 0,
       z: 0,
     },
     decorativeModules: [
@@ -314,6 +315,7 @@ export const EXIT_ROOM_TEMPLATES = [
       { x: 0, z: 2.48, w: 1, d: 1, moduleId: "banner", rotationY: 0 },
       { x: -1.6, z: 1.8, w: 1, d: 1, moduleId: "floorDetail" },
       { x: -1.9, z: -2, w: 1, d: 1, moduleId: "stones", rotationY: Math.PI },
+      { x: 0, z: 0, w: 1, d: 1, moduleId: "stairs", rotationY: 0 },
     ],
     obstacleModules: [],
   },

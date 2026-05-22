@@ -85,7 +85,7 @@ export class GameScene {
     this.collisionWalls = [];
     this.wallMeshes = [];
     this.navBounds = null;
-    this.exitButton = null;
+    this.levelExitTrigger = null;
     this.clickEffects = [];
     this.feedbackEffects = [];
 
@@ -340,7 +340,7 @@ export class GameScene {
     this.collisionWalls = [];
     this.wallMeshes = [];
     this.navBounds = null;
-    this.exitButton = null;
+    this.levelExitTrigger = null;
     this.clickEffects = [];
     this.feedbackEffects = [];
 
@@ -350,7 +350,6 @@ export class GameScene {
     this.addLevelEnemies(level);
     this.placePlayer(level.playerStart);
 
-    this.gameManager.setLevel(levelIndex);
     this.updateHud();
     this.addLog(`${level.name} loaded.`);
     console.log("levelLoaded", { level: levelIndex + 1, name: level.name });
@@ -373,47 +372,12 @@ export class GameScene {
     this.wallMeshes = environmentBuild.wallMeshes;
 
     if (level.exit?.x !== undefined && level.exit?.z !== undefined) {
-      this.addExitButton(level.exit);
+      this.levelExitTrigger = {
+        x: level.exit.x,
+        z: level.exit.z,
+        activated: false,
+      };
     }
-  }
-
-  addExitButton(exit) {
-    const group = new THREE.Group();
-
-    const baseMat = new THREE.MeshStandardMaterial({
-      color: 0x20262a,
-      roughness: 0.75,
-    });
-
-    const buttonMat = new THREE.MeshStandardMaterial({
-      color: 0xd7b857,
-      emissive: 0x3f2e08,
-      roughness: 0.55,
-    });
-
-    const base = new THREE.Mesh(
-      new THREE.CylinderGeometry(0.82, 0.82, 0.08, 32),
-      baseMat
-    );
-    base.position.y = 0.04;
-    group.add(base);
-
-    const button = new THREE.Mesh(
-      new THREE.CylinderGeometry(0.55, 0.62, 0.1, 32),
-      buttonMat
-    );
-    button.position.y = 0.13;
-    group.add(button);
-
-    group.position.set(exit.x, 0, exit.z);
-    this.levelGroup.add(group);
-
-    this.exitButton = {
-      group,
-      button,
-      disabled: Boolean(exit.disabled),
-      activated: false,
-    };
   }
 
   addLevelEnemies(level) {
@@ -1089,7 +1053,7 @@ export class GameScene {
 
     this.handleGameEvents(events);
     this.chestManager.update();
-    this.checkExitButton();
+    this.checkLevelExitTrigger();
     this.updateClickEffects(delta);
     this.updateFeedbackEffects(delta);
     this.updateCamera(delta);
@@ -1115,27 +1079,21 @@ export class GameScene {
     this.updateHud();
   }
 
-  checkExitButton() {
-    if (!this.exitButton || this.exitButton.activated) return;
-    if (this.exitButton.disabled) return;
+  checkLevelExitTrigger() {
+    if (!this.levelExitTrigger || this.levelExitTrigger.activated) return;
 
     const distance = flatDistance(
       this.player.model.position,
-      this.exitButton.group.position
+      this.levelExitTrigger
     );
 
-    if (distance > 0.7) return;
+    if (distance > 0.6) return;
 
-    this.exitButton.activated = true;
-    this.exitButton.button.position.y = 0.08;
-    this.exitButton.button.material.color.setHex(0x65d67c);
-    this.exitButton.button.material.emissive.setHex(0x143d1d);
-    this.addLog("Exit activated.");
-    console.log("levelExitActivated", {
+    this.levelExitTrigger.activated = true;
+    this.addLog("Stairs reached. Debug: would change floor.");
+    console.log("levelExitTriggerReached", {
       from: this.levelIndex + 1,
     });
-
-    this.gameManager.activateLevelExit();
   }
 
   updateClickEffects(delta) {

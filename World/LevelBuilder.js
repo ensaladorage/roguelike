@@ -20,6 +20,13 @@ const OPPOSITE_SIDE = {
 
 const ROCK_COLLISION_SCALE = 0.55;
 const BARREL_COLLISION_SCALE = 0.1;
+const ENTRY_STAIRS_OFFSET_FROM_WALL = 0.55;
+const STAIRS_ROTATION_TOWARD_WALL_BY_SIDE = {
+  north: Math.PI,
+  south: 0,
+  west: -Math.PI / 2,
+  east: Math.PI / 2,
+};
 
 const CONNECTOR_STYLES = {
   openCorridor: {
@@ -173,12 +180,19 @@ export class LevelBuilder {
         room.doorwayModules,
         roomConnectionEndpoints
       );
+      const entryStairsModule = this.createEntryStairsModule(
+        room,
+        roomConnectionEndpoints
+      );
 
       environment.floorModules.push(...room.floorModules);
       environment.wallModules.push(...wallModules);
       environment.doorwayModules.push(...doorwayModules);
       environment.decorativeModules.push(...room.decorativeModules);
       environment.decorativeModules.push(...room.obstacleModules);
+      if (entryStairsModule) {
+        environment.decorativeModules.push(entryStairsModule);
+      }
 
       walkableAreas.push(...room.walkableAreas.map(cloneArea));
       walkableAreas.push(
@@ -190,6 +204,9 @@ export class LevelBuilder {
       );
       collisionWalls.push(...wallModules.map(cloneArea));
       collisionWalls.push(...doorwayModules.map(cloneArea));
+      if (entryStairsModule) {
+        collisionWalls.push(this.createObstacleCollision(entryStairsModule));
+      }
       collisionWalls.push(
         ...this.createDecorationCollisionModules(room)
       );
@@ -570,6 +587,64 @@ export class LevelBuilder {
     ]
       .filter((module) => module.collision)
       .map((module) => this.createObstacleCollision(module));
+  }
+
+  createEntryStairsModule(room, endpoints) {
+    if (room.type !== "enter") return null;
+
+    const connectedOpening = (room.doorOpenings ?? []).find((opening) =>
+      this.isOpeningConnected(room.id, opening, endpoints)
+    );
+
+    if (!connectedOpening) return null;
+
+    const stairSide = OPPOSITE_SIDE[connectedOpening.side];
+    const stairOpening = (room.doorOpenings ?? []).find(
+      (opening) =>
+        opening.side === stairSide &&
+        !this.isOpeningConnected(room.id, opening, endpoints)
+    );
+
+    if (!stairOpening) return null;
+
+    return this.createStairsModuleAtOpening(stairOpening, {
+      collision: true,
+      role: "entryStairs",
+    });
+  }
+
+  createStairsModuleAtOpening(opening, options = {}) {
+    const module = {
+      x: opening.x,
+      z: opening.z,
+      w: 1,
+      d: 1,
+      side: opening.side,
+      moduleId: "stairs",
+      rotationY: STAIRS_ROTATION_TOWARD_WALL_BY_SIDE[opening.side] ?? 0,
+      generated: true,
+      ...options,
+    };
+
+    switch (opening.side) {
+      case "north":
+        module.z += ENTRY_STAIRS_OFFSET_FROM_WALL;
+        break;
+
+      case "south":
+        module.z -= ENTRY_STAIRS_OFFSET_FROM_WALL;
+        break;
+
+      case "west":
+        module.x += ENTRY_STAIRS_OFFSET_FROM_WALL;
+        break;
+
+      case "east":
+        module.x -= ENTRY_STAIRS_OFFSET_FROM_WALL;
+        break;
+    }
+
+    return module;
   }
 
   isHorizontalSide(side) {
