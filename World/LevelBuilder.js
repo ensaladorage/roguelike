@@ -24,9 +24,9 @@ const ENTRY_STAIRS_OFFSET_FROM_WALL = 1.5;
 const EXIT_STAIRS_OFFSET_FROM_WALL = 2.5;
 const EXIT_STAIRS_Y = -0.9;
 const EXIT_STAIRS_FLOOR_HOLE_SIZE = 1;
-const EXIT_STAIRS_SIDE_WALL_OFFSET = 1;
-const EXIT_STAIRS_SIDE_WALL_Y = -1.1;
-const EXIT_STAIRS_SIDE_WALL_SIZE = { w: 1, d: 1 };
+const EXIT_STAIRS_DIRT_SIDE_OFFSET = 1;
+const EXIT_STAIRS_DIRT_FRONT_OFFSET = 1;
+const EXIT_STAIRS_DIRT_Y = -0.95;
 const ENTRY_STAIRS_ROTATION_TOWARD_WALL_BY_SIDE = {
   north: Math.PI,
   south: 0,
@@ -39,19 +39,6 @@ const EXIT_STAIRS_ROTATION_BY_SIDE = {
   west: -Math.PI / 2,
   east: Math.PI / 2,
 };
-const EXIT_STAIRS_LEFT_WALL_ROTATION_BY_SIDE = {
-  north: 0,
-  south: 0,
-  west: 0,
-  east: Math.PI,
-};
-const EXIT_STAIRS_RIGHT_WALL_ROTATION_BY_SIDE = {
-  north: 0,
-  south: Math.PI,
-  west: 0,
-  east: 0,
-};
-
 const CONNECTOR_STYLES = {
   openCorridor: {
     id: "openCorridor",
@@ -221,7 +208,7 @@ export class LevelBuilder {
         environment.decorativeModules.push(stairsModule);
         if (stairsModule.role === "exitStairs") {
           environment.decorativeModules.push(
-            ...this.createExitStairsSideWallModules(stairsModule)
+            ...this.createExitStairsDirtModules(stairsModule)
           );
         }
       }
@@ -700,34 +687,41 @@ export class LevelBuilder {
     return module;
   }
 
-  createExitStairsSideWallModules(stairsModule) {
+  createExitStairsDirtModules(stairsModule) {
     const sideVector = this.getSideVectorForSide(stairsModule.side);
-    if (!sideVector) return [];
+    const frontVector = this.getFrontVectorForSide(stairsModule.side);
+    if (!sideVector || !frontVector) return [];
 
     return [
       {
-        x: stairsModule.x + sideVector.x * EXIT_STAIRS_SIDE_WALL_OFFSET,
-        y: EXIT_STAIRS_SIDE_WALL_Y,
-        z: stairsModule.z + sideVector.z * EXIT_STAIRS_SIDE_WALL_OFFSET,
-        w: EXIT_STAIRS_SIDE_WALL_SIZE.w,
-        d: EXIT_STAIRS_SIDE_WALL_SIZE.d,
-        side: stairsModule.side,
-        moduleId: "wallHalf",
-        rotationY: EXIT_STAIRS_LEFT_WALL_ROTATION_BY_SIDE[stairsModule.side] ?? 0,
+        x: stairsModule.x + sideVector.x * EXIT_STAIRS_DIRT_SIDE_OFFSET,
+        y: EXIT_STAIRS_DIRT_Y,
+        z: stairsModule.z + sideVector.z * EXIT_STAIRS_DIRT_SIDE_OFFSET,
+        w: 1,
+        d: 1,
+        moduleId: "dirt",
         generated: true,
-        role: "exitStairsLeftWall",
+        role: "exitStairsLeftDirt",
       },
       {
-        x: stairsModule.x - sideVector.x * EXIT_STAIRS_SIDE_WALL_OFFSET,
-        y: EXIT_STAIRS_SIDE_WALL_Y,
-        z: stairsModule.z - sideVector.z * EXIT_STAIRS_SIDE_WALL_OFFSET,
-        w: EXIT_STAIRS_SIDE_WALL_SIZE.w,
-        d: EXIT_STAIRS_SIDE_WALL_SIZE.d,
-        side: stairsModule.side,
-        moduleId: "wallHalf",
-        rotationY: EXIT_STAIRS_RIGHT_WALL_ROTATION_BY_SIDE[stairsModule.side] ?? 0,
+        x: stairsModule.x - sideVector.x * EXIT_STAIRS_DIRT_SIDE_OFFSET,
+        y: EXIT_STAIRS_DIRT_Y,
+        z: stairsModule.z - sideVector.z * EXIT_STAIRS_DIRT_SIDE_OFFSET,
+        w: 1,
+        d: 1,
+        moduleId: "dirt",
         generated: true,
-        role: "exitStairsRightWall",
+        role: "exitStairsRightDirt",
+      },
+      {
+        x: stairsModule.x + frontVector.x * EXIT_STAIRS_DIRT_FRONT_OFFSET,
+        y: EXIT_STAIRS_DIRT_Y,
+        z: stairsModule.z + frontVector.z * EXIT_STAIRS_DIRT_FRONT_OFFSET,
+        w: 1,
+        d: 1,
+        moduleId: "dirt",
+        generated: true,
+        role: "exitStairsFrontDirt",
       },
     ];
   }
@@ -741,6 +735,25 @@ export class LevelBuilder {
       case "west":
       case "east":
         return { x: 0, z: 1 };
+
+      default:
+        return null;
+    }
+  }
+
+  getFrontVectorForSide(side) {
+    switch (side) {
+      case "north":
+        return { x: 0, z: 1 };
+
+      case "south":
+        return { x: 0, z: -1 };
+
+      case "west":
+        return { x: 1, z: 0 };
+
+      case "east":
+        return { x: -1, z: 0 };
 
       default:
         return null;
