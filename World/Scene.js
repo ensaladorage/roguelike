@@ -145,6 +145,10 @@ export class GameScene {
       this.useInventorySlot(slotIndex);
     });
 
+    this.hud.setConsumableUseHandler((slotIndex) => {
+      this.useInventorySlot(slotIndex);
+    });
+
     window.addEventListener("resize", () => this.onResize());
     this.animate();
   }

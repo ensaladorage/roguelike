@@ -103,6 +103,71 @@
       font-weight: 800;
     }
 
+    .quick-use-bar {
+      position: fixed;
+      left: 50%;
+      bottom: 18px;
+      z-index: 8;
+      display: flex;
+      gap: 12px;
+      transform: translateX(-50%);
+      pointer-events: auto;
+    }
+
+    .quick-use-button {
+      position: relative;
+      display: grid;
+      place-items: center;
+      width: 66px;
+      height: 66px;
+      padding: 8px;
+      border: 1px solid rgba(244, 241, 232, 0.24);
+      border-radius: 8px;
+      background: rgba(17, 19, 23, 0.78);
+      box-shadow: 0 12px 28px rgba(0, 0, 0, 0.34);
+      backdrop-filter: blur(10px);
+      color: #f4f1e8;
+      cursor: inherit;
+      touch-action: manipulation;
+    }
+
+    .quick-use-button img {
+      width: 44px;
+      height: 44px;
+      object-fit: contain;
+      pointer-events: none;
+    }
+
+    .quick-use-button:active:not(:disabled) {
+      transform: translateY(1px) scale(0.98);
+    }
+
+    .quick-use-button:disabled {
+      opacity: 0.45;
+      filter: grayscale(0.45);
+      cursor: not-allowed;
+    }
+
+    .quick-use-count {
+      position: absolute;
+      right: 4px;
+      bottom: 4px;
+      min-width: 22px;
+      padding: 2px 5px;
+      border-radius: 999px;
+      background: rgba(0, 0, 0, 0.68);
+      color: #f4f1e8;
+      font-size: 12px;
+      font-weight: 800;
+      line-height: 1;
+      text-align: center;
+      pointer-events: none;
+    }
+
+    .quick-use-count.is-max {
+      color: #ff6b6b;
+    }
+
     .stat-highlight {
       animation: statPulseRed 3s ease-in-out;
     }
@@ -191,15 +256,30 @@
 
       .footer-hint {
         right: 10px;
-        bottom: 10px;
+        bottom: 96px;
         max-width: calc(100vw - 20px);
         text-align: right;
       }
       .footer-hintleft {
         left: 10px;
-        bottom: 10px;
+        bottom: 96px;
         max-width: calc(100vw - 20px);
         text-align: left;
+      }
+
+      .quick-use-bar {
+        bottom: 14px;
+        gap: 14px;
+      }
+
+      .quick-use-button {
+        width: 72px;
+        height: 72px;
+      }
+
+      .quick-use-button img {
+        width: 48px;
+        height: 48px;
       }
     }
   </style>
@@ -234,6 +314,8 @@
 
     <div class="panel log" id="log"></div>
   </section>
+
+  <div class="quick-use-bar" id="quickUseBar" aria-label="Consumable quick use"></div>
 
   <div class="footer-hint">Right click to move. Interact automatically.</div>
   <div class="footer-hintleft">1: Energy Drink 2: Stun Shroom</div>

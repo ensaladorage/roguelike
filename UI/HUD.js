@@ -1,3 +1,10 @@
+import {
+  getItemDefinitionByUseSlot,
+  getItemMaxStack,
+} from "../Data/itemDefinitions.js";
+
+const QUICK_USE_SLOTS = [1, 2];
+
 export class HUD {
   constructor() {
     this.hpText = document.querySelector("#hpText");
@@ -7,8 +14,17 @@ export class HUD {
     this.attackSpeedText = document.querySelector("#attackSpeedText");
     this.itemText = document.querySelector("#itemText");
     this.logElement = document.querySelector("#log");
+    this.quickUseElement = document.querySelector("#quickUseBar");
+    this.quickUseButtons = new Map();
+    this.onUseConsumableSlot = null;
     this.logEntries = [];
     this.statHighlightTimers = new Map();
+
+    this.setupQuickUseButtons();
+  }
+
+  setConsumableUseHandler(handler) {
+    this.onUseConsumableSlot = handler;
   }
 
   updatePlayer(player) {
@@ -43,6 +59,8 @@ export class HUD {
   }
 
   updateInventory(inventory) {
+    this.updateQuickUseButtons(inventory);
+
     if (!this.itemText) return;
 
     const consumables = inventory.getConsumableEntries();
@@ -85,6 +103,66 @@ export class HUD {
     });
 
     this.itemText.appendChild(list);
+  }
+
+  setupQuickUseButtons() {
+    if (!this.quickUseElement) return;
+
+    this.quickUseElement.innerHTML = "";
+
+    for (const useSlot of QUICK_USE_SLOTS) {
+      const item = getItemDefinitionByUseSlot(useSlot);
+      if (!item) continue;
+
+      const button = document.createElement("button");
+      button.type = "button";
+      button.className = "quick-use-button";
+      button.dataset.slotIndex = String(useSlot - 1);
+      button.title = `Use ${item.name}`;
+      button.setAttribute("aria-label", `Use ${item.name}`);
+      button.disabled = true;
+      button.classList.add("is-empty");
+
+      const image = document.createElement("img");
+      image.src = item.imagePath;
+      image.alt = "";
+      image.setAttribute("aria-hidden", "true");
+
+      const count = document.createElement("span");
+      count.className = "quick-use-count";
+      count.textContent = "x0";
+
+      button.appendChild(image);
+      button.appendChild(count);
+      this.quickUseElement.appendChild(button);
+      this.quickUseButtons.set(useSlot, { button, count, item });
+    }
+
+    this.quickUseElement.addEventListener("click", (event) => {
+      const button = event.target.closest("[data-slot-index]");
+      if (!button || button.disabled) return;
+
+      const slotIndex = Number(button.dataset.slotIndex);
+      if (!Number.isInteger(slotIndex)) return;
+
+      this.onUseConsumableSlot?.(slotIndex);
+    });
+  }
+
+  updateQuickUseButtons(inventory) {
+    for (const [useSlot, quickUse] of this.quickUseButtons.entries()) {
+      const item = getItemDefinitionByUseSlot(useSlot);
+      if (!item) continue;
+
+      const count = inventory.getConsumableCount(item.id);
+      const maxStack = getItemMaxStack(item.id);
+      const isMax = Number.isFinite(maxStack) && count >= maxStack;
+
+      quickUse.count.textContent = isMax ? "Max." : `x${count}`;
+      quickUse.count.classList.toggle("is-max", isMax);
+      quickUse.button.disabled = count <= 0;
+      quickUse.button.classList.toggle("is-empty", count <= 0);
+    }
   }
 
   highlightStat(statName, duration = 3500) {
