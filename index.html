@@ -41,9 +41,11 @@
       position: fixed;
       top: 16px;
       left: 16px;
+      z-index: 7;
       display: grid;
       gap: 10px;
       width: min(330px, calc(100vw - 32px));
+      max-height: calc(100dvh - 112px);
       pointer-events: none;
     }
 
@@ -249,37 +251,156 @@
 
     @media (max-width: 640px) {
       .hud {
-        top: 10px;
-        left: 10px;
-        width: calc(100vw - 20px);
+        top: calc(8px + env(safe-area-inset-top));
+        left: calc(8px + env(safe-area-inset-left));
+        gap: 6px;
+        width: min(270px, calc(100vw - 16px));
+        max-height: calc(100dvh - 86px - env(safe-area-inset-bottom));
+      }
+
+      .stats {
+        gap: 5px;
+        padding: 8px;
+      }
+
+      .stats-row {
+        gap: 8px;
+        font-size: 12px;
+      }
+
+      .bar {
+        height: 7px;
+      }
+
+      .inventory-items {
+        gap: 4px;
+        max-width: 140px;
+      }
+
+      .inventory-item {
+        min-width: 31px;
+        padding: 1px 4px 1px 2px;
+        border-radius: 5px;
+        font-size: 10px;
+      }
+
+      .inventory-item img {
+        width: 16px;
+        height: 16px;
+      }
+
+      .log {
+        min-height: 48px;
+        max-height: 68px;
+        padding: 7px 8px;
+        font-size: 11px;
+        line-height: 1.25;
+      }
+
+      .log p {
+        margin-bottom: 3px;
       }
 
       .footer-hint {
-        right: 10px;
-        bottom: 96px;
-        max-width: calc(100vw - 20px);
-        text-align: right;
+        display: none;
       }
+
       .footer-hintleft {
-        left: 10px;
-        bottom: 96px;
-        max-width: calc(100vw - 20px);
-        text-align: left;
+        display: none;
       }
 
       .quick-use-bar {
-        bottom: 14px;
-        gap: 14px;
+        bottom: calc(10px + env(safe-area-inset-bottom));
+        gap: 10px;
       }
 
       .quick-use-button {
-        width: 72px;
-        height: 72px;
+        width: 58px;
+        height: 58px;
+        padding: 7px;
       }
 
       .quick-use-button img {
-        width: 48px;
-        height: 48px;
+        width: 38px;
+        height: 38px;
+      }
+
+      .quick-use-count {
+        right: 3px;
+        bottom: 3px;
+        min-width: 20px;
+        padding: 2px 4px;
+        font-size: 11px;
+      }
+    }
+
+    @media (max-width: 420px) {
+      .hud {
+        top: calc(6px + env(safe-area-inset-top));
+        left: calc(6px + env(safe-area-inset-left));
+        width: min(246px, calc(100vw - 12px));
+      }
+
+      .stats {
+        gap: 4px;
+        padding: 7px;
+      }
+
+      .stats-row {
+        font-size: 11px;
+      }
+
+      .inventory-items {
+        max-width: 118px;
+      }
+
+      .log {
+        min-height: 42px;
+        max-height: 58px;
+        padding: 6px 7px;
+        font-size: 10px;
+      }
+
+      .quick-use-button {
+        width: 54px;
+        height: 54px;
+      }
+
+      .quick-use-button img {
+        width: 35px;
+        height: 35px;
+      }
+    }
+
+    @media (max-height: 560px) and (max-width: 900px) {
+      .hud {
+        width: min(246px, calc(100vw - 12px));
+      }
+
+      .stats {
+        gap: 4px;
+        padding: 6px;
+      }
+
+      .stats-row {
+        font-size: 11px;
+      }
+
+      .log {
+        min-height: 0;
+        max-height: 42px;
+        padding: 5px 6px;
+        font-size: 10px;
+      }
+
+      .quick-use-button {
+        width: 52px;
+        height: 52px;
+      }
+
+      .quick-use-button img {
+        width: 34px;
+        height: 34px;
       }
     }
   </style>
