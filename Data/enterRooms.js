@@ -107,12 +107,12 @@ export const ENTER_ROOM_TEMPLATES = [
     exitMarker: null,
     decorativeModules: [],
     obstacleModules: [
-      { x: -1.2, z: -2.5, w: 0.01, d: 0.01, moduleId: "barrel", collision: true },
-      { x: -1.2, z: -3, w: 0.01, d: 0.01, moduleId: "barrel", collision: true },
-      { x: -1.2, z: -3.5, w: 0.01, d: 0.01, moduleId: "barrel", collision: true },
-      { x: 1.2, z: -3.5, w: 0.01, d: 0.01, moduleId: "barrel", collision: true },
-      { x: 0, z: -4.2, w: 0.01, d: 0.01, moduleId: "barrel", collision: true },
-      { x: 0.3, z: -3.9, w: 0.01, d: 0.01, moduleId: "barrel", collision: true },
+      { x: -1.2, z: -2.5, w: 1, d: 1, moduleId: "barrel", collision: true },
+      { x: -1.2, z: -3, w: 1, d: 1, moduleId: "barrel", collision: true },
+      { x: -1.2, z: -3.5, w: 1, d: 1, moduleId: "barrel", collision: true },
+      { x: 1.2, z: -3.5, w: 1, d: 1, moduleId: "barrel", collision: true },
+      { x: 0, z: -4.2, w: 1, d: 1, moduleId: "barrel", collision: true },
+      { x: 0.3, z: -3.9, w: 1, d: 1, moduleId: "barrel", collision: true },
     ],
   },
   {
@@ -257,7 +257,7 @@ export const ENTER_ROOM_TEMPLATES = [
     chestSpawns: [],
     exitMarker: null,
     decorativeModules: [
-      { x: -1.7, z: -1.8, w: 1, d: 1, moduleId: "barrel", rotationY: Math.PI / 2 },
+      { x: -1.7, z: -1.8, w: 1, d: 1, moduleId: "barrel", collision: true },
       { x: 1.6, z: 1.7, w: 1, d: 1, moduleId: "floorDetail" },
       { x: 1.8, z: -2.1, w: 1, d: 1, moduleId: "stones", rotationY: Math.PI },
     ],

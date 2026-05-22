@@ -19,6 +19,7 @@ const OPPOSITE_SIDE = {
 };
 
 const ROCK_COLLISION_SCALE = 0.55;
+const BARREL_COLLISION_SCALE = 0.1;
 
 const CONNECTOR_STYLES = {
   openCorridor: {
@@ -67,9 +68,7 @@ export class LevelBuilder {
 
     const collisionWalls = [
       ...(levelDefinition.wallModules ?? []).map(cloneArea),
-      ...(levelDefinition.obstacleModules ?? [])
-        .filter((module) => module.collision)
-        .map((module) => this.createObstacleCollision(module)),
+      ...this.createDecorationCollisionModules(levelDefinition),
     ];
 
     if (levelDefinition.outerBoundary) {
@@ -191,9 +190,7 @@ export class LevelBuilder {
       );
       collisionWalls.push(...wallModules.map(cloneArea));
       collisionWalls.push(
-        ...room.obstacleModules
-          .filter((module) => module.collision)
-          .map((module) => this.createObstacleCollision(module))
+        ...this.createDecorationCollisionModules(room)
       );
       chests.push(...room.chestSpawns.map((spawn) => ({ ...spawn })));
       enemies.push(
@@ -554,11 +551,24 @@ export class LevelBuilder {
   }
 
   getObstacleCollisionScale(module) {
+    if (module.moduleId === "barrel") {
+      return BARREL_COLLISION_SCALE;
+    }
+
     if (module.moduleId === "rocks") {
       return ROCK_COLLISION_SCALE;
     }
 
     return 1;
+  }
+
+  createDecorationCollisionModules(source) {
+    return [
+      ...(source.decorativeModules ?? []),
+      ...(source.obstacleModules ?? []),
+    ]
+      .filter((module) => module.collision)
+      .map((module) => this.createObstacleCollision(module));
   }
 
   isHorizontalSide(side) {
