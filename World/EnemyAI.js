@@ -3,7 +3,7 @@ import { splitCoinValueIntoTypes } from "./Coin.js";
 
 export const ENEMY_POTION_DROP = {
   itemId: "energyDrink",
-  chancePercent: 100,
+  chancePercent: 10,
   radius: 0.82,
 };
 

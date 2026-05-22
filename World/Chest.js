@@ -4,7 +4,7 @@ import { DEFAULT_CHEST_MODEL_ID } from "../Data/modelDefinitions.js";
 import { splitCoinValueIntoTypes } from "./Coin.js";
 
 export const CHEST_REWARD = {
-  itemChancePercent: 100,
+  itemChancePercent: 80,
   itemRollCount: 1,
   itemPool: [
     "steak",
@@ -13,7 +13,7 @@ export const CHEST_REWARD = {
     "purpleShroom",
   ],
   potionDropItemId: "energyDrink",
-  potionDropChancePercent: 100,
+  potionDropChancePercent: 20,
   potionDropRadius: 0.9,
 };
 
