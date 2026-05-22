@@ -168,7 +168,7 @@ export const TILESET_DEFINITIONS = {
         id: "woodStructure",
         placementMode: "single",
         assetPath: "Assets/Models/Scenario/wood-structure.glb",
-        preserveOriginalScale: true,
+        preserveOriginalScale: false,
         footprint: { w: 1, d: 1, height: 1 },
         fallback: {
           kind: "decor",

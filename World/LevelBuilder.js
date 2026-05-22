@@ -28,13 +28,20 @@ const EXIT_STAIRS_DIRT_SIDE_OFFSET = 1;
 const EXIT_STAIRS_DIRT_FRONT_OFFSET = 1;
 const EXIT_STAIRS_DIRT_Y = -0.95;
 const EXIT_STAIRS_WOOD_STRUCTURE_Y = -0.85;
+const EXIT_STAIRS_WOOD_STRUCTURE_SIZE = { w: 1, d: 1, height: 1 };
 const ENTRY_STAIRS_ROTATION_TOWARD_WALL_BY_SIDE = {
-  north: 0,
+  north: Math.PI,
   south: 0,
-  west: 0,
-  east: 0,
+  west: Math.PI / 2,
+  east: -Math.PI / 2,
 };
 const EXIT_STAIRS_ROTATION_BY_SIDE = {
+  north: Math.PI,
+  south: 0,
+  west: -Math.PI / 2,
+  east: Math.PI / 2,
+};
+const EXIT_STAIRS_WOOD_STRUCTURE_ROTATION_BY_SIDE = {
   north: Math.PI,
   south: 0,
   west: -Math.PI / 2,
@@ -735,10 +742,12 @@ export class LevelBuilder {
       x: stairsModule.x,
       y: EXIT_STAIRS_WOOD_STRUCTURE_Y,
       z: stairsModule.z,
-      w: 1,
-      d: 1,
+      w: EXIT_STAIRS_WOOD_STRUCTURE_SIZE.w,
+      d: EXIT_STAIRS_WOOD_STRUCTURE_SIZE.d,
+      height: EXIT_STAIRS_WOOD_STRUCTURE_SIZE.height,
+      side: stairsModule.side,
       moduleId: "woodStructure",
-      rotationY: stairsModule.rotationY,
+      rotationY: EXIT_STAIRS_WOOD_STRUCTURE_ROTATION_BY_SIDE[stairsModule.side] ?? 0,
       generated: true,
       role: "exitStairsWoodStructure",
     };
