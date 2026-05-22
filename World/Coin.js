@@ -11,21 +11,23 @@ const COIN_WALL_CLEARANCE = 0.28;
 const COIN_LANDING_MIN_DISTANCE = 0.62;
 const COIN_LANDING_MAX_DISTANCE = 1.35;
 const COIN_LANDING_ANGLE_SPREAD = Math.PI * 0.95;
+const COIN_NEUTRAL_COLOR = 0xffffff;
+const COIN_NEUTRAL_EMISSIVE = 0x000000;
 
 export const COIN_TYPES = {
   BASIC: {
     id: "basic",
     name: "Bronze Coin",
     value: 1,
-    color: 0xcf7954,
-    emissive: 0x4a2415,
-    shineColor: 0xf2a070,
+    //color: 0xffffff,
+    //emissive: 0x4a2415,
+    //shineColor: 0xf2a070,
   },
   HEAVY: {
     id: "heavy",
     name: "Silver Coin",
     value: 5,
-    color: 0xebebf2,
+    //color: 0xffffff,
     //emissive: 0x4d5268,
     //shineColor: 0xffffff,
   },
@@ -33,9 +35,9 @@ export const COIN_TYPES = {
     id: "large",
     name: "Gold Coin",
     value: 10,
-    color: 0xffbe52,
-    emissive: 0x5c3608,
-    shineColor: 0xffd77d,
+    //color: 0xffffff,
+    //emissive: 0x5c3608,
+    //shineColor: 0xffd77d,
   },
 };
 
@@ -113,8 +115,8 @@ export class CoinManager {
   createFallbackCoinModel(coinType) {
     const group = new THREE.Group();
     const coinMat = new THREE.MeshStandardMaterial({
-      color: coinType.color,
-      emissive: coinType.emissive,
+      color: coinType.color ?? COIN_NEUTRAL_COLOR,
+      emissive: coinType.emissive ?? COIN_NEUTRAL_EMISSIVE,
       roughness: 0.35,
       metalness: 0.35,
     });
@@ -128,7 +130,9 @@ export class CoinManager {
 
     const shine = new THREE.Mesh(
       new THREE.BoxGeometry(0.05, 0.06, 0.19),
-      new THREE.MeshBasicMaterial({ color: coinType.shineColor })
+      new THREE.MeshBasicMaterial({
+        color: coinType.shineColor ?? COIN_NEUTRAL_COLOR,
+      })
     );
     shine.position.y = 0.035;
     shine.userData.ignoreFlash = true;
@@ -142,13 +146,17 @@ export class CoinManager {
       if (!child.isMesh || !child.material) return;
 
       child.material = child.material.clone();
+      child.material.map = null;
+      child.material.emissiveMap = null;
 
       if (child.material.color) {
-        child.material.color.setHex(coinType.color);
+        child.material.color.setHex(coinType.color ?? COIN_NEUTRAL_COLOR);
       }
 
       if (child.material.emissive) {
-        child.material.emissive.setHex(coinType.emissive);
+        child.material.emissive.setHex(
+          coinType.emissive ?? COIN_NEUTRAL_EMISSIVE
+        );
       }
 
       if (
@@ -159,6 +167,7 @@ export class CoinManager {
         child.material.roughness = 0.42;
       }
 
+      child.material.needsUpdate = true;
       child.userData.ignoreFlash = true;
     });
   }
