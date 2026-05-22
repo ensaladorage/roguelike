@@ -34,6 +34,13 @@ const NAV_GRID_SIZE = 0.7;
 const CLICK_TARGET_SEARCH_RADIUS = 1.35;
 const CLICK_TARGET_SEARCH_STEP = 0.22;
 const PLAYER_COLLISION_SKIN = 0.04;
+const ENTRY_STAIRS_FRONT_OFFSET = 1;
+const FRONT_DIRECTION_BY_SIDE = {
+  north: { x: 0, z: 1 },
+  south: { x: 0, z: -1 },
+  west: { x: 1, z: 0 },
+  east: { x: -1, z: 0 },
+};
 
 export class GameScene {
   constructor(container) {
@@ -356,11 +363,137 @@ export class GameScene {
   }
 
   placePlayer(position) {
-    this.player.model.position.set(position.x, PLAYER_GROUND_Y, position.z);
+    const safePosition = this.getSafePlayerStartPosition(position);
+
+    this.player.model.position.copy(safePosition);
     this.player.groundY = PLAYER_GROUND_Y;
     this.player.model.visible = true;
     this.player.currentEnemy = null;
     this.player.clearTarget();
+  }
+
+  getSafePlayerStartPosition(position) {
+    const start = new THREE.Vector3(position.x, PLAYER_GROUND_Y, position.z);
+
+    if (this.isWalkablePosition(start, PLAYER_COLLISION_RADIUS)) {
+      return start;
+    }
+
+    const entryStairsFallback = this.getEntryStairsFrontSpawnPosition(start);
+    if (entryStairsFallback) {
+      console.log("playerStartAdjusted", {
+        reason: "entryStairs",
+        from: { x: start.x, z: start.z },
+        to: { x: entryStairsFallback.x, z: entryStairsFallback.z },
+      });
+
+      return entryStairsFallback;
+    }
+
+    const fallback = this.getNearestWalkablePosition(
+      start,
+      PLAYER_COLLISION_RADIUS
+    );
+
+    if (!fallback) return start;
+
+    console.log("playerStartAdjusted", {
+      reason: "nearestWalkable",
+      from: { x: start.x, z: start.z },
+      to: { x: fallback.x, z: fallback.z },
+    });
+
+    return fallback;
+  }
+
+  getEntryStairsFrontSpawnPosition(start) {
+    const stairs = this.collisionWalls.find(
+      (wall) =>
+        wall.role === "entryStairs" &&
+        this.isInsideWall(start, wall, PLAYER_COLLISION_RADIUS)
+    );
+
+    if (!stairs) return null;
+
+    const direction = FRONT_DIRECTION_BY_SIDE[stairs.side];
+    if (!direction) return null;
+
+    const frontPoint = new THREE.Vector3(
+      stairs.x + direction.x * ENTRY_STAIRS_FRONT_OFFSET,
+      PLAYER_GROUND_Y,
+      stairs.z + direction.z * ENTRY_STAIRS_FRONT_OFFSET
+    );
+
+    if (this.isWalkablePosition(frontPoint, PLAYER_COLLISION_RADIUS)) {
+      return frontPoint;
+    }
+
+    return this.getNearestWalkablePosition(
+      frontPoint,
+      PLAYER_COLLISION_RADIUS,
+      1.5,
+      0.15
+    );
+  }
+
+  getNearestWalkablePosition(
+    point,
+    radius,
+    maxSearchRadius = 3,
+    searchStep = 0.2
+  ) {
+    const candidates = [];
+    const seen = new Set();
+
+    const addCandidate = (x, z) => {
+      const candidate = new THREE.Vector3(x, PLAYER_GROUND_Y, z);
+      const key = `${candidate.x.toFixed(3)},${candidate.z.toFixed(3)}`;
+
+      if (seen.has(key)) return;
+      if (!this.isWalkablePosition(candidate, radius)) return;
+
+      seen.add(key);
+      candidates.push(candidate);
+    };
+
+    addCandidate(point.x, point.z);
+
+    for (const area of this.walkableAreas) {
+      const minX = area.x - area.w / 2 + radius;
+      const maxX = area.x + area.w / 2 - radius;
+      const minZ = area.z - area.d / 2 + radius;
+      const maxZ = area.z + area.d / 2 - radius;
+
+      if (minX > maxX || minZ > maxZ) continue;
+
+      addCandidate(
+        THREE.MathUtils.clamp(point.x, minX, maxX),
+        THREE.MathUtils.clamp(point.z, minZ, maxZ)
+      );
+    }
+
+    const angleStep = Math.PI / 8;
+
+    for (
+      let distance = searchStep;
+      distance <= maxSearchRadius;
+      distance += searchStep
+    ) {
+      for (let angle = 0; angle < Math.PI * 2; angle += angleStep) {
+        addCandidate(
+          point.x + Math.cos(angle) * distance,
+          point.z + Math.sin(angle) * distance
+        );
+      }
+
+      if (candidates.length > 0) break;
+    }
+
+    candidates.sort(
+      (a, b) => a.distanceToSquared(point) - b.distanceToSquared(point)
+    );
+
+    return candidates[0] ?? null;
   }
 
   addLevelGeometry(level) {

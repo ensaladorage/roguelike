@@ -20,12 +20,14 @@ const OPPOSITE_SIDE = {
 
 const ROCK_COLLISION_SCALE = 0.55;
 const BARREL_COLLISION_SCALE = 0.1;
-const ENTRY_STAIRS_OFFSET_FROM_WALL = 0.55;
+const ENTRY_STAIRS_OFFSET_FROM_WALL = 1.5;
+const EXIT_STAIRS_OFFSET_FROM_WALL = 1.5;
+const EXIT_STAIRS_Y = -1;
 const STAIRS_ROTATION_TOWARD_WALL_BY_SIDE = {
   north: Math.PI,
   south: 0,
-  west: -Math.PI / 2,
-  east: Math.PI / 2,
+  west: Math.PI / 2,
+  east: -Math.PI / 2,
 };
 
 const CONNECTOR_STYLES = {
@@ -180,7 +182,7 @@ export class LevelBuilder {
         room.doorwayModules,
         roomConnectionEndpoints
       );
-      const entryStairsModule = this.createEntryStairsModule(
+      const stairsModule = this.createRoomStairsModule(
         room,
         roomConnectionEndpoints
       );
@@ -190,8 +192,8 @@ export class LevelBuilder {
       environment.doorwayModules.push(...doorwayModules);
       environment.decorativeModules.push(...room.decorativeModules);
       environment.decorativeModules.push(...room.obstacleModules);
-      if (entryStairsModule) {
-        environment.decorativeModules.push(entryStairsModule);
+      if (stairsModule) {
+        environment.decorativeModules.push(stairsModule);
       }
 
       walkableAreas.push(...room.walkableAreas.map(cloneArea));
@@ -204,8 +206,8 @@ export class LevelBuilder {
       );
       collisionWalls.push(...wallModules.map(cloneArea));
       collisionWalls.push(...doorwayModules.map(cloneArea));
-      if (entryStairsModule) {
-        collisionWalls.push(this.createObstacleCollision(entryStairsModule));
+      if (stairsModule?.collision) {
+        collisionWalls.push(this.createObstacleCollision(stairsModule));
       }
       collisionWalls.push(
         ...this.createDecorationCollisionModules(room)
@@ -219,7 +221,13 @@ export class LevelBuilder {
         }))
       );
 
-      if (room.exitMarker) {
+      if (stairsModule?.role === "exitStairs") {
+        exit = {
+          ...(exit ?? {}),
+          x: stairsModule.x,
+          z: stairsModule.z,
+        };
+      } else if (room.exitMarker) {
         exit = {
           ...(exit ?? {}),
           x: room.exitMarker.x,
@@ -589,8 +597,8 @@ export class LevelBuilder {
       .map((module) => this.createObstacleCollision(module));
   }
 
-  createEntryStairsModule(room, endpoints) {
-    if (room.type !== "enter") return null;
+  createRoomStairsModule(room, endpoints) {
+    if (room.type !== "enter" && room.type !== "exit") return null;
 
     const connectedOpening = (room.doorOpenings ?? []).find((opening) =>
       this.isOpeningConnected(room.id, opening, endpoints)
@@ -607,6 +615,14 @@ export class LevelBuilder {
 
     if (!stairOpening) return null;
 
+    if (room.type === "exit") {
+      return this.createStairsModuleAtOpening(stairOpening, {
+        y: EXIT_STAIRS_Y,
+        offsetFromWall: EXIT_STAIRS_OFFSET_FROM_WALL,
+        role: "exitStairs",
+      });
+    }
+
     return this.createStairsModuleAtOpening(stairOpening, {
       collision: true,
       role: "entryStairs",
@@ -614,6 +630,7 @@ export class LevelBuilder {
   }
 
   createStairsModuleAtOpening(opening, options = {}) {
+    const offsetFromWall = options.offsetFromWall ?? ENTRY_STAIRS_OFFSET_FROM_WALL;
     const module = {
       x: opening.x,
       z: opening.z,
@@ -626,21 +643,23 @@ export class LevelBuilder {
       ...options,
     };
 
+    delete module.offsetFromWall;
+
     switch (opening.side) {
       case "north":
-        module.z += ENTRY_STAIRS_OFFSET_FROM_WALL;
+        module.z += offsetFromWall;
         break;
 
       case "south":
-        module.z -= ENTRY_STAIRS_OFFSET_FROM_WALL;
+        module.z -= offsetFromWall;
         break;
 
       case "west":
-        module.x += ENTRY_STAIRS_OFFSET_FROM_WALL;
+        module.x += offsetFromWall;
         break;
 
       case "east":
-        module.x -= ENTRY_STAIRS_OFFSET_FROM_WALL;
+        module.x -= offsetFromWall;
         break;
     }
 
