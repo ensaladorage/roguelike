@@ -19,7 +19,8 @@ export const COIN_TYPES = {
     id: "basic",
     name: "Bronze Coin",
     value: 1,
-    //color: 0xffffff,
+    scale: 0.5,
+    color: 0xf1976c,
     //emissive: 0x4a2415,
     //shineColor: 0xf2a070,
   },
@@ -27,7 +28,8 @@ export const COIN_TYPES = {
     id: "heavy",
     name: "Silver Coin",
     value: 5,
-    //color: 0xffffff,
+    scale: 1,
+    color: 0xbec2d4,
     //emissive: 0x4d5268,
     //shineColor: 0xffffff,
   },
@@ -35,7 +37,8 @@ export const COIN_TYPES = {
     id: "large",
     name: "Gold Coin",
     value: 10,
-    //color: 0xffffff,
+    scale: 1.5,
+    color: 0xffc044,
     //emissive: 0x5c3608,
     //shineColor: 0xffd77d,
   },
@@ -102,8 +105,10 @@ export class CoinManager {
     coinRoot.add(occlusionMarker);
     coinRoot.userData.occlusionMarker = occlusionMarker;
 
+    const baseScale = coinType.scale ?? 1;
+    coinRoot.scale.set(baseScale, baseScale, baseScale);
     coinRoot.userData.pulse = {
-      baseScale: 1,
+      baseScale,
       t: Math.random() * Math.PI * 2,
       speed: 2.2,
       amplitude: 0.08,
