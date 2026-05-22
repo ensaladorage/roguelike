@@ -1,6 +1,6 @@
 export const ENTER_ROOM_TEMPLATES = [
   {
-    id: "enter_room_01",
+    id: "enter_room_north_south_01",
     type: "enter",
     name: "North/South Entrance 01",
     dimensions: { w: 5, d: 11 },
