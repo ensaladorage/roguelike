@@ -1,4 +1,5 @@
 import * as THREE from "three";
+import { splitCoinValueIntoTypes } from "./Coin.js";
 
 export const ENEMY_POTION_DROP = {
   itemId: "energyDrink",
@@ -7,9 +8,8 @@ export const ENEMY_POTION_DROP = {
 };
 
 export const ENEMY_COIN_DROP = {
-  countMin: 2,
-  countMax: 5,
-  value: 1,
+  totalValueMin: 2,
+  totalValueMax: 5,
   radius: 0.7,
 };
 
@@ -494,10 +494,13 @@ export class EnemyAI {
 
   createCoinDrops() {
     const coins = [];
-    const count = this.rollIntegerRange(
-      ENEMY_COIN_DROP.countMin,
-      ENEMY_COIN_DROP.countMax
+    const totalValue = this.rollIntegerRange(
+      ENEMY_COIN_DROP.totalValueMin,
+      ENEMY_COIN_DROP.totalValueMax
     );
+    const coinTypes = splitCoinValueIntoTypes(totalValue);
+    const count = coinTypes.length;
+
     if (count === 0) return coins;
 
     const origin = this.model.position.clone();
@@ -509,10 +512,15 @@ export class EnemyAI {
     const right = new THREE.Vector3(forward.z, 0, -forward.x);
 
     for (let i = 0; i < count; i += 1) {
+      const coinType = coinTypes[i];
       const centered = i - (count - 1) / 2;
       const sideOffset = centered * 0.42 + (Math.random() * 0.18 - 0.09);
       const ringOffset = Math.abs(centered) % 2 === 0 ? 0 : 0.16;
-      const distance = ENEMY_COIN_DROP.radius + 0.45 + ringOffset + (Math.random() * 0.18 - 0.09);
+      const distance =
+        ENEMY_COIN_DROP.radius +
+        0.45 +
+        ringOffset +
+        (Math.random() * 0.18 - 0.09);
 
       const position = origin
         .clone()
@@ -520,17 +528,22 @@ export class EnemyAI {
         .addScaledVector(right, sideOffset);
 
       coins.push({
-        value: ENEMY_COIN_DROP.value,
+        typeId: coinType.typeId,
+        value: coinType.value,
         position: new THREE.Vector3(position.x, 0, position.z),
         fallbackOrigin: origin.clone(),
       });
     }
 
     console.log("enemyCoinsDropped", {
+      totalValue,
       count: coins.length,
-      value: ENEMY_COIN_DROP.value,
-      countMin: ENEMY_COIN_DROP.countMin,
-      countMax: ENEMY_COIN_DROP.countMax,
+      breakdown: coins.map((coin) => ({
+        typeId: coin.typeId,
+        value: coin.value,
+      })),
+      totalValueMin: ENEMY_COIN_DROP.totalValueMin,
+      totalValueMax: ENEMY_COIN_DROP.totalValueMax,
     });
 
     return coins;

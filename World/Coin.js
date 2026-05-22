@@ -12,6 +12,63 @@ const COIN_LANDING_MIN_DISTANCE = 0.62;
 const COIN_LANDING_MAX_DISTANCE = 1.35;
 const COIN_LANDING_ANGLE_SPREAD = Math.PI * 0.95;
 
+export const COIN_TYPES = {
+  BASIC: {
+    id: "basic",
+    name: "Bronze Coin",
+    value: 1,
+    color: 0xcd7f32,
+    emissive: 0x3b1f08,
+    shineColor: 0xffd199,
+  },
+  HEAVY: {
+    id: "heavy",
+    name: "Silver Coin",
+    value: 5,
+    color: 0xc9d1d9,
+    emissive: 0x26323b,
+    shineColor: 0xffffff,
+  },
+  LARGE: {
+    id: "large",
+    name: "Gold Coin",
+    value: 10,
+    color: 0xf2c94c,
+    emissive: 0x5a3b07,
+    shineColor: 0xfff2a6,
+  },
+};
+
+export const DEFAULT_COIN_TYPE_ID = COIN_TYPES.BASIC.id;
+
+export function getCoinTypeDefinition(typeId = DEFAULT_COIN_TYPE_ID) {
+  return (
+    Object.values(COIN_TYPES).find((coinType) => coinType.id === typeId) ??
+    COIN_TYPES.BASIC
+  );
+}
+
+export function splitCoinValueIntoTypes(totalValue) {
+  let remainingValue = Math.max(0, Math.floor(totalValue));
+  const coinTypesByValue = Object.values(COIN_TYPES)
+    .filter((coinType) => coinType.value > 0)
+    .sort((a, b) => b.value - a.value);
+  const coins = [];
+
+  for (const coinType of coinTypesByValue) {
+    while (remainingValue >= coinType.value) {
+      coins.push({
+        typeId: coinType.id,
+        value: coinType.value,
+        name: coinType.name,
+      });
+      remainingValue -= coinType.value;
+    }
+  }
+
+  return coins;
+}
+
 export class CoinManager {
   constructor(scene) {
     this.scene = scene; // GameScene instance
@@ -21,8 +78,9 @@ export class CoinManager {
     this.coinWorldPosition = new THREE.Vector3();
   }
 
-  createCoinModel() {
+  createCoinModel(typeId = DEFAULT_COIN_TYPE_ID) {
     let coinRoot = null;
+    const coinType = getCoinTypeDefinition(typeId);
 
     if (typeof this.scene.cloneGameModel === "function") {
       try {
@@ -33,24 +91,9 @@ export class CoinManager {
     }
 
     if (!coinRoot) {
-      const group = new THREE.Group();
-      const coinMat = new THREE.MeshStandardMaterial({
-        color: 0xe0bb42,
-        emissive: 0x3b2b06,
-        roughness: 0.35,
-        metalness: 0.35,
-      });
-
-      const coin = new THREE.Mesh(new THREE.CylinderGeometry(0.16, 0.16, 0.055, 24), coinMat);
-      coin.userData.ignoreFlash = true;
-      group.add(coin);
-
-      const shine = new THREE.Mesh(new THREE.BoxGeometry(0.05, 0.06, 0.19), new THREE.MeshBasicMaterial({ color: 0xffec95 }));
-      shine.position.y = 0.035;
-      shine.userData.ignoreFlash = true;
-      group.add(shine);
-
-      coinRoot = group;
+      coinRoot = this.createFallbackCoinModel(coinType);
+    } else {
+      this.applyCoinVisuals(coinRoot, coinType);
     }
 
     const occlusionMarker = this.createOcclusionMarker();
@@ -65,6 +108,59 @@ export class CoinManager {
     };
 
     return coinRoot;
+  }
+
+  createFallbackCoinModel(coinType) {
+    const group = new THREE.Group();
+    const coinMat = new THREE.MeshStandardMaterial({
+      color: coinType.color,
+      emissive: coinType.emissive,
+      roughness: 0.35,
+      metalness: 0.35,
+    });
+
+    const coin = new THREE.Mesh(
+      new THREE.CylinderGeometry(0.16, 0.16, 0.055, 24),
+      coinMat
+    );
+    coin.userData.ignoreFlash = true;
+    group.add(coin);
+
+    const shine = new THREE.Mesh(
+      new THREE.BoxGeometry(0.05, 0.06, 0.19),
+      new THREE.MeshBasicMaterial({ color: coinType.shineColor })
+    );
+    shine.position.y = 0.035;
+    shine.userData.ignoreFlash = true;
+    group.add(shine);
+
+    return group;
+  }
+
+  applyCoinVisuals(coinRoot, coinType) {
+    coinRoot.traverse((child) => {
+      if (!child.isMesh || !child.material) return;
+
+      child.material = child.material.clone();
+
+      if (child.material.color) {
+        child.material.color.setHex(coinType.color);
+      }
+
+      if (child.material.emissive) {
+        child.material.emissive.setHex(coinType.emissive);
+      }
+
+      if (
+        child.material.isMeshStandardMaterial ||
+        child.material.isMeshPhysicalMaterial
+      ) {
+        child.material.metalness = 0.35;
+        child.material.roughness = 0.42;
+      }
+
+      child.userData.ignoreFlash = true;
+    });
   }
 
   createOcclusionMarker() {
@@ -102,7 +198,8 @@ export class CoinManager {
 
     for (let index = 0; index < count; index += 1) {
       const c = coins[index];
-      const model = this.createCoinModel();
+      const coinType = getCoinTypeDefinition(c.typeId);
+      const model = this.createCoinModel(coinType.id);
       const origin = c.fallbackOrigin ? c.fallbackOrigin.clone() : c.position.clone();
 
       const resolved = this.resolveDropPosition(
@@ -121,7 +218,8 @@ export class CoinManager {
 
       this.coinDrops.push({
         model,
-        value: c.value ?? 1,
+        typeId: coinType.id,
+        value: c.value ?? coinType.value,
         collected: false,
         collectable: false,
         spinSpeed: 1.6 + this.coinDrops.length * 0.13,

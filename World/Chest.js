@@ -1,6 +1,7 @@
 import * as THREE from "three";
 import { flatDistance } from "../Game/Utils.js";
 import { DEFAULT_CHEST_MODEL_ID } from "../Data/modelDefinitions.js";
+import { splitCoinValueIntoTypes } from "./Coin.js";
 
 export const CHEST_REWARD = {
   itemChancePercent: 80,
@@ -17,9 +18,8 @@ export const CHEST_REWARD = {
 };
 
 export const CHEST_COIN_DROP = {
-  countMin: 20,
-  countMax: 30,
-  value: 1,
+  totalValueMin: 20,
+  totalValueMax: 30,
   radius: 0.62,
 };
 
@@ -212,10 +212,12 @@ export class ChestManager {
   // =========================
   spawnCoins(chest) {
     const coins = [];
-    const count = rollIntegerRange(
-      CHEST_COIN_DROP.countMin,
-      CHEST_COIN_DROP.countMax
+    const totalValue = rollIntegerRange(
+      CHEST_COIN_DROP.totalValueMin,
+      CHEST_COIN_DROP.totalValueMax
     );
+    const coinTypes = splitCoinValueIntoTypes(totalValue);
+    const count = coinTypes.length;
 
     const origin = chest.model.position;
 
@@ -226,11 +228,15 @@ export class ChestManager {
     const right = new THREE.Vector3(forward.z, 0, -forward.x);
 
     for (let i = 0; i < count; i++) {
+      const coinType = coinTypes[i];
       const centered = i - (count - 1) / 2;
 
       const sideOffset = centered * 0.42 + (Math.random() * 0.18 - 0.09);
       const forwardOffset =
-        CHEST_COIN_DROP.radius + 0.45 + (Math.abs(centered) % 2) * 0.14 + (Math.random() * 0.2 - 0.1);
+        CHEST_COIN_DROP.radius +
+        0.45 +
+        (Math.abs(centered) % 2) * 0.14 +
+        (Math.random() * 0.2 - 0.1);
 
       const position = origin
         .clone()
@@ -238,17 +244,22 @@ export class ChestManager {
         .addScaledVector(right, sideOffset);
 
       coins.push({
-        value: CHEST_COIN_DROP.value,
+        typeId: coinType.typeId,
+        value: coinType.value,
         position: new THREE.Vector3(position.x, 0, position.z),
         fallbackOrigin: origin.clone(),
       });
     }
 
     console.log("chestCoinsDropped", {
+      totalValue,
       count: coins.length,
-      value: CHEST_COIN_DROP.value,
-      countMin: CHEST_COIN_DROP.countMin,
-      countMax: CHEST_COIN_DROP.countMax,
+      breakdown: coins.map((coin) => ({
+        typeId: coin.typeId,
+        value: coin.value,
+      })),
+      totalValueMin: CHEST_COIN_DROP.totalValueMin,
+      totalValueMax: CHEST_COIN_DROP.totalValueMax,
     });
 
     if (this.scene.coinManager) {

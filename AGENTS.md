@@ -20,9 +20,9 @@ Build a simple top-down 3D roguelike with:
 - Player logic lives in `Core/Player.js`.
 - Enemy logic lives in `World/EnemyAI.js`.
 - Chest logic lives in `World/Chest.js`.
-- Coin physical rendering, landing, pickup, and collection behavior lives in `World/Coin.js`.
-- Enemy coin reward counts/values live in `World/EnemyAI.js`, currently `ENEMY_COIN_DROP`.
-- Chest coin reward counts/values live in `World/Chest.js`, currently `CHEST_COIN_DROP`.
+- Coin type definitions, denomination values, physical rendering, landing, pickup, and collection behavior live in `World/Coin.js`.
+- Enemy coin reward total value ranges live in `World/EnemyAI.js`, currently `ENEMY_COIN_DROP`.
+- Chest coin reward total value ranges live in `World/Chest.js`, currently `CHEST_COIN_DROP`.
 - Item definitions live in `Data/itemDefinitions.js`.
 - Inventory state lives in `Core/Inventory.js`.
 - Item effect logic lives in `Core/ItemEffects.js`.
@@ -168,8 +168,9 @@ Rules:
 - Scene renders dropped loot and handles pickup wiring only.
 - Enemy coin drop parameters live in `World/EnemyAI.js` -> `ENEMY_COIN_DROP`.
 - Chest coin drop parameters live in `World/Chest.js` -> `CHEST_COIN_DROP`.
-- Coin drop counts should be random integer rolls within configurable min/max ranges.
-- `World/Coin.js` must not own enemy/chest coin reward counts or reward source tables.
+- Coin type definitions and denomination values live in `World/Coin.js` -> `COIN_TYPES`.
+- Enemy/chest coin drops should roll a configurable total gold value, then convert that total into the fewest useful coin denominations.
+- `World/Coin.js` must not own enemy/chest coin reward total ranges or reward source tables.
 - Coin and item drops should:
   - launch from source
   - avoid walls
