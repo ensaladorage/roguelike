@@ -31,6 +31,9 @@ const PLAYER_GROUND_Y = 0;
 const PLAYER_COLLISION_RADIUS = 0.32;
 const ENEMY_COLLISION_RADIUS = 0.32;
 const NAV_GRID_SIZE = 0.7;
+const CLICK_TARGET_SEARCH_RADIUS = 1.35;
+const CLICK_TARGET_SEARCH_STEP = 0.22;
+const PLAYER_COLLISION_SKIN = 0.04;
 
 export class GameScene {
   constructor(container) {
@@ -124,19 +127,11 @@ export class GameScene {
     this.loadLevel(0);
 
     setupInput(this.renderer, this.camera, this.floor, (point) => {
-      this.createClickFeedback(point);
+      const navigation = this.getClickNavigation(point);
+      if (!navigation) return;
 
-      const pos = this.getWalkableTarget(point);
-      if (!pos) return;
-
-      const path = this.findNavigationPath(
-        this.player.model.position,
-        new THREE.Vector3(pos.x, PLAYER_GROUND_Y, pos.z)
-      );
-
-      if (path.length > 0) {
-        this.player.setPath(path);
-      }
+      this.createClickFeedback(navigation.target);
+      this.player.setPath(navigation.path);
     });
 
     setupInventoryInput((slotIndex) => {
@@ -525,11 +520,16 @@ export class GameScene {
       return [to.clone()];
     }
 
-    const start = this.worldToNavCell(from);
-    const goal = this.worldToNavCell(to);
+    const start = this.getNearestWalkableNavCell(from, radius, {
+      maxRing: 2,
+    });
 
-    if (!this.isNavCellWalkable(start, radius)) return [];
-    if (!this.isNavCellWalkable(goal, radius)) return [];
+    const goal = this.getNearestWalkableNavCell(to, radius, {
+      maxRing: 3,
+      mustConnectToPosition: true,
+    });
+
+    if (!start || !goal) return [];
 
     const open = [start];
     const cameFrom = new Map();
@@ -605,6 +605,56 @@ export class GameScene {
   isNavCellWalkable(cell, radius = PLAYER_COLLISION_RADIUS) {
     const position = this.navCellToWorld(cell);
     return this.isWalkablePosition(position, radius);
+  }
+
+  getNearestWalkableNavCell(position, radius, options = {}) {
+    const maxRing = options.maxRing ?? 2;
+    const center = this.worldToNavCell(position);
+    const candidates = [];
+
+    for (let ring = 0; ring <= maxRing; ring += 1) {
+      for (let x = center.x - ring; x <= center.x + ring; x += 1) {
+        for (let z = center.z - ring; z <= center.z + ring; z += 1) {
+          const cellRing = Math.max(
+            Math.abs(x - center.x),
+            Math.abs(z - center.z)
+          );
+
+          if (cellRing !== ring) {
+            continue;
+          }
+
+          candidates.push({ x, z });
+        }
+      }
+    }
+
+    candidates.sort((a, b) => {
+      const aWorld = this.navCellToWorld(a);
+      const bWorld = this.navCellToWorld(b);
+
+      return (
+        aWorld.distanceToSquared(position) -
+        bWorld.distanceToSquared(position)
+      );
+    });
+
+    for (const cell of candidates) {
+      if (!this.isNavCellInBounds(cell)) continue;
+      if (!this.isNavCellWalkable(cell, radius)) continue;
+
+      const cellWorld = this.navCellToWorld(cell);
+      if (
+        options.mustConnectToPosition &&
+        !this.canMoveBetween(cellWorld, position, radius)
+      ) {
+        continue;
+      }
+
+      return cell;
+    }
+
+    return null;
   }
 
   getNavNeighbors(cell, radius = PLAYER_COLLISION_RADIUS) {
@@ -713,22 +763,98 @@ export class GameScene {
     return simplified;
   }
 
-  getWalkableTarget(point) {
-    const target = { x: point.x, z: point.z };
-    if (!this.isWalkablePosition(target, PLAYER_COLLISION_RADIUS)) return null;
-    return target;
+  getClickNavigation(point) {
+    const candidates = this.getWalkableTargetCandidates(
+      point,
+      PLAYER_COLLISION_RADIUS
+    );
+
+    for (const target of candidates) {
+      const path = this.findNavigationPath(
+        this.player.model.position,
+        target,
+        PLAYER_COLLISION_RADIUS
+      );
+
+      if (path.length > 0) {
+        return { target, path };
+      }
+    }
+
+    return null;
+  }
+
+  getWalkableTargetCandidates(point, radius) {
+    const candidates = [];
+    const seen = new Set();
+    const maxSnapDistanceSq =
+      CLICK_TARGET_SEARCH_RADIUS * CLICK_TARGET_SEARCH_RADIUS;
+
+    const addCandidate = (x, z) => {
+      const target = new THREE.Vector3(x, PLAYER_GROUND_Y, z);
+      const key = `${target.x.toFixed(3)},${target.z.toFixed(3)}`;
+
+      if (seen.has(key)) return;
+      if (!this.isWalkablePosition(target, radius)) return;
+
+      seen.add(key);
+      candidates.push(target);
+    };
+
+    addCandidate(point.x, point.z);
+
+    for (const area of this.walkableAreas) {
+      const minX = area.x - area.w / 2 + radius;
+      const maxX = area.x + area.w / 2 - radius;
+      const minZ = area.z - area.d / 2 + radius;
+      const maxZ = area.z + area.d / 2 - radius;
+
+      if (minX > maxX || minZ > maxZ) continue;
+
+      const clampedX = THREE.MathUtils.clamp(point.x, minX, maxX);
+      const clampedZ = THREE.MathUtils.clamp(point.z, minZ, maxZ);
+      const dx = clampedX - point.x;
+      const dz = clampedZ - point.z;
+
+      if (dx * dx + dz * dz > maxSnapDistanceSq) continue;
+
+      addCandidate(clampedX, clampedZ);
+    }
+
+    const angleStep = Math.PI / 8;
+
+    for (
+      let distance = CLICK_TARGET_SEARCH_STEP;
+      distance <= CLICK_TARGET_SEARCH_RADIUS;
+      distance += CLICK_TARGET_SEARCH_STEP
+    ) {
+      for (let angle = 0; angle < Math.PI * 2; angle += angleStep) {
+        addCandidate(
+          point.x + Math.cos(angle) * distance,
+          point.z + Math.sin(angle) * distance
+        );
+      }
+    }
+
+    candidates.sort(
+      (a, b) => a.distanceToSquared(point) - b.distanceToSquared(point)
+    );
+
+    return candidates;
   }
 
   applyPlayerWorldCollision(previousPosition) {
     const currentPosition = this.player.model.position;
+    const movementRadius = this.getPlayerMovementCollisionRadius();
 
-    if (this.canMoveBetween(previousPosition, currentPosition)) {
+    if (this.canMoveBetween(previousPosition, currentPosition, movementRadius)) {
       return;
     }
 
     const slidePosition = this.getSlidePosition(
       previousPosition,
-      currentPosition
+      currentPosition,
+      movementRadius
     );
 
     if (slidePosition) {
@@ -737,10 +863,29 @@ export class GameScene {
     }
 
     currentPosition.copy(previousPosition);
+
+    const recoveryTarget = this.getPlayerNavigationDestination();
+    if (recoveryTarget) {
+      const recoveryPath = this.findNavigationPath(
+        previousPosition,
+        recoveryTarget,
+        PLAYER_COLLISION_RADIUS
+      );
+
+      if (recoveryPath.length > 0) {
+        this.player.setPath(recoveryPath);
+        return;
+      }
+    }
+
     this.player.clearTarget();
   }
 
-  getSlidePosition(previousPosition, desiredPosition) {
+  getSlidePosition(
+    previousPosition,
+    desiredPosition,
+    radius = PLAYER_COLLISION_RADIUS
+  ) {
     const candidates = [
       new THREE.Vector3(
         desiredPosition.x,
@@ -755,7 +900,7 @@ export class GameScene {
     ];
 
     const validCandidates = candidates.filter((candidate) =>
-      this.canMoveBetween(previousPosition, candidate)
+      this.canMoveBetween(previousPosition, candidate, radius)
     );
 
     if (validCandidates.length === 0) return null;
@@ -767,6 +912,18 @@ export class GameScene {
     );
 
     return validCandidates[0];
+  }
+
+  getPlayerMovementCollisionRadius() {
+    return Math.max(0.05, PLAYER_COLLISION_RADIUS - PLAYER_COLLISION_SKIN);
+  }
+
+  getPlayerNavigationDestination() {
+    if (this.player.path.length > 0) {
+      return this.player.path[this.player.path.length - 1].clone();
+    }
+
+    return this.player.target?.clone() ?? null;
   }
 
   canMoveBetween(from, to, radius = PLAYER_COLLISION_RADIUS) {
