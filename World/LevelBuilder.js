@@ -23,11 +23,18 @@ const BARREL_COLLISION_SCALE = 0.1;
 const ENTRY_STAIRS_OFFSET_FROM_WALL = 1.5;
 const EXIT_STAIRS_OFFSET_FROM_WALL = 2.5;
 const EXIT_STAIRS_Y = 0;
-const STAIRS_ROTATION_TOWARD_WALL_BY_SIDE = {
+const EXIT_STAIRS_FLOOR_HOLE_SIZE = 1;
+const ENTRY_STAIRS_ROTATION_TOWARD_WALL_BY_SIDE = {
   north: Math.PI,
   south: 0,
   west: Math.PI / 2,
   east: -Math.PI / 2,
+};
+const EXIT_STAIRS_ROTATION_BY_SIDE = {
+  north: 0,
+  south: Math.PI,
+  west: -Math.PI / 2,
+  east: Math.PI / 2,
 };
 
 const CONNECTOR_STYLES = {
@@ -186,8 +193,11 @@ export class LevelBuilder {
         room,
         roomConnectionEndpoints
       );
+      const floorModules = stairsModule?.role === "exitStairs"
+        ? this.hideFloorTileUnderModule(room.floorModules, stairsModule)
+        : room.floorModules;
 
-      environment.floorModules.push(...room.floorModules);
+      environment.floorModules.push(...floorModules);
       environment.wallModules.push(...wallModules);
       environment.doorwayModules.push(...doorwayModules);
       environment.decorativeModules.push(...room.decorativeModules);
@@ -619,18 +629,21 @@ export class LevelBuilder {
       return this.createStairsModuleAtOpening(stairOpening, {
         y: EXIT_STAIRS_Y,
         offsetFromWall: EXIT_STAIRS_OFFSET_FROM_WALL,
+        rotationBySide: EXIT_STAIRS_ROTATION_BY_SIDE,
         role: "exitStairs",
       });
     }
 
     return this.createStairsModuleAtOpening(stairOpening, {
       collision: true,
+      rotationBySide: ENTRY_STAIRS_ROTATION_TOWARD_WALL_BY_SIDE,
       role: "entryStairs",
     });
   }
 
   createStairsModuleAtOpening(opening, options = {}) {
     const offsetFromWall = options.offsetFromWall ?? ENTRY_STAIRS_OFFSET_FROM_WALL;
+    const rotationBySide = options.rotationBySide ?? ENTRY_STAIRS_ROTATION_TOWARD_WALL_BY_SIDE;
     const module = {
       x: opening.x,
       z: opening.z,
@@ -638,12 +651,13 @@ export class LevelBuilder {
       d: 1,
       side: opening.side,
       moduleId: "stairs",
-      rotationY: STAIRS_ROTATION_TOWARD_WALL_BY_SIDE[opening.side] ?? 0,
+      rotationY: rotationBySide[opening.side] ?? 0,
       generated: true,
       ...options,
     };
 
     delete module.offsetFromWall;
+    delete module.rotationBySide;
 
     switch (opening.side) {
       case "north":
@@ -664,6 +678,35 @@ export class LevelBuilder {
     }
 
     return module;
+  }
+
+  hideFloorTileUnderModule(floorModules, module) {
+    return floorModules.map((floorModule) => {
+      if (!this.areaContainsPoint(floorModule, module)) return floorModule;
+
+      return {
+        ...floorModule,
+        hiddenAreas: [
+          ...(floorModule.hiddenAreas ?? []),
+          {
+            x: module.x,
+            z: module.z,
+            w: EXIT_STAIRS_FLOOR_HOLE_SIZE,
+            d: EXIT_STAIRS_FLOOR_HOLE_SIZE,
+            role: "exitStairsFloorHole",
+          },
+        ],
+      };
+    });
+  }
+
+  areaContainsPoint(area, point) {
+    return (
+      point.x >= area.x - area.w / 2 &&
+      point.x <= area.x + area.w / 2 &&
+      point.z >= area.z - area.d / 2 &&
+      point.z <= area.z + area.d / 2
+    );
   }
 
   isHorizontalSide(side) {

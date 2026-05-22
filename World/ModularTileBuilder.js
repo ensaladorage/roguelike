@@ -110,10 +110,21 @@ export class ModularTileBuilder {
           d: tileD,
         };
 
+        if (this.isGridModuleHidden(modulePiece, piece.hiddenAreas)) continue;
+
         const object = this.createModuleObject(modulePiece, definition);
         if (object) this.scene.levelGroup.add(object);
       }
     }
+  }
+
+  isGridModuleHidden(modulePiece, hiddenAreas = []) {
+    return hiddenAreas.some((area) =>
+      modulePiece.x >= area.x - area.w / 2 &&
+      modulePiece.x <= area.x + area.w / 2 &&
+      modulePiece.z >= area.z - area.d / 2 &&
+      modulePiece.z <= area.z + area.d / 2
+    );
   }
 
   buildLinearModules(piece, definition, wallMeshes) {
