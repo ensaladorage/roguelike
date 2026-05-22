@@ -29,10 +29,10 @@ const EXIT_STAIRS_DIRT_FRONT_OFFSET = 1;
 const EXIT_STAIRS_DIRT_Y = -0.95;
 const EXIT_STAIRS_WOOD_STRUCTURE_Y = -0.85;
 const ENTRY_STAIRS_ROTATION_TOWARD_WALL_BY_SIDE = {
-  north: Math.PI,
+  north: 0,
   south: 0,
-  west: Math.PI / 2,
-  east: -Math.PI / 2,
+  west: 0,
+  east: 0,
 };
 const EXIT_STAIRS_ROTATION_BY_SIDE = {
   north: Math.PI,
