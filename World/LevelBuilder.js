@@ -24,8 +24,8 @@ const ENTRY_STAIRS_OFFSET_FROM_WALL = 1.5;
 const EXIT_STAIRS_OFFSET_FROM_WALL = 2.5;
 const EXIT_STAIRS_Y = -0.9;
 const EXIT_STAIRS_FLOOR_HOLE_SIZE = 1;
-const EXIT_STAIRS_SIDE_WALL_OFFSET = 0.8;
-const EXIT_STAIRS_SIDE_WALL_Y = EXIT_STAIRS_Y;
+const EXIT_STAIRS_SIDE_WALL_OFFSET = 1;
+const EXIT_STAIRS_SIDE_WALL_Y = -1.1;
 const EXIT_STAIRS_SIDE_WALL_SIZE = { w: 1, d: 1 };
 const ENTRY_STAIRS_ROTATION_TOWARD_WALL_BY_SIDE = {
   north: Math.PI,
@@ -42,14 +42,14 @@ const EXIT_STAIRS_ROTATION_BY_SIDE = {
 const EXIT_STAIRS_LEFT_WALL_ROTATION_BY_SIDE = {
   north: 0,
   south: 0,
-  west: Math.PI / 2,
-  east: Math.PI / 2,
+  west: 0,
+  east: Math.PI,
 };
 const EXIT_STAIRS_RIGHT_WALL_ROTATION_BY_SIDE = {
   north: 0,
-  south: 0,
-  west: Math.PI / 2,
-  east: Math.PI / 2,
+  south: Math.PI,
+  west: 0,
+  east: 0,
 };
 
 const CONNECTOR_STYLES = {
