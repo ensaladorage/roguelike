@@ -585,12 +585,21 @@ export class EnemyAI {
   }
 
   rollPercentChance(chancePercent) {
+    const safeChancePercent = this.normalizePercentChance(chancePercent);
     const value = Math.random() * 100;
 
     return {
       value: Number(value.toFixed(2)),
-      success: value < chancePercent,
+      success: value < safeChancePercent,
     };
+  }
+
+  normalizePercentChance(chancePercent) {
+    const numericChance = Number.parseFloat(chancePercent);
+
+    if (!Number.isFinite(numericChance)) return 0;
+
+    return Math.max(0, Math.min(100, numericChance));
   }
 
   rollIntegerRange(min, max) {

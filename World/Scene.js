@@ -1216,6 +1216,15 @@ export class GameScene {
     this.updateHud();
   }
 
+  flushInventoryEvents() {
+    if (!this.inventory) return;
+
+    const events = this.inventory.consumeEvents();
+    if (events.length > 0) {
+      this.handleGameEvents(events);
+    }
+  }
+
   checkLevelExitTrigger() {
     if (!this.levelExitTrigger || this.levelExitTrigger.activated) return;
 
@@ -1294,7 +1303,13 @@ export class GameScene {
           break;
 
         case "enemyItemsDropped":
-          this.itemDropManager.addItemDrops(event.items);
+          console.log("enemyItemsDropped", {
+            count: event.items?.length ?? 0,
+            itemIds: (event.items ?? []).map((item) => item.itemId),
+          });
+          if (this.itemDropManager) {
+            this.itemDropManager.addItemDrops(event.items ?? []);
+          }
           break;
 
         case "enemyDefeated":

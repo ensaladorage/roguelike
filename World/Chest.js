@@ -64,12 +64,21 @@ function rollChestItems(rewardConfig) {
 }
 
 function rollPercentChance(chancePercent) {
+  const safeChancePercent = normalizePercentChance(chancePercent);
   const value = Math.random() * 100;
 
   return {
     value: Number(value.toFixed(2)),
-    success: value < chancePercent,
+    success: value < safeChancePercent,
   };
+}
+
+function normalizePercentChance(chancePercent) {
+  const numericChance = Number.parseFloat(chancePercent);
+
+  if (!Number.isFinite(numericChance)) return 0;
+
+  return Math.max(0, Math.min(100, numericChance));
 }
 
 function rollIntegerRange(min, max) {
@@ -100,11 +109,10 @@ export class ChestManager {
       model.scale.set(1, 1, 1);
 
       this.scene.levelGroup.add(model);
-      const reward = getChestReward(data.rewardOverrides);
 
       return {
         model,
-        itemIds: reward.itemIds,
+        rewardOverrides: data.rewardOverrides,
         collected: false,
       };
     });
@@ -158,7 +166,13 @@ export class ChestManager {
   collectChestItem(chest) {
     if (!this.scene.inventory) return;
 
-    const itemIds = chest.itemIds ?? [];
+    const reward = getChestReward(chest.rewardOverrides);
+    const itemIds = reward.itemIds ?? [];
+
+    console.log("chestItemsGranted", {
+      count: itemIds.length,
+      itemIds,
+    });
 
     for (const itemId of itemIds) {
       this.scene.inventory.pickupItem(itemId, {
@@ -166,6 +180,10 @@ export class ChestManager {
         chest,
         enemies: this.scene.enemies,
       });
+    }
+
+    if (typeof this.scene.flushInventoryEvents === "function") {
+      this.scene.flushInventoryEvents();
     }
   }
 

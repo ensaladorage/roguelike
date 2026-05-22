@@ -175,6 +175,9 @@ export class ItemDropManager {
     itemDrop.collected = true;
     itemDrop.model.visible = false;
     itemDrop.model.removeFromParent();
+    if (typeof this.scene.flushInventoryEvents === "function") {
+      this.scene.flushInventoryEvents();
+    }
     this.scene.updateHud();
     this.scene.sfx.play("chest");
   }
