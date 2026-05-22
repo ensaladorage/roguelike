@@ -28,7 +28,7 @@ const EXIT_STAIRS_DIRT_SIDE_OFFSET = 1;
 const EXIT_STAIRS_DIRT_FRONT_OFFSET = 1;
 const EXIT_STAIRS_DIRT_Y = -0.95;
 const EXIT_STAIRS_WOOD_STRUCTURE_Y = -0.85;
-const EXIT_STAIRS_WOOD_STRUCTURE_SIZE = { w: 1, d: 1, height: 1 };
+const EXIT_STAIRS_WOOD_STRUCTURE_SIZE = { w: 1.2, d: 1.2, height: 1 };
 const ENTRY_STAIRS_ROTATION_TOWARD_WALL_BY_SIDE = {
   north: Math.PI,
   south: 0,
@@ -42,10 +42,10 @@ const EXIT_STAIRS_ROTATION_BY_SIDE = {
   east: Math.PI / 2,
 };
 const EXIT_STAIRS_WOOD_STRUCTURE_ROTATION_BY_SIDE = {
-  north: Math.PI,
-  south: 0,
-  west: -Math.PI / 2,
-  east: Math.PI / 2,
+  north: 0,
+  south: Math.PI,
+  west: Math.PI / 2,
+  east: -Math.PI / 2,
 };
 const CONNECTOR_STYLES = {
   openCorridor: {
