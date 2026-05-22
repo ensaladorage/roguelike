@@ -189,6 +189,7 @@ export class LevelBuilder {
           .map((opening) => this.createDoorOpeningWalkableArea(opening))
       );
       collisionWalls.push(...wallModules.map(cloneArea));
+      collisionWalls.push(...doorwayModules.map(cloneArea));
       collisionWalls.push(
         ...this.createDecorationCollisionModules(room)
       );
