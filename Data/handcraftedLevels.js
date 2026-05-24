@@ -4,10 +4,24 @@ export const HANDCRAFTED_LEVELS = [
     tileSetId: "scenarioDefault",
     name: "Test Floor: enter_room_north_south_01 + combat_02 + exit_room_north_south_01",
     connectorStyleId: "openCorridor",
-    floorDetailFill: {
-      density: 0.3,
-      moduleId: "floorDetail",
+    decorationFill: {
       seed: "random",
+      modules: [
+        {
+          moduleId: "floorDetail",
+          density: 0.3,
+        },
+        {
+          moduleId: "barrel",
+          density: 0.01,
+          roomTypes: ["combat"],
+        },
+        {
+          moduleId: "rocks",
+          density: 0.012,
+          roomTypes: ["combat"],
+        },
+      ],
     },
     playerStart: { x: -8, z: -13 },
     floorSize: 54,
