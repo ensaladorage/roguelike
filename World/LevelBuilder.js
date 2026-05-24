@@ -47,6 +47,7 @@ const EXIT_STAIRS_WOOD_STRUCTURE_ROTATION_BY_SIDE = {
   west: Math.PI / 2,
   east: -Math.PI / 2,
 };
+const FLOOR_DETAIL_ROTATIONS = [0, Math.PI / 2, Math.PI, -Math.PI / 2];
 const CONNECTOR_STYLES = {
   openCorridor: {
     id: "openCorridor",
@@ -203,6 +204,11 @@ export class LevelBuilder {
         room,
         roomConnectionEndpoints
       );
+      const generatedFloorDetails = this.createRoomFloorDetailModules(
+        room,
+        levelDefinition.floorDetailFill,
+        stairsModule ? [stairsModule] : []
+      );
       const floorModules = stairsModule?.role === "exitStairs"
         ? this.hideFloorTileUnderModule(room.floorModules, stairsModule)
         : room.floorModules;
@@ -210,6 +216,7 @@ export class LevelBuilder {
       environment.floorModules.push(...floorModules);
       environment.wallModules.push(...wallModules);
       environment.doorwayModules.push(...doorwayModules);
+      environment.decorativeModules.push(...generatedFloorDetails);
       environment.decorativeModules.push(...room.decorativeModules);
       environment.decorativeModules.push(...room.obstacleModules);
       if (stairsModule) {
@@ -623,6 +630,121 @@ export class LevelBuilder {
     ]
       .filter((module) => module.collision)
       .map((module) => this.createObstacleCollision(module));
+  }
+
+  createRoomFloorDetailModules(room, fillConfig, extraOccupiedModules = []) {
+    const config = this.normalizeFloorDetailFillConfig(fillConfig);
+    if (!config || config.density <= 0) return [];
+
+    const occupiedModules = this.createFloorDetailOccupiedModules(
+      room,
+      extraOccupiedModules
+    );
+    const usedTileKeys = new Set();
+    const modules = [];
+
+    for (const area of room.walkableAreas ?? []) {
+      for (const tile of this.createTileCentersForArea(area)) {
+        const key = this.getFloorDetailTileKey(tile);
+        if (usedTileKeys.has(key)) continue;
+        usedTileKeys.add(key);
+
+        if (this.isPointInsideAnyModule(tile, occupiedModules)) continue;
+
+        const roll = this.createDeterministicUnit(
+          `${config.seed}:${room.id}:${key}`
+        );
+        if (roll >= config.density) continue;
+
+        const rotationIndex = Math.floor(
+          this.createDeterministicUnit(`${config.seed}:rotation:${room.id}:${key}`) *
+          FLOOR_DETAIL_ROTATIONS.length
+        );
+
+        modules.push({
+          x: tile.x,
+          z: tile.z,
+          w: 1,
+          d: 1,
+          moduleId: config.moduleId,
+          rotationY: FLOOR_DETAIL_ROTATIONS[rotationIndex] ?? 0,
+          generated: true,
+          role: "floorDetailFill",
+        });
+      }
+    }
+
+    return modules;
+  }
+
+  normalizeFloorDetailFillConfig(fillConfig) {
+    if (!fillConfig) return null;
+
+    if (typeof fillConfig === "number") {
+      return {
+        density: Math.max(0, Math.min(1, fillConfig)),
+        moduleId: "floorDetail",
+        seed: "floorDetailFill",
+      };
+    }
+
+    return {
+      density: Math.max(0, Math.min(1, fillConfig.density ?? 0)),
+      moduleId: fillConfig.moduleId ?? "floorDetail",
+      seed: fillConfig.seed ?? "floorDetailFill",
+    };
+  }
+
+  createFloorDetailOccupiedModules(room, extraOccupiedModules) {
+    return [
+      ...(room.wallModules ?? []),
+      ...(room.doorwayModules ?? []),
+      ...(room.decorativeModules ?? []),
+      ...(room.obstacleModules ?? []),
+      ...(room.chestSpawns ?? []).map((spawn) => ({ ...spawn, w: 1, d: 1 })),
+      ...(room.enemySpawns ?? []).map((spawn) => ({ ...spawn, w: 1, d: 1 })),
+      ...(extraOccupiedModules ?? []),
+    ];
+  }
+
+  createTileCentersForArea(area) {
+    const countX = Math.max(1, Math.round(area.w));
+    const countZ = Math.max(1, Math.round(area.d));
+    const tileW = area.w / countX;
+    const tileD = area.d / countZ;
+    const startX = area.x - area.w / 2 + tileW / 2;
+    const startZ = area.z - area.d / 2 + tileD / 2;
+    const tiles = [];
+
+    for (let ix = 0; ix < countX; ix += 1) {
+      for (let iz = 0; iz < countZ; iz += 1) {
+        tiles.push({
+          x: startX + ix * tileW,
+          z: startZ + iz * tileD,
+        });
+      }
+    }
+
+    return tiles;
+  }
+
+  getFloorDetailTileKey(tile) {
+    return `${tile.x.toFixed(3)}:${tile.z.toFixed(3)}`;
+  }
+
+  isPointInsideAnyModule(point, modules) {
+    return modules.some((module) => this.areaContainsPoint(module, point));
+  }
+
+  createDeterministicUnit(value) {
+    let hash = 2166136261;
+
+    for (let index = 0; index < value.length; index += 1) {
+      hash ^= value.charCodeAt(index);
+      hash = Math.imul(hash, 16777619);
+    }
+
+    return (hash >>> 0) / 4294967296;
   }
 
   createRoomStairsModule(room, endpoints) {
