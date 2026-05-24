@@ -7,7 +7,7 @@ export const HANDCRAFTED_LEVELS = [
     floorDetailFill: {
       density: 0.3,
       moduleId: "floorDetail",
-      seed: 124,
+      seed: "random",
     },
     playerStart: { x: -8, z: -13 },
     floorSize: 54,

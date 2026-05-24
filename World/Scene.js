@@ -80,6 +80,7 @@ export class GameScene {
     container.appendChild(this.renderer.domElement);
 
     this.clock = new THREE.Clock();
+    this.runSeed = this.createRunSeed();
     this.floorSize = 48;
     this.levelIndex = 0;
     this.levelGroup = new THREE.Group();
@@ -336,7 +337,9 @@ export class GameScene {
     const definition = this.levelDefinitions[levelIndex];
     if (!definition) return;
 
-    const level = this.levelBuilder.build(definition);
+    const level = this.levelBuilder.build(definition, {
+      runSeed: this.runSeed,
+    });
     if (!level) return;
 
     this.levelIndex = levelIndex;
@@ -363,7 +366,16 @@ export class GameScene {
 
     this.updateHud();
     this.addLog(`${level.name} loaded.`);
-    console.log("levelLoaded", { level: levelIndex + 1, name: level.name });
+    console.log("levelLoaded", {
+      level: levelIndex + 1,
+      name: level.name,
+      runSeed: this.runSeed,
+    });
+  }
+
+  createRunSeed() {
+    const randomPart = Math.random().toString(36).slice(2, 10);
+    return `${Date.now().toString(36)}-${randomPart}`;
   }
 
   placePlayer(position) {

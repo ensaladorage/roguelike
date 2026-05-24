@@ -67,7 +67,7 @@ export class LevelBuilder {
     this.roomTemplateLibrary = roomTemplateLibrary;
   }
 
-  build(levelDefinition) {
+  build(levelDefinition, buildOptions = {}) {
     if (!levelDefinition) return null;
 
     if (levelDefinition.kind === "authored") {
@@ -75,7 +75,7 @@ export class LevelBuilder {
     }
 
     if (levelDefinition.kind === "assembled") {
-      return this.buildAssembledLevel(levelDefinition);
+      return this.buildAssembledLevel(levelDefinition, buildOptions);
     }
 
     return this.buildLegacyLevel(levelDefinition);
@@ -169,7 +169,7 @@ export class LevelBuilder {
     };
   }
 
-  buildAssembledLevel(levelDefinition) {
+  buildAssembledLevel(levelDefinition, buildOptions = {}) {
     const environment = {
       tileSetId: levelDefinition.tileSetId ?? "scenarioDefault",
       floorModules: [],
@@ -207,6 +207,7 @@ export class LevelBuilder {
       const generatedFloorDetails = this.createRoomFloorDetailModules(
         room,
         levelDefinition.floorDetailFill,
+        buildOptions,
         stairsModule ? [stairsModule] : []
       );
       const floorModules = stairsModule?.role === "exitStairs"
@@ -632,8 +633,8 @@ export class LevelBuilder {
       .map((module) => this.createObstacleCollision(module));
   }
 
-  createRoomFloorDetailModules(room, fillConfig, extraOccupiedModules = []) {
-    const config = this.normalizeFloorDetailFillConfig(fillConfig);
+  createRoomFloorDetailModules(room, fillConfig, buildOptions = {}, extraOccupiedModules = []) {
+    const config = this.normalizeFloorDetailFillConfig(fillConfig, buildOptions);
     if (!config || config.density <= 0) return [];
 
     const occupiedModules = this.createFloorDetailOccupiedModules(
@@ -677,22 +678,30 @@ export class LevelBuilder {
     return modules;
   }
 
-  normalizeFloorDetailFillConfig(fillConfig) {
+  normalizeFloorDetailFillConfig(fillConfig, buildOptions = {}) {
     if (!fillConfig) return null;
 
     if (typeof fillConfig === "number") {
       return {
         density: Math.max(0, Math.min(1, fillConfig)),
         moduleId: "floorDetail",
-        seed: "floorDetailFill",
+        seed: this.resolveFloorDetailSeed(undefined, buildOptions),
       };
     }
 
     return {
       density: Math.max(0, Math.min(1, fillConfig.density ?? 0)),
       moduleId: fillConfig.moduleId ?? "floorDetail",
-      seed: fillConfig.seed ?? "floorDetailFill",
+      seed: this.resolveFloorDetailSeed(fillConfig.seed, buildOptions),
     };
+  }
+
+  resolveFloorDetailSeed(seed, buildOptions = {}) {
+    if (seed !== undefined && seed !== null && seed !== "random") {
+      return String(seed);
+    }
+
+    return String(buildOptions.runSeed ?? "floorDetailFill");
   }
 
   createFloorDetailOccupiedModules(room, extraOccupiedModules) {
