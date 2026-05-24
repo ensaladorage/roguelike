@@ -21,7 +21,7 @@ const OPPOSITE_SIDE = {
 const ROCK_COLLISION_SCALE = 0.55;
 const BARREL_COLLISION_SCALE = 0.1;
 const ENTRY_STAIRS_OFFSET_FROM_WALL = 1.5;
-const EXIT_STAIRS_OFFSET_FROM_WALL = 2.5;
+const EXIT_STAIRS_OFFSET_FROM_WALL = 1.5;
 const EXIT_STAIRS_Y = -0.9;
 const EXIT_STAIRS_FLOOR_HOLE_SIZE = 1;
 const EXIT_STAIRS_DIRT_SIDE_OFFSET = 1;
@@ -30,10 +30,10 @@ const EXIT_STAIRS_DIRT_Y = -0.95;
 const EXIT_STAIRS_WOOD_STRUCTURE_Y = -0.85;
 const EXIT_STAIRS_WOOD_STRUCTURE_SIZE = { w: 1.2, d: 1.2, height: 1 };
 const ENTRY_STAIRS_ROTATION_TOWARD_WALL_BY_SIDE = {
-  north: Math.PI,
-  south: 0,
-  west: Math.PI / 2,
-  east: -Math.PI / 2,
+  north: 0,
+  south: Math.PI,
+  west: -Math.PI / 2,
+  east: Math.PI / 2,
 };
 const EXIT_STAIRS_ROTATION_BY_SIDE = {
   north: Math.PI,

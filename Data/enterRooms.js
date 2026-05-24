@@ -111,8 +111,6 @@ export const ENTER_ROOM_TEMPLATES = [
       { x: -1.2, z: -3, w: 1, d: 1, moduleId: "barrel", collision: true },
       { x: -1.2, z: -3.5, w: 1, d: 1, moduleId: "barrel", collision: true },
       { x: 1.2, z: -3.5, w: 1, d: 1, moduleId: "barrel", collision: true },
-      { x: 0, z: -4.2, w: 1, d: 1, moduleId: "barrel", collision: true },
-      { x: 0.3, z: -3.9, w: 1, d: 1, moduleId: "barrel", collision: true },
     ],
   },
   {
