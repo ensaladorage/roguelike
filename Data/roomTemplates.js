@@ -252,6 +252,7 @@ function createRectRoomTemplate({
   exitMarker = null,
   decorativeModules = [],
   obstacleModules = [],
+  decorZones = [],
 }) {
   const perimeter = createPerimeterModules({
     dimensions,
@@ -289,6 +290,7 @@ function createRectRoomTemplate({
     exitMarker,
     decorativeModules,
     obstacleModules,
+    decorZones,
   };
 }
 

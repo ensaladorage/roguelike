@@ -158,6 +158,9 @@ export class RoomTemplateLibrary {
       obstacleModules: template.obstacleModules.map((module) =>
         transformArea(module, placement, quarterTurns)
       ),
+      decorZones: (template.decorZones ?? []).map((zone) =>
+        transformArea(zone, placement, quarterTurns)
+      ),
       walkableAreas: template.walkableAreas.map((area) =>
         transformArea(area, placement, quarterTurns)
       ),

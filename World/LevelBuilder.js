@@ -1,3 +1,5 @@
+import { DecorationBuilder } from "./DecorationBuilder.js";
+
 function cloneArea(area) {
   return {
     ...area,
@@ -47,8 +49,6 @@ const EXIT_STAIRS_WOOD_STRUCTURE_ROTATION_BY_SIDE = {
   west: Math.PI / 2,
   east: -Math.PI / 2,
 };
-const DECORATION_FILL_ROTATIONS = [0, Math.PI / 2, Math.PI, -Math.PI / 2];
-const DECORATION_DOOR_CLEARANCE = 3;
 const CONNECTOR_STYLES = {
   openCorridor: {
     id: "openCorridor",
@@ -66,6 +66,7 @@ const CONNECTOR_STYLES = {
 export class LevelBuilder {
   constructor({ roomTemplateLibrary }) {
     this.roomTemplateLibrary = roomTemplateLibrary;
+    this.decorationBuilder = new DecorationBuilder();
   }
 
   build(levelDefinition, buildOptions = {}) {
@@ -205,12 +206,12 @@ export class LevelBuilder {
         room,
         roomConnectionEndpoints
       );
-      const generatedDecorativeModules = this.createRoomGeneratedDecorationModules(
+      const generatedDecorativeModules = this.decorationBuilder.buildRoomDecorations({
         room,
         levelDefinition,
         buildOptions,
-        stairsModule ? [stairsModule] : []
-      );
+        extraOccupiedModules: stairsModule ? [stairsModule] : [],
+      });
       const floorModules = stairsModule?.role === "exitStairs"
         ? this.hideFloorTileUnderModule(room.floorModules, stairsModule)
         : room.floorModules;
@@ -637,215 +638,6 @@ export class LevelBuilder {
     ]
       .filter((module) => module.collision)
       .map((module) => this.createObstacleCollision(module));
-  }
-
-  createRoomGeneratedDecorationModules(room, levelDefinition, buildOptions = {}, extraOccupiedModules = []) {
-    const config = this.normalizeDecorationFillConfig(levelDefinition, buildOptions);
-    if (!config || config.entries.length === 0) return [];
-
-    const occupiedModules = this.createDecorationFillOccupiedModules(
-      room,
-      extraOccupiedModules
-    );
-    const modules = [];
-
-    for (const entry of config.entries) {
-      if (!this.canPlaceDecorationEntryInRoom(entry, room)) continue;
-
-      const usedTileKeys = new Set();
-
-      for (const area of room.walkableAreas ?? []) {
-        for (const tile of this.createTileCentersForArea(area)) {
-          const key = this.getDecorationTileKey(tile);
-          if (usedTileKeys.has(key)) continue;
-          usedTileKeys.add(key);
-
-          if (this.isPointInsideAnyModule(tile, occupiedModules)) continue;
-
-          const roll = this.createDeterministicUnit(
-            `${entry.seed}:${entry.moduleId}:${room.id}:${key}`
-          );
-          if (roll >= entry.density) continue;
-
-          const module = this.createGeneratedDecorationModule(entry, tile, room, key);
-
-          modules.push(module);
-
-          if (entry.occupiesTile) {
-            occupiedModules.push(module);
-          }
-        }
-      }
-    }
-
-    return modules;
-  }
-
-  normalizeDecorationFillConfig(levelDefinition, buildOptions = {}) {
-    if (levelDefinition.decorationFill) {
-      const fillConfig = levelDefinition.decorationFill;
-      const seed = this.resolveDecorationSeed(fillConfig.seed, buildOptions);
-      const entries = (fillConfig.modules ?? fillConfig.entries ?? [])
-        .map((entry) => this.normalizeDecorationFillEntry(entry, seed))
-        .filter((entry) => entry.density > 0);
-
-      return {
-        seed,
-        entries,
-      };
-    }
-
-    if (levelDefinition.floorDetailFill) {
-      const floorDetailEntry = this.normalizeLegacyFloorDetailFillConfig(
-        levelDefinition.floorDetailFill,
-        buildOptions
-      );
-
-      return floorDetailEntry
-        ? { seed: floorDetailEntry.seed, entries: [floorDetailEntry] }
-        : null;
-    }
-
-    return null;
-  }
-
-  normalizeLegacyFloorDetailFillConfig(fillConfig, buildOptions = {}) {
-    if (typeof fillConfig === "number") {
-      return this.normalizeDecorationFillEntry(
-        { moduleId: "floorDetail", density: fillConfig },
-        this.resolveDecorationSeed(undefined, buildOptions)
-      );
-    }
-
-    return this.normalizeDecorationFillEntry(
-      {
-        moduleId: fillConfig.moduleId ?? "floorDetail",
-        density: fillConfig.density ?? 0,
-        seed: fillConfig.seed,
-      },
-      this.resolveDecorationSeed(fillConfig.seed, buildOptions)
-    );
-  }
-
-  normalizeDecorationFillEntry(entry, sharedSeed) {
-    const moduleId = entry.moduleId ?? "floorDetail";
-
-    return {
-      moduleId,
-      density: Math.max(0, Math.min(1, entry.density ?? 0)),
-      seed: this.resolveDecorationSeed(entry.seed ?? sharedSeed, { runSeed: sharedSeed }),
-      role: entry.role ?? `${moduleId}Fill`,
-      roomTypes: entry.roomTypes ?? null,
-      w: entry.w ?? 1,
-      d: entry.d ?? 1,
-      collision: entry.collision ?? this.isGeneratedCollisionDecoration(moduleId),
-      occupiesTile: entry.occupiesTile ?? moduleId !== "floorDetail",
-    };
-  }
-
-  resolveDecorationSeed(seed, buildOptions = {}) {
-    if (seed !== undefined && seed !== null && seed !== "random") {
-      return String(seed);
-    }
-
-    return String(buildOptions.runSeed ?? "decorationFill");
-  }
-
-  isGeneratedCollisionDecoration(moduleId) {
-    return moduleId === "barrel";
-  }
-
-  canPlaceDecorationEntryInRoom(entry, room) {
-    if (!entry.roomTypes) return true;
-
-    return entry.roomTypes.includes(room.type);
-  }
-
-  createGeneratedDecorationModule(entry, tile, room, tileKey) {
-    const rotationIndex = Math.floor(
-      this.createDeterministicUnit(`${entry.seed}:rotation:${entry.moduleId}:${room.id}:${tileKey}`) *
-      DECORATION_FILL_ROTATIONS.length
-    );
-
-    return {
-      x: tile.x,
-      z: tile.z,
-      w: entry.w,
-      d: entry.d,
-      moduleId: entry.moduleId,
-      rotationY: DECORATION_FILL_ROTATIONS[rotationIndex] ?? 0,
-      collision: entry.collision,
-      generated: true,
-      role: entry.role,
-    };
-  }
-
-  createDecorationFillOccupiedModules(room, extraOccupiedModules) {
-    return [
-      ...(room.wallModules ?? []),
-      ...(room.doorwayModules ?? []),
-      ...(room.decorativeModules ?? []),
-      ...(room.obstacleModules ?? []),
-      ...(room.chestSpawns ?? []).map((spawn) => ({ ...spawn, w: 1, d: 1 })),
-      ...(room.enemySpawns ?? []).map((spawn) => ({ ...spawn, w: 1, d: 1 })),
-      ...this.createDoorOpeningProtectedModules(room),
-      ...(extraOccupiedModules ?? []),
-    ];
-  }
-
-  createDoorOpeningProtectedModules(room) {
-    return (room.doorOpenings ?? []).map((opening) => {
-      const frontVector = this.getFrontVectorForSide(opening.side);
-      const isHorizontal = this.isHorizontalSide(opening.side);
-      const width = Math.max(opening.width ?? 1, 3);
-
-      return {
-        x: opening.x + frontVector.x * (DECORATION_DOOR_CLEARANCE / 2),
-        z: opening.z + frontVector.z * (DECORATION_DOOR_CLEARANCE / 2),
-        w: isHorizontal ? width : DECORATION_DOOR_CLEARANCE,
-        d: isHorizontal ? DECORATION_DOOR_CLEARANCE : width,
-      };
-    });
-  }
-
-  createTileCentersForArea(area) {
-    const countX = Math.max(1, Math.round(area.w));
-    const countZ = Math.max(1, Math.round(area.d));
-    const tileW = area.w / countX;
-    const tileD = area.d / countZ;
-    const startX = area.x - area.w / 2 + tileW / 2;
-    const startZ = area.z - area.d / 2 + tileD / 2;
-    const tiles = [];
-
-    for (let ix = 0; ix < countX; ix += 1) {
-      for (let iz = 0; iz < countZ; iz += 1) {
-        tiles.push({
-          x: startX + ix * tileW,
-          z: startZ + iz * tileD,
-        });
-      }
-    }
-
-    return tiles;
-  }
-
-  getDecorationTileKey(tile) {
-    return `${tile.x.toFixed(3)}:${tile.z.toFixed(3)}`;
-  }
-
-  isPointInsideAnyModule(point, modules) {
-    return modules.some((module) => this.areaContainsPoint(module, point));
-  }
-
-  createDeterministicUnit(value) {
-    let hash = 2166136261;
-
-    for (let index = 0; index < value.length; index += 1) {
-      hash ^= value.charCodeAt(index);
-      hash = Math.imul(hash, 16777619);
-    }
-
-    return (hash >>> 0) / 4294967296;
   }
 
   createRoomStairsModule(room, endpoints) {

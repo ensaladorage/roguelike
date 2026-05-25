@@ -188,12 +188,18 @@ export class ModularTileBuilder {
     const clone = SkeletonUtils.clone(assetScene);
     const rotationY = this.getModuleRotationY(piece, definition);
     const scale = this.getScaleForDefinition(piece, definition, meta.size);
+    const scaleMultiplier = piece.scaleMultiplier ?? 1;
+    const finalScale = {
+      x: scale.x * scaleMultiplier,
+      y: scale.y * scaleMultiplier,
+      z: scale.z * scaleMultiplier,
+    };
 
-    clone.scale.set(scale.x, scale.y, scale.z);
+    clone.scale.set(finalScale.x, finalScale.y, finalScale.z);
     clone.position.set(
-      -meta.center.x * scale.x,
-      -meta.min.y * scale.y,
-      -meta.center.z * scale.z
+      -meta.center.x * finalScale.x,
+      -meta.min.y * finalScale.y,
+      -meta.center.z * finalScale.z
     );
 
     root.add(clone);
@@ -244,8 +250,13 @@ export class ModularTileBuilder {
   createFallbackWall(piece, fallback) {
     const height = piece.height ?? 1;
     const baseY = piece.y ?? 0;
+    const scaleMultiplier = piece.scaleMultiplier ?? 1;
     const mesh = new THREE.Mesh(
-      new THREE.BoxGeometry(piece.w, height, piece.d),
+      new THREE.BoxGeometry(
+        piece.w * scaleMultiplier,
+        height * scaleMultiplier,
+        piece.d * scaleMultiplier
+      ),
       new THREE.MeshStandardMaterial({
         color: fallback.color ?? 0x15191c,
         roughness: 0.8,
@@ -263,8 +274,13 @@ export class ModularTileBuilder {
   createFallbackDecor(piece, fallback, definition) {
     const height = piece.height ?? definition.footprint?.height ?? 0.35;
     const baseY = piece.y ?? 0;
+    const scaleMultiplier = piece.scaleMultiplier ?? 1;
     const mesh = new THREE.Mesh(
-      new THREE.BoxGeometry(piece.w ?? 1, height, piece.d ?? 1),
+      new THREE.BoxGeometry(
+        (piece.w ?? 1) * scaleMultiplier,
+        height * scaleMultiplier,
+        (piece.d ?? 1) * scaleMultiplier
+      ),
       new THREE.MeshStandardMaterial({
         color: fallback.color ?? 0x5a5f5c,
         roughness: 0.85,
