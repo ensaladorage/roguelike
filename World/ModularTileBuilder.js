@@ -8,6 +8,10 @@ export class ModularTileBuilder {
     this.scene = scene;
     this.loadingManager = new THREE.LoadingManager();
     this.loadingManager.setURLModifier((url) => {
+      if (url.endsWith("Textures/colormap.png")) {
+        return "Assets/Models/Textures/characters-colormap.png";
+      }
+
       if (url.startsWith("Textures/")) {
         return `Assets/Models/${url}`;
       }

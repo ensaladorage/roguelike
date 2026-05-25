@@ -229,9 +229,28 @@ export class GameScene {
       });
     };
 
+    const createModelLoader = (modelDefinition) => {
+      const modelTextureDefinition =
+        MODEL_TEXTURE_DEFINITIONS[modelDefinition.textureId] ??
+        MODEL_TEXTURE_DEFINITIONS.charactersColormap;
+      if (!modelTextureDefinition) return loader;
+
+      const loadingManager = new THREE.LoadingManager();
+      loadingManager.setURLModifier((url) => {
+        if (url.endsWith("Textures/colormap.png")) {
+          return modelTextureDefinition.primaryPath;
+        }
+
+        return url;
+      });
+
+      return new GLTFLoader(loadingManager);
+    };
+
     const modelEntries = await Promise.all(
       getModelDefinitionsToPreload().map(async (modelDefinition) => {
-        const gltf = await loader.loadAsync(modelDefinition.assetPath);
+        const modelLoader = createModelLoader(modelDefinition);
+        const gltf = await modelLoader.loadAsync(modelDefinition.assetPath);
         const texture = textures[modelDefinition.textureId];
 
         if (texture) applyTexture(gltf, texture);

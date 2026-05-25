@@ -7,15 +7,20 @@ export const MODEL_CATEGORIES = {
 };
 
 export const DEFAULT_PLAYER_MODEL_ID = "player_human_01";
-export const DEFAULT_ENEMY_MODEL_ID = "enemy_orc_01";
+export const DEFAULT_ENEMY_MODEL_ID = "enemy_hog_01";
 export const DEFAULT_CHEST_MODEL_ID = "chest_01";
 export const DEFAULT_COIN_MODEL_ID = "coin_01";
 
 export const MODEL_TEXTURE_DEFINITIONS = {
-  colormap: {
-    id: "colormap",
-    primaryPath: "Assets/Models/Textures/colormap.png",
-    fallbackPath: "Assets/Textures/colormap.png",
+  charactersColormap: {
+    id: "charactersColormap",
+    primaryPath: "Assets/Models/Textures/characters-colormap.png",
+    fallbackPath: "Assets/Textures/characters-colormap.png",
+  },
+  animalsColormap: {
+    id: "animalsColormap",
+    primaryPath: "Assets/Models/Textures/animals-colormap.png",
+    fallbackPath: "Assets/Textures/animals-colormap.png",
   },
   variationA: {
     id: "variationA",
@@ -30,7 +35,7 @@ export const MODEL_DEFINITIONS = {
       id: DEFAULT_PLAYER_MODEL_ID,
       category: MODEL_CATEGORIES.PLAYER,
       assetPath: "Assets/Models/character-human.glb",
-      textureId: "colormap",
+      textureId: "charactersColormap",
       scale: 1,
     },
   },
@@ -38,8 +43,8 @@ export const MODEL_DEFINITIONS = {
     [DEFAULT_ENEMY_MODEL_ID]: {
       id: DEFAULT_ENEMY_MODEL_ID,
       category: MODEL_CATEGORIES.ENEMY,
-      assetPath: "Assets/Models/character-orc.glb",
-      textureId: "colormap",
+      assetPath: "Assets/Models/animal-hog.glb",
+      textureId: "animalsColormap",
       scale: 1,
     },
   },
@@ -49,7 +54,7 @@ export const MODEL_DEFINITIONS = {
       id: DEFAULT_CHEST_MODEL_ID,
       category: MODEL_CATEGORIES.INTERACTABLE,
       assetPath: "Assets/Models/chest.glb",
-      textureId: "colormap",
+      textureId: "charactersColormap",
       scale: 1,
     },
   },

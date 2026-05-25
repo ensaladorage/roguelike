@@ -141,7 +141,7 @@ export const COMBAT_ROOM_TEMPLATES = [
       {
         x: -4.6,
         z: -2,
-        modelId: "enemy_orc_01",
+        modelId: "enemy_hog_01",
         patrol: [
           { x: -4.6, z: -2 },
           { x: -5.3, z: 1.7 },
@@ -151,7 +151,7 @@ export const COMBAT_ROOM_TEMPLATES = [
       {
         x: 0,
         z: 1.9,
-        modelId: "enemy_orc_01",
+        modelId: "enemy_hog_01",
         patrol: [
           { x: 0, z: 1.9 },
           { x: -1.8, z: -1.8 },
@@ -161,7 +161,7 @@ export const COMBAT_ROOM_TEMPLATES = [
       {
         x: 4.6,
         z: -2,
-        modelId: "enemy_orc_01",
+        modelId: "enemy_hog_01",
         patrol: [
           { x: 4.6, z: -2 },
           { x: 5.3, z: 1.7 },
@@ -461,7 +461,7 @@ export const COMBAT_ROOM_TEMPLATES = [
       {
         x: -8,
         z: 1.5,
-        modelId: "enemy_orc_01",
+        modelId: "enemy_hog_01",
         patrol: [
           { x: -8, z: 1.5 },
           { x: -8.5, z: -6 },
@@ -471,7 +471,7 @@ export const COMBAT_ROOM_TEMPLATES = [
       {
         x: 8,
         z: 1.5,
-        modelId: "enemy_orc_01",
+        modelId: "enemy_hog_01",
         patrol: [
           { x: 8, z: 1.5 },
           { x: 8.5, z: -6 },
@@ -660,7 +660,7 @@ export const COMBAT_ROOM_TEMPLATES = [
       {
         x: -3,
         z: -2.2,
-        modelId: "enemy_orc_01",
+        modelId: "enemy_hog_01",
         patrol: [
           { x: -3, z: -2.2 },
           { x: -3.4, z: 1.6 },
@@ -670,7 +670,7 @@ export const COMBAT_ROOM_TEMPLATES = [
       {
         x: 3,
         z: 2.2,
-        modelId: "enemy_orc_01",
+        modelId: "enemy_hog_01",
         patrol: [
           { x: 3, z: 2.2 },
           { x: 3.4, z: -1.6 },
