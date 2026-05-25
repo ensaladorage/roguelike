@@ -174,6 +174,8 @@ export class DecorationBuilder {
       if (roll >= entry.density) continue;
 
       const module = this.createPropModule(entry, tile, room, key);
+      if (!this.isPointInsideAnyArea(module, room.walkableAreas ?? [])) continue;
+      if (!this.canPlaceModule(module, occupiedModules)) continue;
       if (!this.keepsNavigationValid(room, module, blockingModules)) continue;
 
       modules.push(module);

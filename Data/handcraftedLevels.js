@@ -50,10 +50,14 @@ export const HANDCRAFTED_LEVELS = [
         },
         {
           moduleId: "stones",
-          // Probabilidad por tile dentro de las zonas semanticas de stones/rubble.
-          density: 0.12,
+          // Probabilidad por tile caminable. No usa decorZones ni spots.
+          density: 0.07,
           roomTypes: ["combat"],
-          zoneTypes: ["rubble", "stones"],
+          // null hace que use todas las walkableAreas de la room.
+          zoneTypes: null,
+          allowUnzoned: true,
+          // Offset dentro del tile para que los stones no caigan en cuadricula perfecta.
+          positionJitter: 0.35,
           // Variacion visual ligera; no da colision.
           scaleVariation: { min: 0.5, max: 1.2 },
         },

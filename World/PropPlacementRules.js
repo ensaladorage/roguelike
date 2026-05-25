@@ -20,14 +20,17 @@ export const PROP_PLACEMENT_RULES = {
     occupiesTile: false,
   },
   stones: {
+    // Scatter global: elige puntos del suelo caminable por densidad y seed.
     placement: "scatter",
     role: "stonesFill",
     density: 0.012,
-    // Solo aparece en decorZones marcadas como rubble/stones.
-    zoneTypes: ["rubble", "stones"],
-    allowUnzoned: false,
+    // null + allowUnzoned usa todas las walkableAreas, igual que floorDetail.
+    zoneTypes: null,
+    allowUnzoned: true,
     collision: false,
     occupiesTile: true,
+    // Desplazamiento maximo dentro del tile para que no parezca una cuadricula.
+    positionJitter: 0.35,
     // Escala visual aleatoria determinista; no modifica el asset original.
     scaleVariation: { min: 0.92, max: 1.08 },
   },
