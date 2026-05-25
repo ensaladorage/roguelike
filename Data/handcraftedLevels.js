@@ -18,22 +18,35 @@ export const HANDCRAFTED_LEVELS = [
           // Para barrels, density solo activa esta regla; la cantidad real la controla clustersPerRoom.
           density: 1,
           roomTypes: ["combat"],
-          // Debe coincidir con type/tags de decorZones en las room templates.
-          zoneTypes: ["storage", "corner", "wall", "barrelStorage"],
+          // Los spots se calculan solos: esquinas, laterales de puertas y puntos cerca de cofres.
+          spotStrategy: "semantic",
+          // Quita o agrega tipos para probar donde pueden aparecer los grupos.
+          spotTypes: ["corner", "door", "chest"],
+          // Distancia minima entre grupos. Sube este valor si ves spots demasiado cercanos.
+          spotMinDistance: 5,
+          // Separacion desde los bordes de walkableAreas para spots de esquina.
+          spotInset: 1.4,
+          // Distancia hacia dentro y hacia los lados de cada puerta para spots de puerta.
+          doorSpotDepth: 2.2,
+          doorSpotSideOffset: 2,
+          // Distancia desde cada cofre para proponer spots cercanos.
+          chestSpotOffset: 1.8,
           // Numero de grupos de barriles por room compatible.
-          clustersPerRoom: { min: 2, max: 3 },
+          clustersPerRoom: { min: 3, max: 5 },
           // Cantidad de barriles dentro de cada grupo.
-          clusterSize: { min: 2, max: 4 },
+          clusterSize: { min: 2, max: 5 },
           // Distancia maxima desde el punto elegido del grupo.
           clusterRadius: 1,
           // Radio real de dispersion dentro del grupo; baja este valor para barriles mas pegados.
-          clusterScatterRadius: 0.45,
+          clusterScatterRadius: 0.4,
           // Huella de separacion entre barriles; menor valor permite grupos mas juntos.
-          placementFootprint: { w: 0.1, d: 0.1 },
+          placementFootprint: { w: 0.6, d: 0.6 },
+          // Huella usada para validar navegacion; mantenla pequena si la colision real del barril es pequena.
+          collisionFootprint: { w: 0.1, d: 0.1 },
           // Offset extra para decoraciones scatter; los barriles agrupados usan clusterScatterRadius.
-          positionJitter: 0.1,
+          positionJitter: 1,
           // Variacion visual ligera; no cambia el asset original.
-          scaleVariation: { min: 0.5, max: 1.6 },
+          scaleVariation: { min: 0.8, max: 1.6 },
         },
         {
           moduleId: "stones",

@@ -172,15 +172,6 @@ export const COMBAT_ROOM_TEMPLATES = [
     chestSpawns: [],
     decorZones: [
       {
-        id: "combat_01_barrel_storage_corner",
-        type: "storage",
-        tags: ["barrelStorage", "corner", "wall"],
-        x: -5.4,
-        z: 2.6,
-        w: 2.2,
-        d: 2.2,
-      },
-      {
         id: "combat_01_rubble_scatter",
         type: "rubble",
         x: 0,
@@ -525,42 +516,6 @@ export const COMBAT_ROOM_TEMPLATES = [
     ],
     decorZones: [
       {
-        id: "combat_02_barrel_storage_corner",
-        type: "storage",
-        tags: ["barrelStorage", "corner", "wall"],
-        x: -10,
-        z: 6.4,
-        w: 3,
-        d: 3,
-      },
-      {
-        id: "combat_02_barrel_storage_inner_west",
-        type: "storage",
-        tags: ["barrelStorage", "corner", "wall"],
-        x: -5.8,
-        z: 3.1,
-        w: 2.4,
-        d: 2.4,
-      },
-      {
-        id: "combat_02_barrel_storage_inner_east",
-        type: "storage",
-        tags: ["barrelStorage", "corner", "wall"],
-        x: 5.8,
-        z: 3.1,
-        w: 2.4,
-        d: 2.4,
-      },
-      {
-        id: "combat_02_barrel_storage_east_wall",
-        type: "storage",
-        tags: ["barrelStorage", "wall"],
-        x: 10.6,
-        z: 1.2,
-        w: 2.4,
-        d: 3,
-      },
-      {
         id: "combat_02_rubble_scatter",
         type: "rubble",
         x: 0,
@@ -751,15 +706,6 @@ export const COMBAT_ROOM_TEMPLATES = [
       },
     ],
     decorZones: [
-      {
-        id: "combat_obstacle_01_barrel_storage_corner",
-        type: "storage",
-        tags: ["barrelStorage", "corner", "wall"],
-        x: -3.4,
-        z: 3.4,
-        w: 2,
-        d: 2,
-      },
       {
         id: "combat_obstacle_01_rubble_scatter",
         type: "rubble",

@@ -106,6 +106,13 @@ export class DecorationBuilder {
       roomTypes: entry.roomTypes ?? rule.roomTypes ?? null,
       zoneTypes: entry.zoneTypes ?? rule.zoneTypes ?? null,
       allowUnzoned: entry.allowUnzoned ?? rule.allowUnzoned ?? true,
+      spotStrategy: entry.spotStrategy ?? rule.spotStrategy ?? "decorZones",
+      spotTypes: entry.spotTypes ?? rule.spotTypes ?? ["corner", "door", "chest"],
+      spotInset: entry.spotInset ?? rule.spotInset ?? 1.4,
+      spotMinDistance: entry.spotMinDistance ?? rule.spotMinDistance ?? 4,
+      doorSpotDepth: entry.doorSpotDepth ?? rule.doorSpotDepth ?? 2.2,
+      doorSpotSideOffset: entry.doorSpotSideOffset ?? rule.doorSpotSideOffset ?? 2,
+      chestSpotOffset: entry.chestSpotOffset ?? rule.chestSpotOffset ?? 1.8,
       w: entry.w ?? rule.w ?? 1,
       d: entry.d ?? rule.d ?? 1,
       collision: entry.collision ?? rule.collision ?? false,
@@ -115,6 +122,7 @@ export class DecorationBuilder {
       clusterRadius: entry.clusterRadius ?? rule.clusterRadius ?? 1.25,
       clusterScatterRadius: entry.clusterScatterRadius ?? rule.clusterScatterRadius ?? entry.clusterRadius ?? rule.clusterRadius ?? 1.25,
       placementFootprint: entry.placementFootprint ?? rule.placementFootprint ?? null,
+      collisionFootprint: entry.collisionFootprint ?? rule.collisionFootprint ?? entry.placementFootprint ?? rule.placementFootprint ?? null,
       positionJitter: entry.positionJitter ?? rule.positionJitter ?? 0,
       scaleVariation: entry.scaleVariation ?? rule.scaleVariation ?? null,
     };
@@ -180,19 +188,25 @@ export class DecorationBuilder {
     const modules = [];
     const clusterCount = this.getClusterCount(entry, room);
     if (clusterCount <= 0) return modules;
-    const zones = this.getClusterZones(room, entry, clusterCount);
+    const spots = this.getClusterSpots(room, entry, clusterCount, occupiedModules);
+    let acceptedClusterCount = 0;
 
-    for (let clusterIndex = 0; clusterIndex < clusterCount; clusterIndex += 1) {
+    for (let spotIndex = 0; spotIndex < spots.length; spotIndex += 1) {
+      if (acceptedClusterCount >= clusterCount) break;
+
       const cluster = this.createPropCluster({
         entry,
         room,
-        zone: zones[clusterIndex] ?? null,
+        spot: spots[spotIndex],
         occupiedModules,
         blockingModules,
-        clusterIndex,
+        clusterIndex: spotIndex,
       });
 
       modules.push(...cluster);
+      if (cluster.length >= entry.clusterSize.min) {
+        acceptedClusterCount += 1;
+      }
     }
 
     return modules;
@@ -207,6 +221,23 @@ export class DecorationBuilder {
       min,
       max
     );
+  }
+
+  getClusterSpots(room, entry, clusterCount, occupiedModules) {
+    if (entry.spotStrategy === "semantic") {
+      return this.createSemanticClusterSpots(
+        room,
+        entry,
+        occupiedModules,
+        clusterCount * 3
+      );
+    }
+
+    return this.getClusterZones(room, entry, clusterCount).map((zone) => ({
+      x: zone.x,
+      z: zone.z,
+      zone,
+    }));
   }
 
   getClusterZones(room, entry, clusterCount) {
@@ -225,8 +256,111 @@ export class DecorationBuilder {
       .map((candidate) => candidate.zone);
   }
 
-  createPropCluster({ entry, room, zone, occupiedModules, blockingModules, clusterIndex }) {
-    const anchors = this.getCandidateTilesForEntry(room, entry, zone)
+  createSemanticClusterSpots(room, entry, occupiedModules, clusterCount) {
+    const spots = [
+      ...this.createCornerClusterSpots(room, entry),
+      ...this.createDoorClusterSpots(room, entry),
+      ...this.createChestClusterSpots(room, entry),
+    ]
+      .filter((spot) => entry.spotTypes.includes(spot.kind))
+      .filter((spot) => this.canUseClusterSpot(spot, entry, room, occupiedModules))
+      .map((spot) => ({
+        ...spot,
+        sort: this.createDeterministicUnit(
+          `${entry.seed}:${entry.moduleId}:${room.id}:semanticSpot:${spot.kind}:${spot.x.toFixed(3)}:${spot.z.toFixed(3)}`
+        ),
+      }))
+      .sort((a, b) => a.sort - b.sort);
+
+    const selected = [];
+    for (const spot of spots) {
+      if (selected.length >= clusterCount) break;
+      if (selected.some((usedSpot) => this.distance2D(usedSpot, spot) < entry.spotMinDistance)) {
+        continue;
+      }
+
+      selected.push(spot);
+    }
+
+    return selected;
+  }
+
+  createCornerClusterSpots(room, entry) {
+    return (room.walkableAreas ?? []).flatMap((area, areaIndex) => {
+      const insetX = Math.min(entry.spotInset, Math.max(0.1, area.w / 2 - 0.1));
+      const insetZ = Math.min(entry.spotInset, Math.max(0.1, area.d / 2 - 0.1));
+      const minX = area.x - area.w / 2 + insetX;
+      const maxX = area.x + area.w / 2 - insetX;
+      const minZ = area.z - area.d / 2 + insetZ;
+      const maxZ = area.z + area.d / 2 - insetZ;
+
+      return [
+        { x: minX, z: minZ },
+        { x: maxX, z: minZ },
+        { x: minX, z: maxZ },
+        { x: maxX, z: maxZ },
+      ].map((spot, cornerIndex) => ({
+        ...spot,
+        kind: "corner",
+        id: `${room.id}:corner:${areaIndex}:${cornerIndex}`,
+      }));
+    });
+  }
+
+  createDoorClusterSpots(room, entry) {
+    return (room.doorOpenings ?? []).flatMap((opening, openingIndex) => {
+      const frontVector = this.getFrontVectorForSide(opening.side);
+      const sideVector = this.getSideVectorForSide(opening.side);
+      if (!frontVector || !sideVector) return [];
+
+      return [-1, 1].map((direction) => ({
+        x: opening.x +
+          frontVector.x * entry.doorSpotDepth +
+          sideVector.x * direction * entry.doorSpotSideOffset,
+        z: opening.z +
+          frontVector.z * entry.doorSpotDepth +
+          sideVector.z * direction * entry.doorSpotSideOffset,
+        kind: "door",
+        id: `${room.id}:door:${openingIndex}:${direction}`,
+      }));
+    });
+  }
+
+  createChestClusterSpots(room, entry) {
+    const offsets = [
+      { x: entry.chestSpotOffset, z: 0 },
+      { x: -entry.chestSpotOffset, z: 0 },
+      { x: 0, z: entry.chestSpotOffset },
+      { x: 0, z: -entry.chestSpotOffset },
+    ];
+
+    return (room.chestSpawns ?? []).flatMap((chest, chestIndex) =>
+      offsets.map((offset, offsetIndex) => ({
+        x: chest.x + offset.x,
+        z: chest.z + offset.z,
+        kind: "chest",
+        id: `${room.id}:chest:${chestIndex}:${offsetIndex}`,
+      }))
+    );
+  }
+
+  canUseClusterSpot(spot, entry, room, occupiedModules) {
+    if (!this.isPointInsideAnyArea(spot, room.walkableAreas ?? [])) return false;
+
+    return this.canPlaceModule({
+      x: spot.x,
+      z: spot.z,
+      w: entry.w,
+      d: entry.d,
+      placementFootprint: entry.placementFootprint,
+    }, occupiedModules);
+  }
+
+  createPropCluster({ entry, room, spot, occupiedModules, blockingModules, clusterIndex }) {
+    const fixedAnchor = spot && !spot.zone
+      ? [spot]
+      : null;
+    const anchors = (fixedAnchor ?? this.getCandidateTilesForEntry(room, entry, spot?.zone ?? null))
       .map((tile) => ({
         tile,
         sort: this.createDeterministicUnit(
@@ -243,7 +377,7 @@ export class DecorationBuilder {
         entry,
         room,
         anchor,
-        zone,
+        zone: spot?.zone ?? null,
         occupiedModules,
         blockingModules,
         clusterIndex,
@@ -288,8 +422,11 @@ export class DecorationBuilder {
   }
 
   getClusterCandidatePoints(room, entry, anchor, clusterIndex, zone = null, targetSize = 1) {
-    const candidates = [anchor];
-    const attemptCount = Math.max(targetSize * 12, 24);
+    const candidates = [
+      anchor,
+      ...this.createCompactClusterPoints(entry, room, anchor, clusterIndex, targetSize),
+    ];
+    const attemptCount = Math.max(targetSize * 18, 36);
 
     for (let attemptIndex = 0; attemptIndex < attemptCount; attemptIndex += 1) {
       const unitAngle = this.createDeterministicUnit(
@@ -323,6 +460,39 @@ export class DecorationBuilder {
       }))
       .sort((a, b) => a.distance - b.distance || a.sort - b.sort)
       .map((candidate) => candidate.tile);
+  }
+
+  createCompactClusterPoints(entry, room, anchor, clusterIndex, targetSize) {
+    const points = [];
+    const footprint = entry.placementFootprint ?? { w: 0, d: 0 };
+    const minimumStep = Math.max(footprint.w ?? 0, footprint.d ?? 0) + 0.001;
+    const baseRadius = Math.min(
+      entry.clusterRadius,
+      Math.max(entry.clusterScatterRadius, minimumStep + 0.05)
+    );
+    if (baseRadius <= 0) return points;
+
+    const angleOffset = this.createDeterministicUnit(
+      `${entry.seed}:${entry.moduleId}:${room.id}:compactOffset:${clusterIndex}:${this.getTileKey(anchor)}`
+    ) * Math.PI * 2;
+    const pointCount = Math.max(targetSize * 2, 8);
+
+    for (let index = 0; index < pointCount; index += 1) {
+      const ring = 1 + Math.floor(index / 8);
+      const radius = Math.min(entry.clusterRadius, baseRadius * ring);
+      const angle = angleOffset + (index % 8) * (Math.PI / 4);
+
+      const point = {
+        x: anchor.x + Math.cos(angle) * radius,
+        z: anchor.z + Math.sin(angle) * radius,
+      };
+
+      if (this.isPointInsideAnyArea(point, room.walkableAreas ?? [])) {
+        points.push(point);
+      }
+    }
+
+    return points;
   }
 
   getCandidateTilesForEntry(room, entry, preferredZone = null) {
@@ -388,6 +558,7 @@ export class DecorationBuilder {
       w: entry.w,
       d: entry.d,
       placementFootprint: entry.placementFootprint,
+      collisionFootprint: entry.collisionFootprint,
       moduleId: entry.moduleId,
       rotationY: DECORATION_FILL_ROTATIONS[rotationIndex] ?? 0,
       collision: entry.collision,
@@ -587,8 +758,16 @@ export class DecorationBuilder {
 
   isPointInsideAnyModule(point, modules) {
     return modules.some((module) =>
-      this.areaContainsPoint(module, point)
+      this.areaContainsPoint(this.createBlockingArea(module), point)
     );
+  }
+
+  createBlockingArea(module) {
+    return {
+      ...module,
+      w: module.collisionFootprint?.w ?? module.w,
+      d: module.collisionFootprint?.d ?? module.d,
+    };
   }
 
   isPointInsideAnyArea(point, areas) {
@@ -617,6 +796,21 @@ export class DecorationBuilder {
 
   isHorizontalSide(side) {
     return side === "north" || side === "south";
+  }
+
+  getSideVectorForSide(side) {
+    switch (side) {
+      case "north":
+      case "south":
+        return { x: 1, z: 0 };
+
+      case "west":
+      case "east":
+        return { x: 0, z: 1 };
+
+      default:
+        return null;
+    }
   }
 
   getFrontVectorForSide(side) {

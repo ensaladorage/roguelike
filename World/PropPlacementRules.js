@@ -32,10 +32,21 @@ export const PROP_PLACEMENT_RULES = {
     scaleVariation: { min: 0.92, max: 1.08 },
   },
   barrel: {
-    // Cluster coloca grupos compactos en zonas de almacenaje/pared/esquina.
+    // Cluster coloca grupos compactos en spots semanticos calculados por sala.
     placement: "cluster",
     role: "barrelFill",
-    zoneTypes: ["storage", "corner", "wall", "barrelStorage"],
+    spotStrategy: "semantic",
+    // Tipos de spot automatico: esquinas de areas caminables, laterales de puertas y zonas junto a cofres.
+    spotTypes: ["corner", "door", "chest"],
+    // Distancia minima entre grupos elegidos dentro de la misma room.
+    spotMinDistance: 5,
+    // Separacion desde el borde de cada walkableArea para calcular spots de esquina.
+    spotInset: 1.4,
+    // Distancia hacia dentro y hacia el lado para spots cerca de puertas.
+    doorSpotDepth: 2.2,
+    doorSpotSideOffset: 2,
+    // Distancia desde cada cofre para proponer spots cercanos sin ocuparlo.
+    chestSpotOffset: 1.8,
     allowUnzoned: false,
     collision: true,
     occupiesTile: true,
@@ -49,6 +60,8 @@ export const PROP_PLACEMENT_RULES = {
     clusterScatterRadius: 0.45,
     // Huella usada solo para separar colocaciones; no cambia tamano visual ni colision.
     placementFootprint: { w: 0.55, d: 0.55 },
+    // Huella usada para validar navegacion; debe parecerse a la colision real del barril.
+    collisionFootprint: { w: 0.1, d: 0.1 },
     // Offset extra para scatter; los clusters usan clusterScatterRadius para separacion visual.
     positionJitter: 0.28,
     scaleVariation: { min: 0.94, max: 1.06 },
