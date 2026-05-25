@@ -63,6 +63,7 @@ Build a simple top-down 3D roguelike with:
   - `treasureRooms.js`
   - `exitRooms.js`
 - `Data/roomTemplates.js` is the room template registry.
+- Seeded procedural room decoration is configured from level data and built by `World/DecorationBuilder.js` using rules from `World/PropPlacementRules.js`.
 
 ---
 
@@ -84,10 +85,23 @@ New rooms must be reusable room templates and must declare:
 
 Rules:
 - New rooms must not be authored directly inside `Scene.js`.
-- Each new room should be testable in a simple floor composition with `enter_room_01` and `exit_room_north_south_01`.
+- Each new room should be testable in a simple floor composition with the matching enter/exit room orientation, such as `enter_room_north_south_01` and `exit_room_north_south_01`.
 - Prefer readable handcrafted layouts over dense geometry.
 - Openings must align cleanly with shared connectors.
 - Avoid duplicated room borders on connected sides.
+
+---
+
+## Decoration Rules
+
+- Decoration placement must stay out of `Scene.js`; use `DecorationBuilder`, `PropPlacementRules`, room templates, and level data.
+- Seeded decoration must remain deterministic for a given run seed.
+- `floorDetail` and `stones` are scatter-style decorations placed from walkable floor using density, random rotation, and scale variation.
+- `floorDetail` and `stones` should be available to enter, combat, exit, treasure, and future room types unless a level config explicitly narrows them.
+- Generated barrels are combat-room props only by default; enter/exit barrels should be manually authored when needed.
+- Barrel clusters should use semantic spots such as corners, door-adjacent areas, and chest-adjacent areas, with spacing between group spots.
+- Generated decoration must avoid openings, connectors, player spawn, enemy spawn, chest spawn, stairs, and critical navigation paths.
+- Visual scale/placement footprint/collision footprint may differ when needed, but navigation validation should use the gameplay collision footprint.
 
 ---
 
@@ -192,7 +206,7 @@ Rules:
   - east/west use the perpendicular Y rotation
 - Corner wall modules must be explicitly oriented.
 - Visual obstacle size and collision size may differ when needed for navigation.
-- Exit buttons are in-floor gameplay elements unless future progression explicitly uses them for floor loading.
+- Enter rooms use stairs as entry set dressing with collision; exit rooms use visible non-blocking stairs for future level transition triggers.
 
 ---
 
