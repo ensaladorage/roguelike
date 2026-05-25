@@ -307,10 +307,7 @@ export const ROOM_TEMPLATES = [
       { side: "south", offset: 0, width: 1 },
       { side: "east", offset: 0, width: 1 },
     ],
-    decorativeModules: [
-      { x: -1, z: 2, w: 1, d: 1, moduleId: "floorDetail" },
-      { x: 1, z: -2, w: 1, d: 1, moduleId: "stones", rotationY: Math.PI / 2 },
-    ],
+    decorativeModules: [],
   }),
   createRectRoomTemplate({
     id: "combat_room_basic",
@@ -346,12 +343,7 @@ export const ROOM_TEMPLATES = [
       { x: 3.5, z: 2.6, rotationY: Math.PI },
       { x: -3.7, z: 2.4, rotationY: Math.PI / 2 },
     ],
-    decorativeModules: [
-      { x: -2, z: 2, w: 1, d: 1, moduleId: "floorDetail" },
-      { x: 2, z: -2, w: 1, d: 1, moduleId: "floorDetail" },
-      { x: -3, z: -2.5, w: 1, d: 1, moduleId: "stones" },
-      { x: 4, z: -1, w: 1, d: 1, moduleId: "stones", rotationY: Math.PI / 2 },
-    ],
+    decorativeModules: [],
     obstacleModules: [
       { x: 0, z: 1.4, w: 1, d: 1, moduleId: "rocks", collision: true },
     ],
@@ -372,8 +364,6 @@ export const ROOM_TEMPLATES = [
     ],
     decorativeModules: [
       { x: 0, z: -3.7, w: 1, d: 1, moduleId: "banner" },
-      { x: -1, z: -2.7, w: 1, d: 1, moduleId: "floorDetail" },
-      { x: 2.5, z: 2, w: 1, d: 1, moduleId: "stones", rotationY: Math.PI },
     ],
   }),
   createRectRoomTemplate({
@@ -385,10 +375,7 @@ export const ROOM_TEMPLATES = [
     doorOpenings: [
       { side: "west", offset: 0, width: 1 },
     ],
-    decorativeModules: [
-      { x: -2, z: 2, w: 2, d: 1, moduleId: "floorDetail" },
-      { x: 1.5, z: -2.2, w: 1, d: 1, moduleId: "stones", rotationY: Math.PI / 2 },
-    ],
+    decorativeModules: [],
     chestSpawns: [
       { x: -1.6, z: 0.8, rotationY: Math.PI / 2 },
     ],

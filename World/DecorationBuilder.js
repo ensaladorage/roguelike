@@ -113,6 +113,8 @@ export class DecorationBuilder {
       clustersPerRoom: this.normalizeRange(entry.clustersPerRoom ?? rule.clustersPerRoom, 0, 0),
       clusterSize: this.normalizeRange(entry.clusterSize ?? rule.clusterSize, 1, 1),
       clusterRadius: entry.clusterRadius ?? rule.clusterRadius ?? 1.25,
+      placementFootprint: entry.placementFootprint ?? rule.placementFootprint ?? null,
+      positionJitter: entry.positionJitter ?? rule.positionJitter ?? 0,
       scaleVariation: entry.scaleVariation ?? rule.scaleVariation ?? null,
     };
   }
@@ -177,11 +179,13 @@ export class DecorationBuilder {
     const modules = [];
     const clusterCount = this.getClusterCount(entry, room);
     if (clusterCount <= 0) return modules;
+    const zones = this.getClusterZones(room, entry, clusterCount);
 
     for (let clusterIndex = 0; clusterIndex < clusterCount; clusterIndex += 1) {
       const cluster = this.createPropCluster({
         entry,
         room,
+        zone: zones[clusterIndex] ?? null,
         occupiedModules,
         blockingModules,
         clusterIndex,
@@ -204,8 +208,24 @@ export class DecorationBuilder {
     );
   }
 
-  createPropCluster({ entry, room, occupiedModules, blockingModules, clusterIndex }) {
-    const anchors = this.getCandidateTilesForEntry(room, entry)
+  getClusterZones(room, entry, clusterCount) {
+    const zones = this.getZonesForEntry(room, entry);
+    if (zones.length === 0) return [];
+
+    return zones
+      .map((zone) => ({
+        zone,
+        sort: this.createDeterministicUnit(
+          `${entry.seed}:${entry.moduleId}:${room.id}:zone:${zone.id ?? zone.x}:${zone.z}`
+        ),
+      }))
+      .sort((a, b) => a.sort - b.sort)
+      .slice(0, clusterCount)
+      .map((candidate) => candidate.zone);
+  }
+
+  createPropCluster({ entry, room, zone, occupiedModules, blockingModules, clusterIndex }) {
+    const anchors = this.getCandidateTilesForEntry(room, entry, zone)
       .map((tile) => ({
         tile,
         sort: this.createDeterministicUnit(
@@ -222,6 +242,7 @@ export class DecorationBuilder {
         entry,
         room,
         anchor,
+        zone,
         occupiedModules,
         blockingModules,
         clusterIndex,
@@ -233,7 +254,7 @@ export class DecorationBuilder {
     return [];
   }
 
-  createClusterAtAnchor({ entry, room, anchor, occupiedModules, blockingModules, clusterIndex }) {
+  createClusterAtAnchor({ entry, room, anchor, zone, occupiedModules, blockingModules, clusterIndex }) {
     const targetSize = this.createDeterministicInteger(
       `${entry.seed}:${entry.moduleId}:${room.id}:clusterSize:${clusterIndex}:${this.getTileKey(anchor)}`,
       entry.clusterSize.min,
@@ -242,13 +263,12 @@ export class DecorationBuilder {
     const localOccupied = [...occupiedModules];
     const localBlocking = [...blockingModules];
     const cluster = [];
-    const candidates = this.getClusterCandidateTiles(room, entry, anchor, clusterIndex);
+    const candidates = this.getClusterCandidateTiles(room, entry, anchor, clusterIndex, zone);
 
     for (const tile of candidates) {
       if (cluster.length >= targetSize) break;
-      if (!this.canPlaceAtTile(tile, entry, localOccupied)) continue;
-
       const module = this.createPropModule(entry, tile, room, this.getTileKey(tile));
+      if (!this.canPlaceModule(module, localOccupied)) continue;
       if (!this.keepsNavigationValid(room, module, localBlocking)) continue;
 
       cluster.push(module);
@@ -264,8 +284,8 @@ export class DecorationBuilder {
     return cluster;
   }
 
-  getClusterCandidateTiles(room, entry, anchor, clusterIndex) {
-    return this.getCandidateTilesForEntry(room, entry)
+  getClusterCandidateTiles(room, entry, anchor, clusterIndex, zone = null) {
+    return this.getCandidateTilesForEntry(room, entry, zone)
       .filter((tile) => this.distance2D(tile, anchor) <= entry.clusterRadius)
       .map((tile) => ({
         tile,
@@ -278,9 +298,11 @@ export class DecorationBuilder {
       .map((candidate) => candidate.tile);
   }
 
-  getCandidateTilesForEntry(room, entry) {
+  getCandidateTilesForEntry(room, entry, preferredZone = null) {
     const zones = this.getZonesForEntry(room, entry);
-    const sources = entry.zoneTypes && zones.length > 0
+    const sources = preferredZone
+      ? [preferredZone]
+      : entry.zoneTypes && zones.length > 0
       ? zones
       : entry.allowUnzoned
         ? room.walkableAreas ?? []
@@ -310,14 +332,17 @@ export class DecorationBuilder {
   }
 
   canPlaceAtTile(tile, entry, occupiedModules) {
-    const module = {
+    return this.canPlaceModule({
       x: tile.x,
       z: tile.z,
       w: entry.w,
       d: entry.d,
-    };
+      placementFootprint: entry.placementFootprint,
+    }, occupiedModules);
+  }
 
-    return !this.isAreaInsideAnyModule(module, occupiedModules);
+  canPlaceModule(module, occupiedModules) {
+    return !this.isAreaInsideAnyModule(this.createPlacementArea(module), occupiedModules);
   }
 
   createPropModule(entry, tile, room, tileKey) {
@@ -326,18 +351,37 @@ export class DecorationBuilder {
       DECORATION_FILL_ROTATIONS.length
     );
     const scaleMultiplier = this.createScaleMultiplier(entry, room, tileKey);
+    const offset = this.createPositionJitter(entry, room, tileKey);
 
     return {
-      x: tile.x,
-      z: tile.z,
+      x: tile.x + offset.x,
+      z: tile.z + offset.z,
       w: entry.w,
       d: entry.d,
+      placementFootprint: entry.placementFootprint,
       moduleId: entry.moduleId,
       rotationY: DECORATION_FILL_ROTATIONS[rotationIndex] ?? 0,
       collision: entry.collision,
       scaleMultiplier,
       generated: true,
       role: entry.role,
+    };
+  }
+
+  createPositionJitter(entry, room, tileKey) {
+    const amount = entry.positionJitter ?? 0;
+    if (amount <= 0) return { x: 0, z: 0 };
+
+    const unitX = this.createDeterministicUnit(
+      `${entry.seed}:jitterX:${entry.moduleId}:${room.id}:${tileKey}`
+    );
+    const unitZ = this.createDeterministicUnit(
+      `${entry.seed}:jitterZ:${entry.moduleId}:${room.id}:${tileKey}`
+    );
+
+    return {
+      x: (unitX * 2 - 1) * amount,
+      z: (unitZ * 2 - 1) * amount,
     };
   }
 
@@ -500,8 +544,16 @@ export class DecorationBuilder {
 
   isAreaInsideAnyModule(area, modules) {
     return modules.some((module) =>
-      this.areasOverlap(area, module)
+      this.areasOverlap(area, this.createPlacementArea(module))
     );
+  }
+
+  createPlacementArea(module) {
+    return {
+      ...module,
+      w: module.placementFootprint?.w ?? module.w,
+      d: module.placementFootprint?.d ?? module.d,
+    };
   }
 
   isPointInsideAnyModule(point, modules) {

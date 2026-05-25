@@ -256,8 +256,6 @@ export const ENTER_ROOM_TEMPLATES = [
     exitMarker: null,
     decorativeModules: [
       { x: -1.7, z: -1.8, w: 1, d: 1, moduleId: "barrel", collision: true },
-      { x: 1.6, z: 1.7, w: 1, d: 1, moduleId: "floorDetail" },
-      { x: 1.8, z: -2.1, w: 1, d: 1, moduleId: "stones", rotationY: Math.PI },
     ],
     obstacleModules: [],
   },

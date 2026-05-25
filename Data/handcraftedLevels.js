@@ -11,7 +11,7 @@ export const HANDCRAFTED_LEVELS = [
         {
           moduleId: "floorDetail",
           // Porcentaje aproximado de tiles caminables que reciben variacion de suelo.
-          density: 0.3,
+          density: 0,
         },
         {
           moduleId: "barrel",
@@ -26,13 +26,17 @@ export const HANDCRAFTED_LEVELS = [
           clusterSize: { min: 2, max: 4 },
           // Distancia maxima desde el punto elegido del grupo.
           clusterRadius: 1.35,
+          // Huella de separacion entre barriles; menor valor permite grupos mas juntos.
+          placementFootprint: { w: 0.55, d: 0.55 },
+          // Offset maximo dentro de cada tile para romper la cuadricula visual.
+          positionJitter: 0.28,
           // Variacion visual ligera; no cambia el asset original.
           scaleVariation: { min: 0.94, max: 1.06 },
         },
         {
           moduleId: "stones",
           // Probabilidad por tile dentro de las zonas semanticas de stones/rubble.
-          density: 0.18,
+          density: 0,
           roomTypes: ["combat"],
           zoneTypes: ["rubble", "stones"],
           // Variacion visual ligera; no da colision.

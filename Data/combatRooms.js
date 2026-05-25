@@ -198,12 +198,7 @@ export const COMBAT_ROOM_TEMPLATES = [
         d: 2,
       },
     ],
-    decorativeModules: [
-      { x: -5.8, z: -3, w: 1, d: 1, moduleId: "floorDetail" },
-      { x: -2.1, z: 3, w: 1, d: 1, moduleId: "stones", rotationY: Math.PI / 2 },
-      { x: 2.2, z: -3, w: 1, d: 1, moduleId: "floorDetail", rotationY: Math.PI },
-      { x: 5.8, z: 3, w: 1, d: 1, moduleId: "stones", rotationY: Math.PI },
-    ],
+    decorativeModules: [],
     obstacleModules: [],
   },
   {
@@ -539,6 +534,33 @@ export const COMBAT_ROOM_TEMPLATES = [
         d: 3,
       },
       {
+        id: "combat_02_barrel_storage_inner_west",
+        type: "storage",
+        tags: ["barrelStorage", "corner", "wall"],
+        x: -5.8,
+        z: 3.1,
+        w: 2.4,
+        d: 2.4,
+      },
+      {
+        id: "combat_02_barrel_storage_inner_east",
+        type: "storage",
+        tags: ["barrelStorage", "corner", "wall"],
+        x: 5.8,
+        z: 3.1,
+        w: 2.4,
+        d: 2.4,
+      },
+      {
+        id: "combat_02_barrel_storage_east_wall",
+        type: "storage",
+        tags: ["barrelStorage", "wall"],
+        x: 10.6,
+        z: 1.2,
+        w: 2.4,
+        d: 3,
+      },
+      {
         id: "combat_02_rubble_scatter",
         type: "rubble",
         x: 0,
@@ -556,14 +578,7 @@ export const COMBAT_ROOM_TEMPLATES = [
         d: 5,
       },
     ],
-    decorativeModules: [
-      { x: -9.8, z: -3.2, w: 1, d: 1, moduleId: "floorDetail" },
-      { x: -6.3, z: 5.4, w: 1, d: 1, moduleId: "stones", rotationY: Math.PI / 2 },
-      { x: -2.2, z: 8.8, w: 1, d: 1, moduleId: "floorDetail", rotationY: Math.PI },
-      { x: 2.2, z: 5.2, w: 1, d: 1, moduleId: "stones", rotationY: Math.PI },
-      { x: 6.3, z: 8.7, w: 1, d: 1, moduleId: "floorDetail", rotationY: -Math.PI / 2 },
-      { x: 9.8, z: -3.2, w: 1, d: 1, moduleId: "stones", rotationY: Math.PI },
-    ],
+    decorativeModules: [],
     obstacleModules: [],
   },
   {
@@ -763,12 +778,7 @@ export const COMBAT_ROOM_TEMPLATES = [
         d: 2.5,
       },
     ],
-    decorativeModules: [
-      { x: -3.4, z: 3.2, w: 1, d: 1, moduleId: "floorDetail" },
-      { x: 3.4, z: -3.2, w: 1, d: 1, moduleId: "floorDetail" },
-      { x: -3.8, z: -3.8, w: 1, d: 1, moduleId: "stones" },
-      { x: 3.8, z: 3.8, w: 1, d: 1, moduleId: "stones", rotationY: Math.PI },
-    ],
+    decorativeModules: [],
     obstacleModules: [
       {
         x: 0,

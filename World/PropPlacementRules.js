@@ -45,6 +45,10 @@ export const PROP_PLACEMENT_RULES = {
     clusterSize: { min: 2, max: 4 },
     // Radio maximo alrededor del punto elegido para agrupar barriles.
     clusterRadius: 1.35,
+    // Huella usada solo para separar colocaciones; no cambia tamano visual ni colision.
+    placementFootprint: { w: 0.55, d: 0.55 },
+    // Desplazamiento maximo dentro del tile para que el grupo no parezca una cuadricula.
+    positionJitter: 0.28,
     scaleVariation: { min: 0.94, max: 1.06 },
   },
 };
