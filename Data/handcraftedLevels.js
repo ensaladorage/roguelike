@@ -52,10 +52,12 @@ export const HANDCRAFTED_LEVELS = [
           moduleId: "stones",
           // Probabilidad por tile caminable. No usa decorZones ni spots.
           density: 0.07,
-          roomTypes: ["combat"],
+          // Sin roomTypes: se aplica a enter, combat, exit y futuros tipos como treasure.
           // null hace que use todas las walkableAreas de la room.
           zoneTypes: null,
           allowUnzoned: true,
+          // Huella logica pequena; no cambia el tamano visual del asset.
+          placementFootprint: { w: 0.35, d: 0.35 },
           // Offset dentro del tile para que los stones no caigan en cuadricula perfecta.
           positionJitter: 0.35,
           // Variacion visual ligera; no da colision.

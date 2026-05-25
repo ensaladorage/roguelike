@@ -29,6 +29,8 @@ export const PROP_PLACEMENT_RULES = {
     allowUnzoned: true,
     collision: false,
     occupiesTile: true,
+    // Huella logica pequeña para poder repartir stones como detalle sin bloquear tiles enteros.
+    placementFootprint: { w: 0.35, d: 0.35 },
     // Desplazamiento maximo dentro del tile para que no parezca una cuadricula.
     positionJitter: 0.35,
     // Escala visual aleatoria determinista; no modifica el asset original.
