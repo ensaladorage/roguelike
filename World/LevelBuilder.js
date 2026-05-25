@@ -752,7 +752,7 @@ export class LevelBuilder {
   }
 
   isGeneratedCollisionDecoration(moduleId) {
-    return moduleId === "barrel" || moduleId === "rocks";
+    return moduleId === "barrel";
   }
 
   canPlaceDecorationEntryInRoom(entry, room) {

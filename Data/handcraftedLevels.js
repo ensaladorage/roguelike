@@ -17,7 +17,7 @@ export const HANDCRAFTED_LEVELS = [
           roomTypes: ["combat"],
         },
         {
-          moduleId: "rocks",
+          moduleId: "stones",
           density: 0.012,
           roomTypes: ["combat"],
         },
