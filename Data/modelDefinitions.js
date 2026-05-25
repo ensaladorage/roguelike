@@ -45,7 +45,7 @@ export const MODEL_DEFINITIONS = {
       category: MODEL_CATEGORIES.ENEMY,
       assetPath: "Assets/Models/animal-hog.glb",
       textureId: "animalsColormap",
-      scale: 1,
+      scale: 0.45,
     },
   },
   [MODEL_CATEGORIES.NPC]: {},
