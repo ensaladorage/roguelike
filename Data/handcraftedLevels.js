@@ -11,7 +11,7 @@ export const HANDCRAFTED_LEVELS = [
         {
           moduleId: "floorDetail",
           // Porcentaje aproximado de tiles caminables que reciben variacion de suelo.
-          density: 0,
+          density: 0.3,
         },
         {
           moduleId: "barrel",
@@ -25,22 +25,24 @@ export const HANDCRAFTED_LEVELS = [
           // Cantidad de barriles dentro de cada grupo.
           clusterSize: { min: 2, max: 4 },
           // Distancia maxima desde el punto elegido del grupo.
-          clusterRadius: 1.35,
+          clusterRadius: 1,
+          // Radio real de dispersion dentro del grupo; baja este valor para barriles mas pegados.
+          clusterScatterRadius: 0.45,
           // Huella de separacion entre barriles; menor valor permite grupos mas juntos.
-          placementFootprint: { w: 0.55, d: 0.55 },
-          // Offset maximo dentro de cada tile para romper la cuadricula visual.
-          positionJitter: 0.28,
+          placementFootprint: { w: 0.1, d: 0.1 },
+          // Offset extra para decoraciones scatter; los barriles agrupados usan clusterScatterRadius.
+          positionJitter: 0.1,
           // Variacion visual ligera; no cambia el asset original.
-          scaleVariation: { min: 0.94, max: 1.06 },
+          scaleVariation: { min: 0.5, max: 1.6 },
         },
         {
           moduleId: "stones",
           // Probabilidad por tile dentro de las zonas semanticas de stones/rubble.
-          density: 0,
+          density: 0.12,
           roomTypes: ["combat"],
           zoneTypes: ["rubble", "stones"],
           // Variacion visual ligera; no da colision.
-          scaleVariation: { min: 0.92, max: 1.08 },
+          scaleVariation: { min: 0.5, max: 1.2 },
         },
       ],
     },

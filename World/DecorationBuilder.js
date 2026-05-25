@@ -113,6 +113,7 @@ export class DecorationBuilder {
       clustersPerRoom: this.normalizeRange(entry.clustersPerRoom ?? rule.clustersPerRoom, 0, 0),
       clusterSize: this.normalizeRange(entry.clusterSize ?? rule.clusterSize, 1, 1),
       clusterRadius: entry.clusterRadius ?? rule.clusterRadius ?? 1.25,
+      clusterScatterRadius: entry.clusterScatterRadius ?? rule.clusterScatterRadius ?? entry.clusterRadius ?? rule.clusterRadius ?? 1.25,
       placementFootprint: entry.placementFootprint ?? rule.placementFootprint ?? null,
       positionJitter: entry.positionJitter ?? rule.positionJitter ?? 0,
       scaleVariation: entry.scaleVariation ?? rule.scaleVariation ?? null,
@@ -263,11 +264,13 @@ export class DecorationBuilder {
     const localOccupied = [...occupiedModules];
     const localBlocking = [...blockingModules];
     const cluster = [];
-    const candidates = this.getClusterCandidateTiles(room, entry, anchor, clusterIndex, zone);
+    const candidates = this.getClusterCandidatePoints(room, entry, anchor, clusterIndex, zone, targetSize);
 
-    for (const tile of candidates) {
+    for (const point of candidates) {
       if (cluster.length >= targetSize) break;
-      const module = this.createPropModule(entry, tile, room, this.getTileKey(tile));
+      const module = this.createPropModule(entry, point, room, this.getTileKey(point), {
+        usePositionJitter: false,
+      });
       if (!this.canPlaceModule(module, localOccupied)) continue;
       if (!this.keepsNavigationValid(room, module, localBlocking)) continue;
 
@@ -284,8 +287,32 @@ export class DecorationBuilder {
     return cluster;
   }
 
-  getClusterCandidateTiles(room, entry, anchor, clusterIndex, zone = null) {
-    return this.getCandidateTilesForEntry(room, entry, zone)
+  getClusterCandidatePoints(room, entry, anchor, clusterIndex, zone = null, targetSize = 1) {
+    const candidates = [anchor];
+    const attemptCount = Math.max(targetSize * 12, 24);
+
+    for (let attemptIndex = 0; attemptIndex < attemptCount; attemptIndex += 1) {
+      const unitAngle = this.createDeterministicUnit(
+        `${entry.seed}:${entry.moduleId}:${room.id}:clusterAngle:${clusterIndex}:${this.getTileKey(anchor)}:${attemptIndex}`
+      );
+      const unitRadius = this.createDeterministicUnit(
+        `${entry.seed}:${entry.moduleId}:${room.id}:clusterRadius:${clusterIndex}:${this.getTileKey(anchor)}:${attemptIndex}`
+      );
+      const radius = Math.sqrt(unitRadius) * entry.clusterScatterRadius;
+      const angle = unitAngle * Math.PI * 2;
+      const point = {
+        x: anchor.x + Math.cos(angle) * radius,
+        z: anchor.z + Math.sin(angle) * radius,
+      };
+
+      if (this.distance2D(point, anchor) > entry.clusterRadius) continue;
+      if (!this.isPointInsideAnyArea(point, room.walkableAreas ?? [])) continue;
+      if (zone && !this.areaContainsPoint(zone, point)) continue;
+
+      candidates.push(point);
+    }
+
+    return candidates
       .filter((tile) => this.distance2D(tile, anchor) <= entry.clusterRadius)
       .map((tile) => ({
         tile,
@@ -345,13 +372,15 @@ export class DecorationBuilder {
     return !this.isAreaInsideAnyModule(this.createPlacementArea(module), occupiedModules);
   }
 
-  createPropModule(entry, tile, room, tileKey) {
+  createPropModule(entry, tile, room, tileKey, options = {}) {
     const rotationIndex = Math.floor(
       this.createDeterministicUnit(`${entry.seed}:rotation:${entry.moduleId}:${room.id}:${tileKey}`) *
       DECORATION_FILL_ROTATIONS.length
     );
     const scaleMultiplier = this.createScaleMultiplier(entry, room, tileKey);
-    const offset = this.createPositionJitter(entry, room, tileKey);
+    const offset = options.usePositionJitter === false
+      ? { x: 0, z: 0 }
+      : this.createPositionJitter(entry, room, tileKey);
 
     return {
       x: tile.x + offset.x,
