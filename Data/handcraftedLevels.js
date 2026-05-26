@@ -2,7 +2,7 @@ export const HANDCRAFTED_LEVELS = [
   {
     kind: "assembled",
     tileSetId: "scenarioDefault",
-    name: "Test Floor: enter_room_north_south_01 + treasure_01 + exit_room_north_south_01",
+    name: "Test Floor: enter_room_north_south_01 + treasure_01 + treasure_02 + exit_room_north_south_01",
     connectorStyleId: "openCorridor",
     decorationFill: {
       // Cambia a un numero fijo para repetir la misma distribucion mientras ajustas a mano.
@@ -78,6 +78,12 @@ export const HANDCRAFTED_LEVELS = [
         id: "TreasureRoom",
         templateId: "treasure_01",
         position: { x: 0, z: 0 },
+        rotationY: 0,
+      },
+      {
+        id: "TreasureRoomEast",
+        templateId: "treasure_02",
+        position: { x: 11, z: 0 },
         rotationY: 0,
       },
       {
