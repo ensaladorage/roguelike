@@ -251,7 +251,6 @@ function createRectRoomTemplate({
   enemySpawns = [],
   chestSpawns = [],
   exitMarker = null,
-  decorativeModules = [],
   obstacleModules = [],
   decorZones = [],
 }) {
@@ -289,7 +288,6 @@ function createRectRoomTemplate({
     enemySpawns,
     chestSpawns,
     exitMarker,
-    decorativeModules,
     obstacleModules,
     decorZones,
   };
@@ -309,7 +307,6 @@ export const ROOM_TEMPLATES = [
       { side: "south", offset: 0, width: 1 },
       { side: "east", offset: 0, width: 1 },
     ],
-    decorativeModules: [],
   }),
   createRectRoomTemplate({
     id: "combat_room_basic",
@@ -345,7 +342,6 @@ export const ROOM_TEMPLATES = [
       { x: 3.5, z: 2.6, rotationY: Math.PI },
       { x: -3.7, z: 2.4, rotationY: Math.PI / 2 },
     ],
-    decorativeModules: [],
     obstacleModules: [
       { x: 0, z: 1.4, w: 1, d: 1, moduleId: "rocks", collision: true },
     ],
@@ -364,9 +360,6 @@ export const ROOM_TEMPLATES = [
     chestSpawns: [
       { x: -2.7, z: 1.9, rotationY: Math.PI / 2 },
     ],
-    decorativeModules: [
-      { x: 0, z: -3.7, w: 1, d: 1, moduleId: "banner" },
-    ],
   }),
   createRectRoomTemplate({
     id: "half_wall_alcove",
@@ -377,7 +370,6 @@ export const ROOM_TEMPLATES = [
     doorOpenings: [
       { side: "west", offset: 0, width: 1 },
     ],
-    decorativeModules: [],
     chestSpawns: [
       { x: -1.6, z: 0.8, rotationY: Math.PI / 2 },
     ],

@@ -180,7 +180,6 @@ export const COMBAT_ROOM_TEMPLATES = [
         d: 2.5,
       },
     ],
-    decorativeModules: [],
     obstacleModules: [],
   },
   {
@@ -515,7 +514,6 @@ export const COMBAT_ROOM_TEMPLATES = [
         d: 3,
       },
     ],
-    decorativeModules: [],
     obstacleModules: [],
   },
   {
@@ -697,7 +695,6 @@ export const COMBAT_ROOM_TEMPLATES = [
         d: 3,
       },
     ],
-    decorativeModules: [],
     obstacleModules: [
       {
         x: 0,

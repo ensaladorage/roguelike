@@ -220,7 +220,7 @@ export class LevelBuilder {
       environment.wallModules.push(...wallModules);
       environment.doorwayModules.push(...doorwayModules);
       environment.decorativeModules.push(...generatedDecorativeModules);
-      environment.decorativeModules.push(...room.decorativeModules);
+      environment.decorativeModules.push(...(room.decorativeModules ?? []));
       environment.decorativeModules.push(...room.obstacleModules);
       if (stairsModule) {
         environment.decorativeModules.push(stairsModule);

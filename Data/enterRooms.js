@@ -105,13 +105,7 @@ export const ENTER_ROOM_TEMPLATES = [
     enemySpawns: [],
     chestSpawns: [],
     exitMarker: null,
-    decorativeModules: [],
-    obstacleModules: [
-      { x: -1.2, z: -2.5, w: 1, d: 1, moduleId: "barrel", collision: true },
-      { x: -1.2, z: -3, w: 1, d: 1, moduleId: "barrel", collision: true },
-      { x: -1.2, z: -3.5, w: 1, d: 1, moduleId: "barrel", collision: true },
-      { x: 1.2, z: -3.5, w: 1, d: 1, moduleId: "barrel", collision: true },
-    ],
+    obstacleModules: [],
   },
   {
     id: "enter_room_east_west_01",
@@ -254,9 +248,6 @@ export const ENTER_ROOM_TEMPLATES = [
     enemySpawns: [],
     chestSpawns: [],
     exitMarker: null,
-    decorativeModules: [
-      { x: -1.7, z: -1.8, w: 1, d: 1, moduleId: "barrel", collision: true },
-    ],
     obstacleModules: [],
   },
 ];

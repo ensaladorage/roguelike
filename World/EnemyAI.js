@@ -269,7 +269,7 @@ export class EnemyAI {
 
       if (!target) break;
 
-      const path = this.getNavigationPath(this.model.position, target);
+      const path = this.getPatrolNavigationPath(this.model.position, target);
 
       if (path.length === 0) continue;
 
@@ -308,6 +308,20 @@ export class EnemyAI {
     return target.clone();
   }
 
+  getPatrolNavigationPath(from, to) {
+    if (!this.isWithinPatrolAreas(from) || !this.isWithinPatrolAreas(to)) {
+      return [];
+    }
+
+    const path = this.getNavigationPath(from, to);
+
+    if (!this.isPatrolPathWithinAreas(path)) {
+      return [];
+    }
+
+    return path;
+  }
+
   getNavigationPath(from, to) {
     if (this.navigation?.findPath) {
       const path = this.navigation.findPath(from, to, this.collisionRadius);
@@ -331,7 +345,7 @@ export class EnemyAI {
     this.currentPatrolIndex =
       (this.currentPatrolIndex + 1) % this.patrolPoints.length;
 
-    const path = this.getNavigationPath(this.model.position, target);
+    const path = this.getPatrolNavigationPath(this.model.position, target);
 
     if (path.length === 0) {
       this.startPatrolPause();
@@ -353,6 +367,21 @@ export class EnemyAI {
       this.patrolPauseDurations[
         Math.floor(Math.random() * this.patrolPauseDurations.length)
       ] ?? 0.5;
+  }
+
+  isPatrolPathWithinAreas(path) {
+    return path.every((point) => this.isWithinPatrolAreas(point));
+  }
+
+  isWithinPatrolAreas(point) {
+    if (this.patrolAreas.length === 0) return true;
+
+    return this.patrolAreas.some((area) =>
+      point.x >= area.x - area.w / 2 &&
+      point.x <= area.x + area.w / 2 &&
+      point.z >= area.z - area.d / 2 &&
+      point.z <= area.z + area.d / 2
+    );
   }
 
   moveTo(target, delta, stopRange) {

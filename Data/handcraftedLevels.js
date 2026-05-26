@@ -17,7 +17,7 @@ export const HANDCRAFTED_LEVELS = [
           moduleId: "barrel",
           // Para barrels, density solo activa esta regla; la cantidad real la controla clustersPerRoom.
           density: 1,
-          roomTypes: ["combat"],
+          roomTypes: ["combat", "treasure"],
           // Los spots se calculan solos: esquinas, laterales de puertas y puntos cerca de cofres.
           spotStrategy: "semantic",
           // Quita o agrega tipos para probar donde pueden aparecer los grupos.

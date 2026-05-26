@@ -79,12 +79,13 @@ New rooms must be reusable room templates and must declare:
 - `floor/wall modules`
 - `enemySpawns`
 - `chestSpawns`
-- optional `decorations`
 - optional `obstacles`
+- optional `decorZones` for semantic decoration guidance only
 - optional `modelId` on enemy/chest spawns
 
 Rules:
 - New rooms must not be authored directly inside `Scene.js`.
+- Do not put decorative props directly in room templates; room scripts should not define `decorativeModules`.
 - Each new room should be testable in a simple floor composition with the matching enter/exit room orientation, such as `enter_room_north_south_01` and `exit_room_north_south_01`.
 - Prefer readable handcrafted layouts over dense geometry.
 - Openings must align cleanly with shared connectors.
@@ -95,10 +96,14 @@ Rules:
 ## Decoration Rules
 
 - Decoration placement must stay out of `Scene.js`; use `DecorationBuilder`, `PropPlacementRules`, room templates, and level data.
+- Decorative props are generated from seeded level decoration config, not hand-placed in room scripts.
+- Do not add `decorativeModules` to room templates for props such as `floorDetail`, `stones`, barrels, banners, rubble, or set dressing.
+- Use `obstacleModules` only for intentional gameplay blockers or collision obstacles, not for ordinary decoration.
+- Use `decorZones` only as semantic hints for procedural placement; they should not contain concrete props.
 - Seeded decoration must remain deterministic for a given run seed.
 - `floorDetail` and `stones` are scatter-style decorations placed from walkable floor using density, random rotation, and scale variation.
 - `floorDetail` and `stones` should be available to enter, combat, exit, treasure, and future room types unless a level config explicitly narrows them.
-- Generated barrels are combat-room props only by default; enter/exit barrels should be manually authored when needed.
+- Generated barrels should be enabled by room type from level config, commonly combat and treasure, and should stay out of enter/exit unless explicitly requested.
 - Barrel clusters should use semantic spots such as corners, door-adjacent areas, and chest-adjacent areas, with spacing between group spots.
 - Generated decoration must avoid openings, connectors, player spawn, enemy spawn, chest spawn, stairs, and critical navigation paths.
 - Visual scale/placement footprint/collision footprint may differ when needed, but navigation validation should use the gameplay collision footprint.
@@ -143,6 +148,8 @@ Rules:
   - random walkable point helpers
 - Scene must not contain enemy decision logic.
 - Enemy patrol should choose reachable walkable targets, move for a short duration, pause, then choose again.
+- Current patrol-only enemies must keep patrol targets and patrol paths inside the room where they spawn.
+- Future chase enemies may leave their spawn room while chasing the player, but that behavior must be explicit and must not loosen patrol confinement.
 - During player combat, non-active enemies may be paused by GameManager.
 - The active combat enemy must not be paused by the combat movement lock.
 
