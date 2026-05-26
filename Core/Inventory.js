@@ -130,6 +130,22 @@ export class Inventory {
       .sort(this.sortEntriesByHudSlot);
   }
 
+  createProgressSnapshot() {
+    return {
+      passives: [...this.passives.entries()],
+      consumables: [...this.consumables.entries()],
+      knownConsumables: [...this.knownConsumables],
+    };
+  }
+
+  restoreProgressSnapshot(snapshot) {
+    if (!snapshot) return;
+
+    this.passives = new Map(snapshot.passives ?? []);
+    this.consumables = new Map(snapshot.consumables ?? []);
+    this.knownConsumables = new Set(snapshot.knownConsumables ?? []);
+  }
+
   getPassiveEntries() {
     return this.getEntries(this.passives).sort(this.sortEntriesByHudSlot);
   }

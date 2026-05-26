@@ -99,8 +99,8 @@ export const ENTER_ROOM_TEMPLATES = [
       },
     ],
     doorOpenings: [
-      { side: "north", offset: 0, width: 1 },
-      { side: "south", offset: 0, width: 1 },
+      { side: "north", offset: 0, width: 1, entryStairsRotationY: 0 },
+      { side: "south", offset: 0, width: 1, entryStairsRotationY: Math.PI },
     ],
     enemySpawns: [],
     chestSpawns: [],
@@ -242,8 +242,8 @@ export const ENTER_ROOM_TEMPLATES = [
       },
     ],
     doorOpenings: [
-      { side: "west", offset: 0, width: 1 },
-      { side: "east", offset: 0, width: 1 },
+      { side: "west", offset: 0, width: 1, entryStairsRotationY: Math.PI / 2 },
+      { side: "east", offset: 0, width: 1, entryStairsRotationY: -Math.PI / 2 },
     ],
     enemySpawns: [],
     chestSpawns: [],

@@ -76,6 +76,10 @@ export class GameManager {
     if (event.type === "playerDefeated") {
       this.onPlayerDeath();
     }
+
+    if (event.type === "levelExitReached") {
+      this.onLevelExitReached();
+    }
   }
 
   onPlayerDeath() {
@@ -91,5 +95,13 @@ export class GameManager {
 
   restart() {
     window.location.reload();
+  }
+
+  onLevelExitReached() {
+    if (this.isGameOver) return;
+
+    this.scene.addLog("Stairs reached. Rebuilding level 1...");
+    this.resumeEnemyMovement(this.scene.enemies);
+    this.scene.reloadCurrentLevel();
   }
 }

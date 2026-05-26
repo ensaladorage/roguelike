@@ -91,6 +91,7 @@ function transformDoorOpening(opening, dimensions, placement, quarterTurns) {
 
   return {
     ...opening,
+    sourceSide: opening.side,
     side: rotateSide(opening.side, quarterTurns),
     x: placement.position.x + worldCenter.x,
     z: placement.position.z + worldCenter.z,
@@ -112,7 +113,7 @@ function transformEnemySpawn(enemySpawn, placement, quarterTurns) {
 function transformChestSpawn(chestSpawn, placement, quarterTurns) {
   return {
     ...transformPoint(chestSpawn, placement, quarterTurns),
-    rotationY: (chestSpawn.rotationY ?? 0) + quarterTurns * QUARTER_TURN,
+    rotationY: chestSpawn.rotationY ?? 0,
   };
 }
 

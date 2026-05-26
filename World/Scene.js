@@ -15,7 +15,7 @@ import { ChestManager } from "./Chest.js";
 import { CoinManager } from "./Coin.js";
 import { ItemDropManager } from "./ItemDrop.js";
 import { Environment } from "./Environment.js";
-import { HANDCRAFTED_LEVELS } from "../Data/handcraftedLevels.js";
+import { PROCEDURAL_LEVELS } from "../Game/ProceduralLevelFactory.js";
 import { ROOM_TEMPLATES } from "../Data/roomTemplates.js";
 import {
   DEFAULT_ENEMY_MODEL_ID,
@@ -54,7 +54,7 @@ export class GameScene {
     this.coinManager = new CoinManager(this);
     this.itemDropManager = new ItemDropManager(this);
     this.models = {};
-    this.levelDefinitions = HANDCRAFTED_LEVELS;
+    this.levelDefinitions = PROCEDURAL_LEVELS;
     this.roomTemplateLibrary = new RoomTemplateLibrary(ROOM_TEMPLATES);
     this.levelBuilder = new LevelBuilder({
       roomTemplateLibrary: this.roomTemplateLibrary,
@@ -81,6 +81,7 @@ export class GameScene {
 
     this.clock = new THREE.Clock();
     this.runSeed = this.createRunSeed();
+    this.levelGeneration = 0;
     this.floorSize = 48;
     this.levelIndex = 0;
     this.levelGroup = new THREE.Group();
@@ -168,6 +169,20 @@ export class GameScene {
         this.modularTileBuilder.preloadTileSet(tileSetId)
       )
     );
+  }
+
+  resolveLevelDefinition(levelIndex) {
+    const definition = this.levelDefinitions[levelIndex];
+
+    if (typeof definition?.create === "function") {
+      return definition.create({
+        runSeed: this.runSeed,
+        generation: this.levelGeneration,
+        levelIndex,
+      });
+    }
+
+    return definition;
   }
 
   async loadGameModels() {
@@ -317,10 +332,11 @@ export class GameScene {
     this.scene.add(this.floor);
   }
 
-  updateFloorPlane(size) {
+  updateFloorPlane(size, center = { x: 0, z: 0 }) {
     this.floorSize = size;
     this.floor.geometry.dispose();
     this.floor.geometry = new THREE.PlaneGeometry(size, size);
+    this.floor.position.set(center.x ?? 0, 0, center.z ?? 0);
   }
 
   async createPlayer() {
@@ -353,7 +369,7 @@ export class GameScene {
   }
 
   loadLevel(levelIndex) {
-    const definition = this.levelDefinitions[levelIndex];
+    const definition = this.resolveLevelDefinition(levelIndex);
     if (!definition) return;
 
     const level = this.levelBuilder.build(definition, {
@@ -377,7 +393,12 @@ export class GameScene {
     this.clickEffects = [];
     this.feedbackEffects = [];
 
-    this.updateFloorPlane(level.floorSize ?? 48);
+    const levelBounds = this.calculateAreaBounds(level.walkableAreas ?? []);
+    const floorSize = level.floorSize ?? this.getFloorSizeForBounds(levelBounds);
+    const floorCenter = level.floorCenter ?? this.getBoundsCenter(levelBounds);
+
+    this.updateFloorPlane(floorSize, floorCenter);
+    this.environment.updateForLevel(levelBounds);
     this.addLevelGeometry(level);
     this.chestManager.load(level);
     this.addLevelEnemies(level);
@@ -389,7 +410,84 @@ export class GameScene {
       level: levelIndex + 1,
       name: level.name,
       runSeed: this.runSeed,
+      generation: this.levelGeneration,
+      procedural: level.procedural ?? null,
+      navigation: {
+        bounds: levelBounds,
+        floorSize,
+        floorCenter,
+        walkableAreas: level.walkableAreas?.length ?? 0,
+        collisionWalls: level.collisionWalls?.length ?? 0,
+      },
+      connections: (level.connections ?? []).map((connection) => connection.id),
     });
+  }
+
+  calculateAreaBounds(areas = []) {
+    if (areas.length === 0) {
+      return {
+        minX: -this.floorSize / 2,
+        maxX: this.floorSize / 2,
+        minZ: -this.floorSize / 2,
+        maxZ: this.floorSize / 2,
+      };
+    }
+
+    return areas.reduce(
+      (bounds, area) => ({
+        minX: Math.min(bounds.minX, area.x - area.w / 2),
+        maxX: Math.max(bounds.maxX, area.x + area.w / 2),
+        minZ: Math.min(bounds.minZ, area.z - area.d / 2),
+        maxZ: Math.max(bounds.maxZ, area.z + area.d / 2),
+      }),
+      {
+        minX: Infinity,
+        maxX: -Infinity,
+        minZ: Infinity,
+        maxZ: -Infinity,
+      }
+    );
+  }
+
+  getBoundsCenter(bounds) {
+    if (!bounds) return { x: 0, z: 0 };
+
+    return {
+      x: (bounds.minX + bounds.maxX) / 2,
+      z: (bounds.minZ + bounds.maxZ) / 2,
+    };
+  }
+
+  getFloorSizeForBounds(bounds) {
+    if (!bounds) return this.floorSize;
+
+    return Math.ceil(
+      Math.max(bounds.maxX - bounds.minX, bounds.maxZ - bounds.minZ) + 10
+    );
+  }
+
+  reloadCurrentLevel() {
+    const progressSnapshot = this.createProgressSnapshot();
+
+    this.levelGeneration += 1;
+    this.runSeed = this.createRunSeed();
+    this.loadLevel(this.levelIndex);
+    this.restoreProgressSnapshot(progressSnapshot);
+    this.updateHud();
+  }
+
+  createProgressSnapshot() {
+    return {
+      player: this.player?.createProgressSnapshot?.() ?? null,
+      inventory: this.inventory?.createProgressSnapshot?.() ?? null,
+    };
+  }
+
+  restoreProgressSnapshot(snapshot) {
+    if (!snapshot) return;
+
+    this.player?.restoreProgressSnapshot?.(snapshot.player);
+    this.inventory?.restoreProgressSnapshot?.(snapshot.inventory);
   }
 
   createRunSeed() {
@@ -1267,9 +1365,12 @@ export class GameScene {
     if (distance > 0.6) return;
 
     this.levelExitTrigger.activated = true;
-    this.addLog("Stairs reached. Debug: would change floor.");
     console.log("levelExitTriggerReached", {
       from: this.levelIndex + 1,
+    });
+    this.gameManager.handleEvent({
+      type: "levelExitReached",
+      levelIndex: this.levelIndex,
     });
   }
 

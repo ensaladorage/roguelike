@@ -235,13 +235,6 @@ export class LevelBuilder {
       }
 
       walkableAreas.push(...room.walkableAreas.map(cloneArea));
-      walkableAreas.push(
-        ...room.doorOpenings
-          .filter((opening) =>
-            !this.isOpeningConnected(room.id, opening, roomConnectionEndpoints)
-          )
-          .map((opening) => this.createDoorOpeningWalkableArea(opening))
-      );
       collisionWalls.push(...wallModules.map(cloneArea));
       collisionWalls.push(...doorwayModules.map(cloneArea));
       if (stairsModule?.collision) {
@@ -662,21 +655,24 @@ export class LevelBuilder {
       return this.createStairsModuleAtOpening(stairOpening, {
         y: EXIT_STAIRS_Y,
         offsetFromWall: EXIT_STAIRS_OFFSET_FROM_WALL,
-        rotationBySide: EXIT_STAIRS_ROTATION_BY_SIDE,
+        rotationY:
+          stairOpening.exitStairsRotationY ??
+          EXIT_STAIRS_ROTATION_BY_SIDE[stairOpening.side],
         role: "exitStairs",
       });
     }
 
     return this.createStairsModuleAtOpening(stairOpening, {
       collision: true,
-      rotationBySide: ENTRY_STAIRS_ROTATION_TOWARD_WALL_BY_SIDE,
+      rotationY:
+        stairOpening.entryStairsRotationY ??
+        ENTRY_STAIRS_ROTATION_TOWARD_WALL_BY_SIDE[stairOpening.side],
       role: "entryStairs",
     });
   }
 
   createStairsModuleAtOpening(opening, options = {}) {
     const offsetFromWall = options.offsetFromWall ?? ENTRY_STAIRS_OFFSET_FROM_WALL;
-    const rotationBySide = options.rotationBySide ?? ENTRY_STAIRS_ROTATION_TOWARD_WALL_BY_SIDE;
     const module = {
       x: opening.x,
       z: opening.z,
@@ -684,13 +680,12 @@ export class LevelBuilder {
       d: 1,
       side: opening.side,
       moduleId: "stairs",
-      rotationY: rotationBySide[opening.side] ?? 0,
+      rotationY: options.rotationY ?? 0,
       generated: true,
       ...options,
     };
 
     delete module.offsetFromWall;
-    delete module.rotationBySide;
 
     switch (opening.side) {
       case "north":
@@ -833,19 +828,6 @@ export class LevelBuilder {
 
   isHorizontalSide(side) {
     return side === "north" || side === "south";
-  }
-
-  createDoorOpeningWalkableArea(opening) {
-    const width = opening.width ?? 1;
-    const thresholdDepth = 1.4;
-    const isHorizontal = opening.side === "north" || opening.side === "south";
-
-    return {
-      x: opening.x,
-      z: opening.z,
-      w: isHorizontal ? width : thresholdDepth,
-      d: isHorizontal ? thresholdDepth : width,
-    };
   }
 
   createOuterBoundaryModules(boundary) {

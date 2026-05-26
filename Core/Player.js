@@ -60,6 +60,34 @@ export class Player {
     this.attackTimer = Math.min(this.attackTimer, this.attackCooldown);
   }
 
+  createProgressSnapshot() {
+    return {
+      maxHp: this.maxHp,
+      hp: this.hp,
+      gold: this.gold,
+      attackDamage: this.attackDamage,
+      attackRange: this.attackRange,
+      attackSpeed: this.attackSpeed,
+      attackCooldown: this.attackCooldown,
+    };
+  }
+
+  restoreProgressSnapshot(snapshot) {
+    if (!snapshot) return;
+
+    this.maxHp = snapshot.maxHp ?? this.maxHp;
+    this.hp = Math.min(snapshot.hp ?? this.hp, this.maxHp);
+    this.gold = snapshot.gold ?? this.gold;
+    this.attackDamage = snapshot.attackDamage ?? this.attackDamage;
+    this.attackRange = snapshot.attackRange ?? this.attackRange;
+
+    if (snapshot.attackSpeed !== undefined) {
+      this.setAttackSpeed(snapshot.attackSpeed);
+    } else if (snapshot.attackCooldown !== undefined) {
+      this.attackCooldown = snapshot.attackCooldown;
+    }
+  }
+
   createOcclusionMarker() {
     const marker = new THREE.Group();
     marker.name = "playerOcclusionMarker";
