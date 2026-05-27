@@ -4,6 +4,7 @@ export const ROOM_TESTER_LEVELS = [
     tileSetId: "scenarioDefault",
     name: "Room Tester: enter + combat_03 + combat_04 + exit",
     connectorStyleId: "openCorridor",
+    enemyDifficulty: "easy",
     decorationFill: {
       seed: "room-tester",
       modules: [

@@ -41,20 +41,24 @@ export class EnemyAI {
     this.patrolPauseDurations = options.patrolPauseDurations ?? [0.5, 1];
     this.patrolAreas = (options.patrolAreas ?? []).map((area) => ({ ...area }));
 
-    this.speed = 1.2;
-    this.patrolStopRange = 0.08;
+    this.enemyTypeId = options.enemyTypeId ?? "enemy_unknown";
+    this.enemyName = options.enemyName ?? "Enemy";
+    this.enemyDifficulty = options.enemyDifficulty ?? "easy";
+
+    this.speed = options.speed ?? 1.2;
+    this.patrolStopRange = options.patrolStopRange ?? 0.08;
     this.collisionRadius = options.collisionRadius ?? 0.32;
     this.navigation = options.navigation ?? null;
     this.movementPauseReasons = new Set();
 
-    this.attackRange = 1.6;
-    this.attackDamage = 8;
-    this.attackCooldown = 1.2;
+    this.attackRange = options.attackRange ?? 1.6;
+    this.attackDamage = options.attackDamage ?? 8;
+    this.attackCooldown = options.attackCooldown ?? 1.2;
     this.attackTimer = 0;
     this.stunTimer = 0;
 
-    this.hp = 50;
-    this.maxHp = this.hp;
+    this.maxHp = options.maxHp ?? options.hp ?? 50;
+    this.hp = options.hp ?? this.maxHp;
     this.alive = true;
     this.target = null;
     this.events = [];

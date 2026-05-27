@@ -1,4 +1,8 @@
 import { DecorationBuilder } from "./DecorationBuilder.js";
+import {
+  ENEMY_DIFFICULTY,
+  pickEnemyDefinitionForDifficulty,
+} from "../Data/enemyDefinitions.js";
 
 function cloneArea(area) {
   return {
@@ -252,11 +256,15 @@ export class LevelBuilder {
       );
       chests.push(...room.chestSpawns.map((spawn) => ({ ...spawn })));
       enemies.push(
-        ...room.enemySpawns.map((spawn) => ({
-          ...spawn,
-          patrol: (spawn.patrol ?? []).map((point) => ({ ...point })),
-          patrolAreas: room.walkableAreas.map(cloneArea),
-        }))
+        ...room.enemySpawns.map((spawn, spawnIndex) =>
+          this.resolveEnemySpawn({
+            spawn,
+            spawnIndex,
+            room,
+            levelDefinition,
+            buildOptions,
+          })
+        )
       );
 
       if (stairsModule?.role === "exitStairs") {
@@ -624,6 +632,66 @@ export class LevelBuilder {
     }
 
     return 1;
+  }
+
+  resolveEnemySpawn({ spawn, spawnIndex, room, levelDefinition, buildOptions }) {
+    const difficulty =
+      spawn.enemyDifficulty ??
+      room.enemyDifficulty ??
+      levelDefinition.enemyDifficulty ??
+      ENEMY_DIFFICULTY.EASY;
+    const enemyDefinition = room.type === "combat"
+      ? pickEnemyDefinitionForDifficulty(
+        difficulty,
+        this.createSeededRandomValue([
+          buildOptions.runSeed ?? levelDefinition.decorationFill?.seed ?? "level",
+          levelDefinition.name ?? "unnamed-level",
+          room.id,
+          spawnIndex,
+          spawn.x,
+          spawn.z,
+        ].join(":"))
+      )
+      : null;
+
+    return {
+      ...spawn,
+      enemyTypeId: enemyDefinition?.id ?? spawn.enemyTypeId,
+      enemyName: enemyDefinition?.name ?? spawn.enemyName,
+      enemyDifficulty: enemyDefinition?.difficulty ?? spawn.enemyDifficulty,
+      modelId: enemyDefinition?.modelId ?? spawn.modelId,
+      maxHp: enemyDefinition?.maxHp ?? spawn.maxHp,
+      hp: enemyDefinition?.hp ?? spawn.hp,
+      speed: enemyDefinition?.speed ?? spawn.speed,
+      attackDamage: enemyDefinition?.attackDamage ?? spawn.attackDamage,
+      attackRange: enemyDefinition?.attackRange ?? spawn.attackRange,
+      attackCooldown: enemyDefinition?.attackCooldown ?? spawn.attackCooldown,
+      collisionRadius: enemyDefinition?.collisionRadius ?? spawn.collisionRadius,
+      patrolStopRange: enemyDefinition?.patrolStopRange ?? spawn.patrolStopRange,
+      patrolMoveDuration:
+        enemyDefinition?.patrolMoveDuration ?? spawn.patrolMoveDuration,
+      patrolPauseDurations:
+        enemyDefinition?.patrolPauseDurations ?? spawn.patrolPauseDurations,
+      patrol: (spawn.patrol ?? []).map((point) => ({ ...point })),
+      patrolAreas: room.walkableAreas.map(cloneArea),
+    };
+  }
+
+  createSeededRandomValue(seed) {
+    let state = 2166136261;
+    const text = String(seed);
+
+    for (let index = 0; index < text.length; index += 1) {
+      state ^= text.charCodeAt(index);
+      state = Math.imul(state, 16777619);
+    }
+
+    state = (state + 0x6d2b79f5) | 0;
+    let value = Math.imul(state ^ (state >>> 15), 1 | state);
+
+    value ^= value + Math.imul(value ^ (value >>> 7), 61 | value);
+
+    return ((value ^ (value >>> 14)) >>> 0) / 4294967296;
   }
 
   createDecorationCollisionModules(source) {

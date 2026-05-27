@@ -153,6 +153,7 @@ function tryCreateProceduralLevelOne(rng, options, attempt) {
     tileSetId: "scenarioDefault",
     name: `Procedural Level 1 (${roomSummary})`,
     connectorStyleId: "openCorridor",
+    enemyDifficulty: "easy",
     decorationFill: PROCEDURAL_DECORATION_FILL,
     playerStart,
     floorSize,

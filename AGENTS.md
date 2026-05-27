@@ -19,6 +19,7 @@ Build a simple top-down 3D roguelike with:
 - Do not put game rules, item logic, enemy decisions, or room data directly in `Scene.js`.
 - Player logic lives in `Core/Player.js`.
 - Enemy logic lives in `World/EnemyAI.js`.
+- Enemy difficulty/type definitions live in `Data/easyEnemies.js`, `Data/mediumEnemies.js`, `Data/hardEnemies.js`, and `Data/enemyDefinitions.js`.
 - Chest logic lives in `World/Chest.js`.
 - Coin type definitions, denomination values, physical rendering, landing, pickup, and collection behavior live in `World/Coin.js`.
 - Enemy coin reward total value ranges live in `World/EnemyAI.js`, currently `ENEMY_COIN_DROP`.
@@ -37,6 +38,7 @@ Build a simple top-down 3D roguelike with:
 
 - Gameplay model definitions live in `Data/modelDefinitions.js`.
 - Environment/tile asset definitions live in `Data/tileSetDefinitions.js`.
+- Enemy model texture mapping lives in `Data/modelDefinitions.js`; hog/crab use `animalsColormap`, while skeleton/zombie/vampire use `enemiesColormap`.
 - Do not hardcode `.glb` asset paths in `Scene.js`.
 - Use semantic model ids such as:
   - `player_human_01`
@@ -145,6 +147,10 @@ Rules:
 
 - Enemy movement must use the same walkable/collision navigation rules as the player.
 - EnemyAI owns patrol and behavior decisions.
+- `EnemyAI.js` should keep shared enemy behavior only: patrol, states, combat flow, drops, damage, stun, and event emission.
+- Enemy-specific stats such as HP, damage, speed, attack range/cooldown, collision radius, model id, and difficulty must come from enemy definition data files, not from room templates or `EnemyAI` defaults.
+- Combat room `enemySpawns` define position and patrol intent; `LevelBuilder` resolves the actual enemy type from `level.enemyDifficulty` using seeded deterministic selection.
+- Enemy difficulty groups are easy, medium, and hard. Current pools are easy: hogs/crabs; medium: skeletons/zombies; hard: orcs/vampires.
 - Scene may inject navigation callbacks such as:
   - `canMoveBetween`
   - `findPath`

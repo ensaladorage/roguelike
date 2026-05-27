@@ -264,14 +264,30 @@ export class GameScene {
 
     const modelEntries = await Promise.all(
       getModelDefinitionsToPreload().map(async (modelDefinition) => {
-        const modelLoader = createModelLoader(modelDefinition);
-        const gltf = await modelLoader.loadAsync(modelDefinition.assetPath);
-        const texture = textures[modelDefinition.textureId];
+        try {
+          const modelLoader = createModelLoader(modelDefinition);
+          const gltf = await modelLoader.loadAsync(modelDefinition.assetPath);
+          const texture = textures[modelDefinition.textureId];
 
-        if (texture) applyTexture(gltf, texture);
-        this.prepareModelForScene(gltf.scene);
+          if (texture) applyTexture(gltf, texture);
+          this.prepareModelForScene(gltf.scene);
 
-        return [modelDefinition.id, { definition: modelDefinition, gltf }];
+          return [modelDefinition.id, { definition: modelDefinition, gltf }];
+        } catch (error) {
+          console.warn(`Model ${modelDefinition.id} is not loaded. Using fallback when needed.`, {
+            assetPath: modelDefinition.assetPath,
+            error: error?.message ?? error,
+          });
+
+          return [
+            modelDefinition.id,
+            {
+              definition: modelDefinition,
+              gltf: null,
+              loadError: error,
+            },
+          ];
+        }
       })
     );
 
@@ -679,7 +695,19 @@ export class GameScene {
     );
 
     return new EnemyAI(enemyRoot, patrolPoints, {
-      collisionRadius: ENEMY_COLLISION_RADIUS,
+      enemyTypeId: data.enemyTypeId,
+      enemyName: data.enemyName,
+      enemyDifficulty: data.enemyDifficulty,
+      maxHp: data.maxHp,
+      hp: data.hp,
+      speed: data.speed,
+      attackDamage: data.attackDamage,
+      attackRange: data.attackRange,
+      attackCooldown: data.attackCooldown,
+      collisionRadius: data.collisionRadius ?? ENEMY_COLLISION_RADIUS,
+      patrolStopRange: data.patrolStopRange,
+      patrolMoveDuration: data.patrolMoveDuration,
+      patrolPauseDurations: data.patrolPauseDurations,
       patrolAreas: data.patrolAreas,
       navigation: this.createEnemyNavigation(),
     });
