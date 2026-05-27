@@ -90,6 +90,7 @@ export class LevelBuilder {
       wallModules: (levelDefinition.wallModules ?? []).map(cloneArea),
       doorwayModules: (levelDefinition.doorwayModules ?? []).map(cloneArea),
       decorativeModules: [
+        ...(levelDefinition.setDressingModules ?? []),
         ...(levelDefinition.decorativeModules ?? []),
         ...(levelDefinition.obstacleModules ?? []),
       ].map(cloneArea),
@@ -220,6 +221,7 @@ export class LevelBuilder {
       environment.wallModules.push(...wallModules);
       environment.doorwayModules.push(...doorwayModules);
       environment.decorativeModules.push(...generatedDecorativeModules);
+      environment.decorativeModules.push(...(room.setDressingModules ?? []));
       environment.decorativeModules.push(...(room.decorativeModules ?? []));
       environment.decorativeModules.push(...room.obstacleModules);
       if (stairsModule) {
@@ -626,6 +628,7 @@ export class LevelBuilder {
 
   createDecorationCollisionModules(source) {
     return [
+      ...(source.setDressingModules ?? []),
       ...(source.decorativeModules ?? []),
       ...(source.obstacleModules ?? []),
     ]

@@ -80,6 +80,7 @@ New rooms must be reusable room templates and must declare:
 - `enemySpawns`
 - `chestSpawns`
 - optional `obstacles`
+- optional `setDressingModules` only for fixed authored room markers such as exit banners
 - optional `decorZones` for semantic decoration guidance only
 - optional `modelId` on enemy/chest spawns
 
@@ -98,6 +99,7 @@ Rules:
 - Decoration placement must stay out of `Scene.js`; use `DecorationBuilder`, `PropPlacementRules`, room templates, and level data.
 - Decorative props are generated from seeded level decoration config, not hand-placed in room scripts.
 - Do not add `decorativeModules` to room templates for props such as `floorDetail`, `stones`, barrels, banners, rubble, or set dressing.
+- Exit room banners are a special authored marker: place them in `setDressingModules`, not in procedural decoration or `decorativeModules`.
 - Use `obstacleModules` only for intentional gameplay blockers or collision obstacles, not for ordinary decoration.
 - Use `decorZones` only as semantic hints for procedural placement; they should not contain concrete props.
 - Seeded decoration must remain deterministic for a given run seed.

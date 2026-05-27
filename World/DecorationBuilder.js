@@ -672,6 +672,7 @@ export class DecorationBuilder {
     return [
       ...(room.wallModules ?? []),
       ...(room.doorwayModules ?? []),
+      ...(room.setDressingModules ?? []),
       ...(room.decorativeModules ?? []),
       ...(room.obstacleModules ?? []),
       ...(room.chestSpawns ?? []).map((spawn) => ({ ...spawn, w: 1, d: 1 })),
@@ -686,6 +687,7 @@ export class DecorationBuilder {
 
   createNavigationBlockingModules(room, extraOccupiedModules) {
     return [
+      ...(room.setDressingModules ?? []),
       ...(room.decorativeModules ?? []),
       ...(room.obstacleModules ?? []),
       ...(extraOccupiedModules ?? []),

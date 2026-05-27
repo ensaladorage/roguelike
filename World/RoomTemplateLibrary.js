@@ -153,6 +153,9 @@ export class RoomTemplateLibrary {
       doorwayModules: template.doorwayModules.map((module) =>
         transformArea(module, placement, quarterTurns)
       ),
+      setDressingModules: (template.setDressingModules ?? []).map((module) =>
+        transformArea(module, placement, quarterTurns)
+      ),
       decorativeModules: (template.decorativeModules ?? []).map((module) =>
         transformArea(module, placement, quarterTurns)
       ),

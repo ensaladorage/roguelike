@@ -251,6 +251,7 @@ function createRectRoomTemplate({
   enemySpawns = [],
   chestSpawns = [],
   exitMarker = null,
+  setDressingModules = [],
   obstacleModules = [],
   decorZones = [],
 }) {
@@ -288,6 +289,7 @@ function createRectRoomTemplate({
     enemySpawns,
     chestSpawns,
     exitMarker,
+    setDressingModules,
     obstacleModules,
     decorZones,
   };
