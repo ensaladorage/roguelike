@@ -64,6 +64,7 @@ Build a simple top-down 3D roguelike with:
   - `exitRooms.js`
 - `Data/roomTemplates.js` is the room template registry.
 - Seeded procedural room decoration is configured from level data and built by `World/DecorationBuilder.js` using rules from `World/PropPlacementRules.js`.
+- Manual room-composition smoke tests live in `Game/RoomTester.js`; use it to assemble specific rooms for visual/playable testing without changing `LevelBuilder`.
 
 ---
 

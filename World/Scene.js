@@ -15,7 +15,7 @@ import { ChestManager } from "./Chest.js";
 import { CoinManager } from "./Coin.js";
 import { ItemDropManager } from "./ItemDrop.js";
 import { Environment } from "./Environment.js";
-import { PROCEDURAL_LEVELS } from "../Game/ProceduralLevelFactory.js";
+import { ROOM_TESTER_LEVELS } from "../Game/RoomTester.js";
 import { ROOM_TEMPLATES } from "../Data/roomTemplates.js";
 import {
   DEFAULT_ENEMY_MODEL_ID,
@@ -54,7 +54,7 @@ export class GameScene {
     this.coinManager = new CoinManager(this);
     this.itemDropManager = new ItemDropManager(this);
     this.models = {};
-    this.levelDefinitions = PROCEDURAL_LEVELS;
+    this.levelDefinitions = ROOM_TESTER_LEVELS;
     this.roomTemplateLibrary = new RoomTemplateLibrary(ROOM_TEMPLATES);
     this.levelBuilder = new LevelBuilder({
       roomTemplateLibrary: this.roomTemplateLibrary,
