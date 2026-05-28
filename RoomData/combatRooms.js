@@ -477,14 +477,28 @@ export const COMBAT_ROOM_TEMPLATES = [
           { x: 7.4, z: 7.6 },
         ],
       },
+      {
+        x: -8.2,
+        z: 6.8,
+        modelId: "enemy_hog_01",
+        patrol: [
+          { x: -8.2, z: 6.8 },
+          { x: -9.4, z: 3.2 },
+          { x: -7.1, z: 9.2 },
+        ],
+      },
+      {
+        x: 8.2,
+        z: 6.8,
+        modelId: "enemy_hog_01",
+        patrol: [
+          { x: 8.2, z: 6.8 },
+          { x: 9.4, z: 3.2 },
+          { x: 7.1, z: 9.2 },
+        ],
+      },
     ],
     chestSpawns: [
-      {
-        x: -10,
-        z: -7,
-        rotationY: Math.PI / 2,
-        modelId: "chest_01",
-      },
       {
         x: -9.5,
         z: 8,
@@ -495,12 +509,6 @@ export const COMBAT_ROOM_TEMPLATES = [
         x: 9.5,
         z: 8,
         rotationY: Math.PI,
-        modelId: "chest_01",
-      },
-      {
-        x: 10,
-        z: -7,
-        rotationY: -Math.PI / 2,
         modelId: "chest_01",
       },
     ],
