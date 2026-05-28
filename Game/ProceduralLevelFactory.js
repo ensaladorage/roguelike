@@ -1,7 +1,7 @@
-import { COMBAT_ROOM_TEMPLATES } from "../Data/combatRooms.js";
-import { ENTER_ROOM_TEMPLATES } from "../Data/enterRooms.js";
-import { EXIT_ROOM_TEMPLATES } from "../Data/exitRooms.js";
-import { TREASURE_ROOM_TEMPLATES } from "../Data/treasureRooms.js";
+import { COMBAT_ROOM_TEMPLATES } from "../RoomData/combatRooms.js";
+import { ENTER_ROOM_TEMPLATES } from "../RoomData/enterRooms.js";
+import { EXIT_ROOM_TEMPLATES } from "../RoomData/exitRooms.js";
+import { TREASURE_ROOM_TEMPLATES } from "../RoomData/treasureRooms.js";
 
 const MAX_GENERATION_ATTEMPTS = 120;
 const ROOM_TOUCH_EPSILON = 0.001;

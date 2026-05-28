@@ -1,4 +1,4 @@
-import { GameScene } from "./World/Scene.js";
+import { GameScene } from "./Core/Scene.js";
 
 const container = document.querySelector("#game");
 

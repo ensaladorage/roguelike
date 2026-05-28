@@ -1,5 +1,5 @@
 import * as THREE from "three";
-import { splitCoinValueIntoTypes } from "./Coin.js";
+import { splitCoinValueIntoTypes } from "../Game/Coin.js";
 
 export const ENEMY_POTION_DROP = {
   itemId: "energyDrink",

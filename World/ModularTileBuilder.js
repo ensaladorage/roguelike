@@ -1,7 +1,7 @@
 import * as THREE from "three";
 import { GLTFLoader } from "three/addons/loaders/GLTFLoader.js";
 import * as SkeletonUtils from "three/addons/utils/SkeletonUtils.js";
-import { getTileSetDefinition } from "../Data/tileSetDefinitions.js";
+import { getTileSetDefinition } from "../RoomData/tileSetDefinitions.js";
 
 export class ModularTileBuilder {
   constructor(scene) {

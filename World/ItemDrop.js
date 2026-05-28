@@ -1,6 +1,6 @@
 import * as THREE from "three";
 import { flatDistance } from "../Game/Utils.js";
-import { getItemDefinition } from "../Data/itemDefinitions.js";
+import { getItemDefinition } from "../CharacterData/itemDefinitions.js";
 
 const ITEM_DROP_LAUNCH_DURATION = 0.9;
 const ITEM_DROP_LAUNCH_HEIGHT = 2.2;

@@ -57,7 +57,7 @@ export const MODEL_DEFINITIONS = {
       category: MODEL_CATEGORIES.ENEMY,
       assetPath: "Assets/Models/animal-crab.glb",
       textureId: "animalsColormap",
-      scale: 0.45,
+      scale: 0.3,
     },
     enemy_skeleton_01: {
       id: "enemy_skeleton_01",

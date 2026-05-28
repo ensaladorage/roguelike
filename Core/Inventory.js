@@ -3,7 +3,7 @@ import {
   getItemDefinitionByUseSlot,
   getItemDefinition,
   getItemMaxStack,
-} from "../Data/itemDefinitions.js";
+} from "../CharacterData/itemDefinitions.js";
 
 export class Inventory {
   constructor({ player, itemEffects }) {

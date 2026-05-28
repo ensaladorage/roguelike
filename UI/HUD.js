@@ -1,7 +1,7 @@
 import {
   getItemDefinitionByUseSlot,
   getItemMaxStack,
-} from "../Data/itemDefinitions.js";
+} from "../CharacterData/itemDefinitions.js";
 
 const QUICK_USE_SLOTS = [1, 2];
 

@@ -1,6 +1,6 @@
 import * as THREE from "three";
-import { flatDistance } from "../Game/Utils.js";
-import { DEFAULT_COIN_MODEL_ID } from "../Data/modelDefinitions.js";
+import { flatDistance } from "./Utils.js";
+import { DEFAULT_COIN_MODEL_ID } from "../CharacterData/modelDefinitions.js";
 
 const COIN_OCCLUSION_RING_RADIUS = 0.15;
 const COIN_OCCLUSION_RING_THICKNESS = 0.018;

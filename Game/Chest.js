@@ -1,6 +1,6 @@
 import * as THREE from "three";
-import { flatDistance } from "../Game/Utils.js";
-import { DEFAULT_CHEST_MODEL_ID } from "../Data/modelDefinitions.js";
+import { flatDistance } from "./Utils.js";
+import { DEFAULT_CHEST_MODEL_ID } from "../CharacterData/modelDefinitions.js";
 import { splitCoinValueIntoTypes } from "./Coin.js";
 
 export const CHEST_REWARD = {

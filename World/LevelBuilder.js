@@ -2,7 +2,7 @@ import { DecorationBuilder } from "./DecorationBuilder.js";
 import {
   ENEMY_DIFFICULTY,
   pickEnemyDefinitionForDifficulty,
-} from "../Data/enemyDefinitions.js";
+} from "../CharacterData/enemyDefinitions.js";
 
 function cloneArea(area) {
   return {

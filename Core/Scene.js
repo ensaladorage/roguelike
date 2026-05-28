@@ -1,31 +1,31 @@
 import * as THREE from "three";
 import { GLTFLoader } from "three/addons/loaders/GLTFLoader.js";
 import * as SkeletonUtils from "three/addons/utils/SkeletonUtils.js";
-import { EnemyAI } from "./EnemyAI.js";
-import { Player } from "../Core/Player.js";
-import { setupInput, setupInventoryInput } from "../Core/Input.js";
-import { Inventory } from "../Core/Inventory.js";
-import { ItemEffects } from "../Core/ItemEffects.js";
+import { EnemyAI } from "../World/EnemyAI.js";
+import { Player } from "./Player.js";
+import { setupInput, setupInventoryInput } from "./Input.js";
+import { Inventory } from "./Inventory.js";
+import { ItemEffects } from "./ItemEffects.js";
 import { GameManager } from "../Game/GameManager.js";
 import { flatDistance } from "../Game/Utils.js";
 import { HUD } from "../UI/HUD.js";
 import { SFX } from "../UI/SFX.js";
 import { VFX } from "../UI/VFX.js";
-import { ChestManager } from "./Chest.js";
-import { CoinManager } from "./Coin.js";
-import { ItemDropManager } from "./ItemDrop.js";
-import { Environment } from "./Environment.js";
+import { ChestManager } from "../Game/Chest.js";
+import { CoinManager } from "../Game/Coin.js";
+import { ItemDropManager } from "../World/ItemDrop.js";
+import { Environment } from "../World/Environment.js";
 import { ROOM_TESTER_LEVELS } from "../Game/RoomTester.js";
-import { ROOM_TEMPLATES } from "../Data/roomTemplates.js";
+import { ROOM_TEMPLATES } from "../RoomData/roomTemplates.js";
 import {
   DEFAULT_ENEMY_MODEL_ID,
   DEFAULT_PLAYER_MODEL_ID,
   MODEL_TEXTURE_DEFINITIONS,
   getModelDefinitionsToPreload,
-} from "../Data/modelDefinitions.js";
-import { RoomTemplateLibrary } from "./RoomTemplateLibrary.js";
-import { LevelBuilder } from "./LevelBuilder.js";
-import { ModularTileBuilder } from "./ModularTileBuilder.js";
+} from "../CharacterData/modelDefinitions.js";
+import { RoomTemplateLibrary } from "../World/RoomTemplateLibrary.js";
+import { LevelBuilder } from "../World/LevelBuilder.js";
+import { ModularTileBuilder } from "../World/ModularTileBuilder.js";
 
 const PLAYER_GROUND_Y = 0;
 const PLAYER_COLLISION_RADIUS = 0.32;

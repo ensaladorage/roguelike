@@ -2,7 +2,7 @@ import { flatDistance } from "../Game/Utils.js";
 import {
   ITEM_EFFECTS,
   getItemDefinition,
-} from "../Data/itemDefinitions.js";
+} from "../CharacterData/itemDefinitions.js";
 
 export class ItemEffects {
   apply(itemId, context = {}) {
