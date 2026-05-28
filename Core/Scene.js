@@ -15,7 +15,6 @@ import { ChestManager } from "../Game/Chest.js";
 import { CoinManager } from "../Game/Coin.js";
 import { ItemDropManager } from "../World/ItemDrop.js";
 import { Environment } from "../World/Environment.js";
-import { ROOM_TESTER_LEVELS } from "../Game/RoomTester.js";
 import { ROOM_TEMPLATES } from "../RoomData/roomTemplates.js";
 import {
   DEFAULT_ENEMY_MODEL_ID,
@@ -54,7 +53,6 @@ export class GameScene {
     this.coinManager = new CoinManager(this);
     this.itemDropManager = new ItemDropManager(this);
     this.models = {};
-    this.levelDefinitions = ROOM_TESTER_LEVELS;
     this.roomTemplateLibrary = new RoomTemplateLibrary(ROOM_TEMPLATES);
     this.levelBuilder = new LevelBuilder({
       roomTemplateLibrary: this.roomTemplateLibrary,
@@ -80,10 +78,9 @@ export class GameScene {
     container.appendChild(this.renderer.domElement);
 
     this.clock = new THREE.Clock();
-    this.runSeed = this.createRunSeed();
-    this.levelGeneration = 0;
     this.floorSize = 48;
     this.levelIndex = 0;
+    this.currentFloorLoad = null;
     this.levelGroup = new THREE.Group();
     this.scene.add(this.levelGroup);
 
@@ -133,7 +130,7 @@ export class GameScene {
       this.addLog("Error creating player: " + (err.message || err));
     }
 
-    this.loadLevel(0);
+    this.loadLevel();
 
     setupInput(this.renderer, this.camera, this.floor, (point) => {
       const navigation = this.getClickNavigation(point);
@@ -156,33 +153,13 @@ export class GameScene {
   }
 
   async preloadEnvironmentTileSets() {
-    const tileSetIds = [
-      ...new Set(
-        this.levelDefinitions.map(
-          (level) => level.tileSetId ?? "scenarioDefault"
-        )
-      ),
-    ];
+    const tileSetIds = this.gameManager.getPreloadTileSetIds();
 
     await Promise.all(
       tileSetIds.map((tileSetId) =>
         this.modularTileBuilder.preloadTileSet(tileSetId)
       )
     );
-  }
-
-  resolveLevelDefinition(levelIndex) {
-    const definition = this.levelDefinitions[levelIndex];
-
-    if (typeof definition?.create === "function") {
-      return definition.create({
-        runSeed: this.runSeed,
-        generation: this.levelGeneration,
-        levelIndex,
-      });
-    }
-
-    return definition;
   }
 
   async loadGameModels() {
@@ -384,16 +361,22 @@ export class GameScene {
     this.player = new Player(playerRoot);
   }
 
-  loadLevel(levelIndex) {
-    const definition = this.resolveLevelDefinition(levelIndex);
+  loadLevel(options = {}) {
+    const floorLoad = this.gameManager.resolveFloor();
+    const definition = floorLoad?.definition;
     if (!definition) return;
 
+    const progressSnapshot = options.preserveProgress
+      ? this.createProgressSnapshot()
+      : null;
     const level = this.levelBuilder.build(definition, {
-      runSeed: this.runSeed,
+      runSeed: floorLoad.currentFloorSeed,
+      floorSeed: floorLoad.currentFloorSeed,
     });
     if (!level) return;
 
-    this.levelIndex = levelIndex;
+    this.currentFloorLoad = floorLoad;
+    this.levelIndex = floorLoad.levelIndex ?? floorLoad.currentFloorIndex ?? 0;
     if (this.vfx) this.vfx.clear();
     this.levelGroup.clear();
     this.enemy = null;
@@ -419,15 +402,21 @@ export class GameScene {
     this.chestManager.load(level);
     this.addLevelEnemies(level);
     this.placePlayer(level.playerStart);
+    this.restoreProgressSnapshot(progressSnapshot);
 
     this.updateHud();
     this.addLog(`${level.name} loaded.`);
-    this.addLog(`Seed: ${this.runSeed}`);
+    this.addLog(`Mode: ${floorLoad.mode}. Floor ${floorLoad.currentFloorIndex}.`);
+    this.addLog(`Seed: ${floorLoad.currentFloorSeed}`);
     console.log("levelLoaded", {
-      level: levelIndex + 1,
+      mode: floorLoad.mode,
+      floorIndex: floorLoad.currentFloorIndex,
       name: level.name,
-      runSeed: this.runSeed,
-      generation: this.levelGeneration,
+      runSeed: floorLoad.runSeed,
+      floorSeed: floorLoad.currentFloorSeed,
+      floorType: floorLoad.floorType,
+      difficultyTier: floorLoad.difficultyTier,
+      status: floorLoad.status,
       procedural: level.procedural ?? null,
       navigation: {
         bounds: levelBounds,
@@ -483,14 +472,10 @@ export class GameScene {
     );
   }
 
-  reloadCurrentLevel() {
-    const progressSnapshot = this.createProgressSnapshot();
-
-    this.levelGeneration += 1;
-    this.runSeed = this.createRunSeed();
-    this.loadLevel(this.levelIndex);
-    this.restoreProgressSnapshot(progressSnapshot);
-    this.updateHud();
+  reloadCurrentLevel(options = {}) {
+    this.loadLevel({
+      preserveProgress: options.preserveProgress ?? true,
+    });
   }
 
   createProgressSnapshot() {
@@ -507,9 +492,11 @@ export class GameScene {
     this.inventory?.restoreProgressSnapshot?.(snapshot.inventory);
   }
 
-  createRunSeed() {
-    const randomPart = Math.random().toString(36).slice(2, 10);
-    return `${Date.now().toString(36)}-${randomPart}`;
+  resetGameplayProgress() {
+    this.player?.resetProgress?.();
+    this.inventory?.reset?.();
+    this.hud?.clearLog?.();
+    this.updateHud();
   }
 
   placePlayer(position) {
@@ -1395,11 +1382,14 @@ export class GameScene {
 
     this.levelExitTrigger.activated = true;
     console.log("levelExitTriggerReached", {
-      from: this.levelIndex + 1,
+      from: this.currentFloorLoad?.currentFloorIndex ?? this.levelIndex,
+      mode: this.currentFloorLoad?.mode,
     });
     this.gameManager.handleEvent({
       type: "levelExitReached",
       levelIndex: this.levelIndex,
+      floorIndex: this.currentFloorLoad?.currentFloorIndex,
+      mode: this.currentFloorLoad?.mode,
     });
   }
 

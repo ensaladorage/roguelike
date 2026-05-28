@@ -217,4 +217,12 @@ export class HUD {
       this.logElement.appendChild(p);
     }
   }
+
+  clearLog() {
+    this.logEntries = [];
+
+    if (this.logElement) {
+      this.logElement.innerHTML = "";
+    }
+  }
 }

@@ -1,3 +1,4 @@
+import { ENEMY_DIFFICULTY } from "../CharacterData/enemyDefinitions.js";
 import { COMBAT_ROOM_TEMPLATES } from "../RoomData/combatRooms.js";
 import { ENTER_ROOM_TEMPLATES } from "../RoomData/enterRooms.js";
 import { EXIT_ROOM_TEMPLATES } from "../RoomData/exitRooms.js";
@@ -72,18 +73,32 @@ export const PROCEDURAL_LEVELS = [
   },
 ];
 
+export function createProceduralFloor(options = {}) {
+  return createProceduralLevelOne(options);
+}
+
 export function createProceduralLevelOne(options = {}) {
-  const rng = createSeededRandom(
-    `${options.runSeed ?? Date.now()}:level1:${options.generation ?? 0}`
-  );
+  const floorIndex = getFloorIndex(options);
+  const floorSeed =
+    options.floorSeed ??
+    `${options.runSeed ?? Date.now()}:floor:${String(floorIndex).padStart(2, "0")}`;
+  const rng = createSeededRandom(floorSeed);
 
   for (let attempt = 0; attempt < MAX_GENERATION_ATTEMPTS; attempt += 1) {
-    const level = tryCreateProceduralLevelOne(rng, options, attempt);
+    const level = tryCreateProceduralLevelOne(
+      rng,
+      {
+        ...options,
+        floorIndex,
+        floorSeed,
+      },
+      attempt
+    );
 
     if (level) return level;
   }
 
-  throw new Error("Could not generate a connected procedural level 1.");
+  throw new Error(`Could not generate a connected procedural floor ${floorIndex}.`);
 }
 
 function tryCreateProceduralLevelOne(rng, options, attempt) {
@@ -150,20 +165,26 @@ function tryCreateProceduralLevelOne(rng, options, attempt) {
     .map((room) => room.templateId.replace(/_room/g, ""))
     .join(" -> ");
 
+  const floorIndex = getFloorIndex(options);
+  const floorSeed = options.floorSeed ?? `${options.runSeed ?? "run"}:floor:${floorIndex}`;
+  const difficultyTier = options.difficultyTier ?? ENEMY_DIFFICULTY.EASY;
+
   return {
     kind: "assembled",
     tileSetId: "scenarioDefault",
-    name: `Procedural Level 1 (${roomSummary})`,
+    name: `Procedural Floor ${floorIndex} (${roomSummary})`,
     connectorStyleId: "openCorridor",
-    enemyDifficulty: "easy",
+    enemyDifficulty: difficultyTier,
     decorationFill: PROCEDURAL_DECORATION_FILL,
     playerStart,
     floorSize,
     floorCenter,
     procedural: {
-      floor: 1,
+      floor: floorIndex,
+      floorSeed,
+      floorType: options.floorType ?? "procedural",
+      difficultyTier,
       attempt,
-      generation: options.generation ?? 0,
       roomCount: rooms.length,
       treasureCount,
       combatCount,
@@ -513,4 +534,8 @@ function hashString(value) {
   }
 
   return hash >>> 0;
+}
+
+function getFloorIndex(options = {}) {
+  return options.floorIndex ?? (options.levelIndex ?? 0) + 1;
 }

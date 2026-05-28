@@ -146,6 +146,13 @@ export class Inventory {
     this.knownConsumables = new Set(snapshot.knownConsumables ?? []);
   }
 
+  reset() {
+    this.passives.clear();
+    this.consumables.clear();
+    this.knownConsumables.clear();
+    this.events = [];
+  }
+
   getPassiveEntries() {
     return this.getEntries(this.passives).sort(this.sortEntriesByHudSlot);
   }

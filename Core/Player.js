@@ -48,6 +48,7 @@ export class Player {
     this.occlusionSample = new THREE.Vector3();
     this.occlusionMarker = this.createOcclusionMarker();
     this.model.add(this.occlusionMarker);
+    this.initialProgressSnapshot = this.createProgressSnapshot();
   }
 
   getAttackCooldownFromSpeed(attackSpeed) {
@@ -86,6 +87,19 @@ export class Player {
     } else if (snapshot.attackCooldown !== undefined) {
       this.attackCooldown = snapshot.attackCooldown;
     }
+  }
+
+  resetProgress() {
+    this.restoreProgressSnapshot(this.initialProgressSnapshot);
+    this.target = null;
+    this.path = [];
+    this.currentEnemy = null;
+    this.state = PLAYER_STATES.IDLE;
+    this.attackTimer = 0;
+    this.events = [];
+    this.visualRotation = 0;
+    this.model.rotation.y = 0;
+    this.model.visible = true;
   }
 
   createOcclusionMarker() {
