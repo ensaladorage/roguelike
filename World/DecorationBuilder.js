@@ -156,6 +156,10 @@ export class DecorationBuilder {
     return entry.roomTypes.includes(room.type);
   }
 
+  entryRequiresFreeTile(entry) {
+    return entry.occupiesTile || entry.collision;
+  }
+
   createScatteredProps({ entry, room, occupiedModules, blockingModules }) {
     const modules = [];
     const usedTileKeys = new Set();
@@ -166,7 +170,9 @@ export class DecorationBuilder {
       if (usedTileKeys.has(key)) continue;
       usedTileKeys.add(key);
 
-      if (!this.canPlaceAtTile(tile, entry, occupiedModules)) continue;
+      if (this.entryRequiresFreeTile(entry) && !this.canPlaceAtTile(tile, entry, occupiedModules)) {
+        continue;
+      }
 
       const roll = this.createDeterministicUnit(
         `${entry.seed}:${entry.moduleId}:${room.id}:${key}`
@@ -175,7 +181,9 @@ export class DecorationBuilder {
 
       const module = this.createPropModule(entry, tile, room, key);
       if (!this.isPointInsideAnyArea(module, room.walkableAreas ?? [])) continue;
-      if (!this.canPlaceModule(module, occupiedModules)) continue;
+      if (this.entryRequiresFreeTile(entry) && !this.canPlaceModule(module, occupiedModules)) {
+        continue;
+      }
       if (!this.keepsNavigationValid(room, module, blockingModules)) continue;
 
       modules.push(module);

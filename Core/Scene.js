@@ -422,6 +422,7 @@ export class GameScene {
 
     this.updateHud();
     this.addLog(`${level.name} loaded.`);
+    this.addLog(`Seed: ${this.runSeed}`);
     console.log("levelLoaded", {
       level: levelIndex + 1,
       name: level.name,

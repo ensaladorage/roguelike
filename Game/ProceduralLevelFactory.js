@@ -22,6 +22,8 @@ const SIDE_VECTOR = {
 
 const COMBAT_ROOM_COUNT = { min: 2, max: 3 };
 const TREASURE_ROOM_COUNT = { min: 3, max: 4 };
+const ENTRY_STAIRS_OFFSET_FROM_WALL = 1.5;
+const PLAYER_START_OFFSET_FROM_ENTRY_STAIRS = 1;
 
 const PROCEDURAL_DECORATION_FILL = {
   seed: "random",
@@ -454,7 +456,7 @@ function getPlayerStartFromEnterRoom(enterRoom, nextRoom) {
     (opening) => opening.side === OPPOSITE_SIDE[connectedOpening?.side]
   ) ?? enterRoom.openings[0];
   const direction = SIDE_VECTOR[OPPOSITE_SIDE[startOpening.side]];
-  const offset = 2.5;
+  const offset = ENTRY_STAIRS_OFFSET_FROM_WALL + PLAYER_START_OFFSET_FROM_ENTRY_STAIRS;
 
   return {
     x: startOpening.x + direction.x * offset,
