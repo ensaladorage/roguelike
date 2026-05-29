@@ -166,6 +166,10 @@ export class DecorationBuilder {
     const candidateTiles = this.getCandidateTilesForEntry(room, entry);
 
     for (const tile of candidateTiles) {
+      if (this.shouldSkipPointForStairs(entry, tile, occupiedModules)) {
+        continue;
+      }
+
       const key = this.getTileKey(tile);
       if (usedTileKeys.has(key)) continue;
       usedTileKeys.add(key);
@@ -381,6 +385,7 @@ export class DecorationBuilder {
       .map((candidate) => candidate.tile);
 
     for (const anchor of anchors) {
+      if (this.shouldSkipPointForStairs(entry, anchor, occupiedModules)) continue;
       if (!this.canPlaceAtTile(anchor, entry, occupiedModules)) continue;
 
       const cluster = this.createClusterAtAnchor({
@@ -412,6 +417,7 @@ export class DecorationBuilder {
 
     for (const point of candidates) {
       if (cluster.length >= targetSize) break;
+      if (this.shouldSkipPointForStairs(entry, point, localOccupied)) continue;
       const module = this.createPropModule(entry, point, room, this.getTileKey(point), {
         usePositionJitter: false,
       });
@@ -784,6 +790,25 @@ export class DecorationBuilder {
 
   isPointInsideAnyArea(point, areas) {
     return areas.some((area) => this.areaContainsPoint(area, point));
+  }
+
+  shouldSkipPointForStairs(entry, point, occupiedModules) {
+    if (!this.entryAvoidsStairTiles(entry)) return false;
+
+    return (occupiedModules ?? []).some((module) =>
+      this.isStairsModule(module) &&
+      this.areaContainsPoint(this.createBlockingArea(module), point)
+    );
+  }
+
+  entryAvoidsStairTiles(entry) {
+    return entry.moduleId === "floorDetail" || entry.moduleId === "stones";
+  }
+
+  isStairsModule(module) {
+    return module?.moduleId === "stairs" ||
+      module?.role === "entryStairs" ||
+      module?.role === "exitStairs";
   }
 
   areasOverlap(a, b) {
