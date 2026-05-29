@@ -6,16 +6,18 @@ import { Player } from "./Player.js";
 import { setupInput, setupInventoryInput } from "./Input.js";
 import { Inventory } from "./Inventory.js";
 import { ItemEffects } from "./ItemEffects.js";
-import { GameManager } from "../Game/GameManager.js";
+import { GAME_MODES, GameManager } from "../Game/GameManager.js";
 import { flatDistance } from "../Game/Utils.js";
 import { HUD } from "../UI/HUD.js";
 import { SFX } from "../UI/SFX.js";
 import { VFX } from "../UI/VFX.js";
+import { DebugCheats } from "../UI/DebugCheats.js";
 import { ChestManager } from "../Game/Chest.js";
 import { CoinManager } from "../Game/Coin.js";
 import { ItemDropManager } from "../World/ItemDrop.js";
 import { Environment } from "../World/Environment.js";
 import { ROOM_TESTER_LEVELS } from "../Game/RoomTester.js";
+import { PROCEDURAL_LEVELS } from "../Game/ProceduralLevelFactory.js";
 import { ROOM_TEMPLATES } from "../RoomData/roomTemplates.js";
 import {
   DEFAULT_ENEMY_MODEL_ID,
@@ -54,7 +56,9 @@ export class GameScene {
     this.coinManager = new CoinManager(this);
     this.itemDropManager = new ItemDropManager(this);
     this.models = {};
-    this.levelDefinitions = ROOM_TESTER_LEVELS;
+    this.gameMode = this.resolveGameMode();
+    this.runResetConfig = this.resolveRunResetConfig();
+    this.levelDefinitions = this.getLevelDefinitionsForMode(this.gameMode);
     this.roomTemplateLibrary = new RoomTemplateLibrary(ROOM_TEMPLATES);
     this.levelBuilder = new LevelBuilder({
       roomTemplateLibrary: this.roomTemplateLibrary,
@@ -99,9 +103,16 @@ export class GameScene {
     this.feedbackEffects = [];
 
     this.hud = new HUD();
+    this.debugCheats = new DebugCheats({
+      onSelect: (cheat) => this.applyDebugCheat(cheat),
+    });
     this.sfx = new SFX();
     this.vfx = new VFX({ root: this.levelGroup });
-    this.gameManager = new GameManager(this);
+    this.gameManager = new GameManager(this, {
+      mode: this.gameMode,
+      runSeed: this.runSeed,
+      runResetConfig: this.runResetConfig,
+    });
     this.itemEffects = new ItemEffects();
     this.inventory = null;
 
@@ -169,6 +180,29 @@ export class GameScene {
         this.modularTileBuilder.preloadTileSet(tileSetId)
       )
     );
+  }
+
+  resolveGameMode() {
+    const params = new URLSearchParams(window.location.search);
+    const requestedMode = params.get("mode");
+
+    return requestedMode === GAME_MODES.RUN
+      ? GAME_MODES.RUN
+      : GAME_MODES.TESTER;
+  }
+
+  resolveRunResetConfig() {
+    const config = window.ROGUELIKE_CONFIG?.runReset ?? {};
+
+    return {
+      reuseSeedOnRestart: Boolean(config.reuseSeedOnRestart),
+    };
+  }
+
+  getLevelDefinitionsForMode(mode) {
+    return mode === GAME_MODES.RUN
+      ? PROCEDURAL_LEVELS
+      : ROOM_TESTER_LEVELS;
   }
 
   resolveLevelDefinition(levelIndex) {
@@ -384,7 +418,7 @@ export class GameScene {
     this.player = new Player(playerRoot);
   }
 
-  loadLevel(levelIndex) {
+  loadLevel(levelIndex, options = {}) {
     const definition = this.resolveLevelDefinition(levelIndex);
     if (!definition) return;
 
@@ -394,20 +428,15 @@ export class GameScene {
     if (!level) return;
 
     this.levelIndex = levelIndex;
-    if (this.vfx) this.vfx.clear();
-    this.levelGroup.clear();
-    this.enemy = null;
-    this.enemies = [];
-    this.chests = [];
-    if (this.coinManager) this.coinManager.clear();
-    if (this.itemDropManager) this.itemDropManager.clear();
-    this.walkableAreas = [];
-    this.collisionWalls = [];
-    this.wallMeshes = [];
-    this.navBounds = null;
-    this.levelExitTrigger = null;
-    this.clickEffects = [];
-    this.feedbackEffects = [];
+    this.clearCurrentFloorState();
+
+    if (options.resetProgress) {
+      this.resetPlayerProgressForMode();
+    }
+
+    if (options.resetLog) {
+      this.hud.clearLog();
+    }
 
     const levelBounds = this.calculateAreaBounds(level.walkableAreas ?? []);
     const floorSize = level.floorSize ?? this.getFloorSizeForBounds(levelBounds);
@@ -493,6 +522,88 @@ export class GameScene {
     this.updateHud();
   }
 
+  reloadTesterFloor(options = {}) {
+    this.gameMode = GAME_MODES.TESTER;
+    this.levelDefinitions = this.getLevelDefinitionsForMode(this.gameMode);
+    this.levelGeneration += 1;
+
+    this.loadLevel(this.levelIndex, {
+      resetProgress: options.resetProgress ?? true,
+      resetLog: options.resetLog ?? true,
+    });
+  }
+
+  restartRun(options = {}) {
+    this.gameMode = GAME_MODES.RUN;
+    this.levelDefinitions = this.getLevelDefinitionsForMode(this.gameMode);
+    this.runSeed = options.runSeed ?? this.createRunSeed();
+    this.levelGeneration = 0;
+
+    this.loadLevel(0, {
+      resetProgress: options.resetProgress ?? true,
+      resetLog: options.resetLog ?? true,
+    });
+  }
+
+  clearCurrentFloorState() {
+    if (this.vfx) this.vfx.clear();
+    this.clearClickEffects();
+    this.clearFeedbackEffects();
+
+    if (this.chestManager) this.chestManager.clear();
+    if (this.coinManager) this.coinManager.clear();
+    if (this.itemDropManager) this.itemDropManager.clear();
+
+    this.levelGroup.clear();
+    this.enemy = null;
+    this.enemies = [];
+    this.chests = [];
+    this.walkableAreas = [];
+    this.collisionWalls = [];
+    this.wallMeshes = [];
+    this.navBounds = null;
+    this.levelExitTrigger = null;
+  }
+
+  clearClickEffects() {
+    for (const effect of this.clickEffects) {
+      effect.mesh.removeFromParent();
+      effect.material.dispose();
+      effect.mesh.geometry.dispose();
+    }
+
+    this.clickEffects = [];
+  }
+
+  clearFeedbackEffects() {
+    for (const effect of this.feedbackEffects) {
+      this.restoreFlashEffect(effect);
+    }
+
+    this.feedbackEffects = [];
+  }
+
+  restoreFlashEffect(effect) {
+    effect.model?.traverse((child) => {
+      if (!child.isMesh || !child.material) return;
+
+      const materials = Array.isArray(child.material)
+        ? child.material
+        : [child.material];
+
+      for (const material of materials) {
+        if (!material?.color || !material.userData.baseColor) continue;
+
+        material.color.copy(material.userData.baseColor);
+      }
+    });
+  }
+
+  resetPlayerProgressForMode() {
+    this.player?.resetForNewRun?.();
+    this.inventory?.reset?.();
+  }
+
   createProgressSnapshot() {
     return {
       player: this.player?.createProgressSnapshot?.() ?? null,
@@ -517,9 +628,7 @@ export class GameScene {
 
     this.player.model.position.copy(safePosition);
     this.player.groundY = PLAYER_GROUND_Y;
-    this.player.model.visible = true;
-    this.player.currentEnemy = null;
-    this.player.clearTarget();
+    this.player.resetRuntimeState?.();
   }
 
   getSafePlayerStartPosition(position) {
@@ -1381,6 +1490,36 @@ export class GameScene {
     if (events.length > 0) {
       this.handleGameEvents(events);
     }
+  }
+
+  applyDebugCheat(cheat) {
+    if (!this.player) return;
+
+    console.log("debugCheatSelected", cheat.id);
+    this.addLog(`Debug cheat: ${cheat.label}.`);
+
+    switch (cheat.id) {
+      case "killPlayer":
+        this.player.takeDamage(this.player.hp, {
+          type: "debugCheat",
+          id: cheat.id,
+        });
+        break;
+
+      case "takeDamage50":
+        this.player.takeDamage(50, {
+          type: "debugCheat",
+          id: cheat.id,
+        });
+        break;
+
+      default:
+        console.warn("Unknown debug cheat", cheat);
+        break;
+    }
+
+    this.handleGameEvents(this.player.consumeEvents());
+    this.updateHud();
   }
 
   checkLevelExitTrigger() {

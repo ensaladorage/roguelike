@@ -229,6 +229,29 @@
       color: #f4f1e8;
     }
 
+    .defeat-overlay {
+      position: fixed;
+      inset: 0;
+      z-index: 30;
+      display: grid;
+      place-items: center;
+      background: rgba(143, 0, 20, 0.58);
+      pointer-events: auto;
+    }
+
+    .defeat-overlay[hidden] {
+      display: none;
+    }
+
+    .defeat-overlay__text {
+      color: #fff1f1;
+      font-size: 64px;
+      font-weight: 900;
+      line-height: 1;
+      letter-spacing: 0;
+      text-shadow: 0 4px 24px rgba(0, 0, 0, 0.5);
+    }
+
     .footer-hint {
       position: fixed;
       right: 16px;
@@ -307,6 +330,10 @@
 
       .footer-hintleft {
         display: none;
+      }
+
+      .defeat-overlay__text {
+        font-size: 44px;
       }
 
       .quick-use-bar {
@@ -437,6 +464,10 @@
   </section>
 
   <div class="quick-use-bar" id="quickUseBar" aria-label="Consumable quick use"></div>
+
+  <div class="defeat-overlay" id="defeatOverlay" role="status" aria-live="assertive" hidden>
+    <div class="defeat-overlay__text">DEFEATED</div>
+  </div>
 
   <div class="footer-hint">Right click to move. Interact automatically.</div>
   <div class="footer-hintleft">1: Energy Drink 2: Stun Shroom</div>

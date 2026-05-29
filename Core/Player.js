@@ -11,6 +11,14 @@ const OCCLUSION_RING_INNER_RADIUS = 0.42;
 const OCCLUSION_RING_OUTER_RADIUS = 0.5;
 const OCCLUSION_RING_Y = 0.06;
 const MIN_ATTACK_SPEED = 0.1;
+const BASE_PLAYER_STATS = {
+  maxHp: 100,
+  hp: 100,
+  gold: 0,
+  attackDamage: 10,
+  attackRange: 1.65,
+  attackSpeed: 1.2,
+};
 
 export class Player {
   constructor(model) {
@@ -24,13 +32,13 @@ export class Player {
 
     this.speed = 3.5;
 
-    this.maxHp = 100;
-    this.hp = this.maxHp;
-    this.gold = 0;
+    this.maxHp = BASE_PLAYER_STATS.maxHp;
+    this.hp = BASE_PLAYER_STATS.hp;
+    this.gold = BASE_PLAYER_STATS.gold;
 
-    this.attackDamage = 10;
-    this.attackRange = 1.65;
-    this.attackSpeed = 1.2;
+    this.attackDamage = BASE_PLAYER_STATS.attackDamage;
+    this.attackRange = BASE_PLAYER_STATS.attackRange;
+    this.attackSpeed = BASE_PLAYER_STATS.attackSpeed;
     this.attackCooldown = this.getAttackCooldownFromSpeed(this.attackSpeed);
     this.attackTimer = 0;
 
@@ -85,6 +93,30 @@ export class Player {
       this.setAttackSpeed(snapshot.attackSpeed);
     } else if (snapshot.attackCooldown !== undefined) {
       this.attackCooldown = snapshot.attackCooldown;
+    }
+  }
+
+  resetForNewRun() {
+    this.maxHp = BASE_PLAYER_STATS.maxHp;
+    this.hp = BASE_PLAYER_STATS.hp;
+    this.gold = BASE_PLAYER_STATS.gold;
+    this.attackDamage = BASE_PLAYER_STATS.attackDamage;
+    this.attackRange = BASE_PLAYER_STATS.attackRange;
+    this.setAttackSpeed(BASE_PLAYER_STATS.attackSpeed);
+    this.resetRuntimeState();
+  }
+
+  resetRuntimeState() {
+    this.state = PLAYER_STATES.IDLE;
+    this.target = null;
+    this.path = [];
+    this.currentEnemy = null;
+    this.attackTimer = 0;
+    this.events = [];
+    this.model.visible = true;
+
+    if (this.occlusionMarker) {
+      this.occlusionMarker.visible = false;
     }
   }
 

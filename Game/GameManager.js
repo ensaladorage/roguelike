@@ -1,16 +1,37 @@
 import { flatDistance } from "./Utils.js";
 
+export const GAME_MODES = {
+  TESTER: "tester",
+  RUN: "run",
+};
+
+const DEFAULT_RUN_RESET_CONFIG = {
+  reuseSeedOnRestart: false,
+};
+const DEFEATED_RESET_DELAY_MS = 2000;
+
 export class GameManager {
-  constructor(scene) {
+  constructor(scene, options = {}) {
     this.scene = scene;
+    this.mode = options.mode ?? GAME_MODES.TESTER;
     this.isGameOver = false;
-    this.reloadTimer = null;
+    this.isResetting = false;
+    this.resetTimer = null;
     this.combatStartRange = 1;
     this.enemyMovementPauseReason = "playerCombat";
+    this.runResetConfig = {
+      ...DEFAULT_RUN_RESET_CONFIG,
+      ...(options.runResetConfig ?? {}),
+    };
+    this.runState = this.createRunState({
+      mode: this.mode,
+      runSeed: options.runSeed ?? this.scene.runSeed,
+      floorIndex: this.scene.levelIndex ?? 0,
+    });
   }
 
   update() {
-    if (this.isGameOver) return;
+    if (this.isGameOver || this.isResetting) return;
 
     this.updateCombatEngagement();
   }
@@ -74,7 +95,7 @@ export class GameManager {
 
   handleEvent(event) {
     if (event.type === "playerDefeated") {
-      this.onPlayerDeath();
+      this.handlePlayerDeath();
     }
 
     if (event.type === "levelExitReached") {
@@ -82,19 +103,71 @@ export class GameManager {
     }
   }
 
-  onPlayerDeath() {
+  handlePlayerDeath() {
     if (this.isGameOver) return;
 
     this.isGameOver = true;
+    this.clearResetTimer();
+    this.scene.hud?.showDefeatedOverlay?.();
     this.scene.addLog("You died. Restarting...");
 
-    this.reloadTimer = window.setTimeout(() => {
-      this.restart();
-    }, 1800);
+    this.resetTimer = window.setTimeout(() => {
+      this.restartCurrentMode();
+    }, DEFEATED_RESET_DELAY_MS);
   }
 
-  restart() {
-    window.location.reload();
+  restartCurrentMode() {
+    if (this.isResetting) return;
+
+    this.isResetting = true;
+    this.clearResetTimer();
+    this.resumeEnemyMovement(this.scene.enemies);
+
+    try {
+      if (this.mode === GAME_MODES.RUN) {
+        this.restartRun();
+      } else {
+        this.reloadTesterFloor();
+      }
+    } finally {
+      this.isGameOver = false;
+      this.isResetting = false;
+      this.scene.hud?.hideDefeatedOverlay?.();
+      this.scene.updateHud();
+    }
+  }
+
+  restartRun() {
+    const runSeed = this.getRestartRunSeed();
+
+    this.mode = GAME_MODES.RUN;
+    this.runState = this.createRunState({
+      mode: GAME_MODES.RUN,
+      runSeed,
+      floorIndex: 0,
+      status: "active",
+    });
+
+    this.scene.restartRun({
+      runSeed,
+      resetProgress: true,
+      resetLog: true,
+    });
+  }
+
+  reloadTesterFloor() {
+    this.mode = GAME_MODES.TESTER;
+    this.runState = this.createRunState({
+      mode: GAME_MODES.TESTER,
+      runSeed: this.scene.runSeed,
+      floorIndex: this.scene.levelIndex,
+      status: "active",
+    });
+
+    this.scene.reloadTesterFloor({
+      resetProgress: true,
+      resetLog: true,
+    });
   }
 
   onLevelExitReached() {
@@ -103,5 +176,49 @@ export class GameManager {
     this.scene.addLog("Stairs reached. Rebuilding level 1...");
     this.resumeEnemyMovement(this.scene.enemies);
     this.scene.reloadCurrentLevel();
+    this.syncRunStateFromScene();
+  }
+
+  getRestartRunSeed() {
+    if (this.runResetConfig.reuseSeedOnRestart) {
+      return this.runState.runSeed ?? this.scene.runSeed;
+    }
+
+    return this.scene.createRunSeed();
+  }
+
+  createRunState({
+    mode = GAME_MODES.TESTER,
+    runSeed = null,
+    floorIndex = 0,
+    status = "active",
+  } = {}) {
+    const safeFloorIndex = Math.max(0, floorIndex ?? 0);
+
+    return {
+      mode,
+      runSeed,
+      currentFloorIndex: safeFloorIndex,
+      currentFloorSeed: runSeed ? `${runSeed}:floor:${safeFloorIndex + 1}` : null,
+      floorType: mode === GAME_MODES.RUN ? "combat" : "tester",
+      difficultyTier: "easy",
+      status,
+    };
+  }
+
+  clearResetTimer() {
+    if (!this.resetTimer) return;
+
+    window.clearTimeout(this.resetTimer);
+    this.resetTimer = null;
+  }
+
+  syncRunStateFromScene(status = "active") {
+    this.runState = this.createRunState({
+      mode: this.mode,
+      runSeed: this.scene.runSeed,
+      floorIndex: this.scene.levelIndex,
+      status,
+    });
   }
 }

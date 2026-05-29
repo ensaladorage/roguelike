@@ -15,6 +15,7 @@ export class HUD {
     this.itemText = document.querySelector("#itemText");
     this.logElement = document.querySelector("#log");
     this.quickUseElement = document.querySelector("#quickUseBar");
+    this.defeatOverlay = document.querySelector("#defeatOverlay");
     this.quickUseButtons = new Map();
     this.onUseConsumableSlot = null;
     this.logEntries = [];
@@ -25,6 +26,18 @@ export class HUD {
 
   setConsumableUseHandler(handler) {
     this.onUseConsumableSlot = handler;
+  }
+
+  showDefeatedOverlay() {
+    if (!this.defeatOverlay) return;
+
+    this.defeatOverlay.hidden = false;
+  }
+
+  hideDefeatedOverlay() {
+    if (!this.defeatOverlay) return;
+
+    this.defeatOverlay.hidden = true;
   }
 
   updatePlayer(player) {
@@ -183,6 +196,28 @@ export class HUD {
     }, duration);
 
     this.statHighlightTimers.set(statName, timer);
+  }
+
+  clearLog() {
+    this.logEntries = [];
+
+    if (this.logElement) {
+      this.logElement.innerHTML = "";
+    }
+
+    this.clearStatHighlights();
+  }
+
+  clearStatHighlights() {
+    for (const timer of this.statHighlightTimers.values()) {
+      window.clearTimeout(timer);
+    }
+
+    this.statHighlightTimers.clear();
+
+    for (const stat of ["hp", "maxHp", "attackDamage", "attackCooldown", "attackSpeed"]) {
+      this.getStatElement(stat)?.classList.remove("stat-highlight");
+    }
   }
 
   getStatElement(statName) {
