@@ -35,6 +35,8 @@ const CLICK_TARGET_SEARCH_RADIUS = 1.35;
 const CLICK_TARGET_SEARCH_STEP = 0.22;
 const PLAYER_COLLISION_SKIN = 0.04;
 const ENTRY_STAIRS_FRONT_OFFSET = 1;
+const DEBUG_SUPER_SPEED_MULTIPLIER = 5;
+const DEBUG_EXTERMINATOR_DAMAGE = 999999;
 const FRONT_DIRECTION_BY_SIDE = {
   north: { x: 0, z: 1 },
   south: { x: 0, z: -1 },
@@ -97,8 +99,19 @@ export class GameScene {
     this.feedbackEffects = [];
 
     this.hud = new HUD();
+    this.debugCheatState = {
+      superSpeed: {
+        active: false,
+        baseSpeed: null,
+      },
+      exterminator: {
+        active: false,
+        baseAttackDamage: null,
+      },
+    };
     this.debugCheats = new DebugCheats({
       onSelect: (cheat) => this.applyDebugCheat(cheat),
+      getState: () => this.getDebugCheatStates(),
     });
     this.sfx = new SFX();
     this.vfx = new VFX({ root: this.levelGroup });
@@ -402,6 +415,7 @@ export class GameScene {
     this.addLevelEnemies(level);
     this.placePlayer(level.playerStart);
     this.restoreProgressSnapshot(progressSnapshot);
+    this.syncDebugCheatEffects();
 
     this.updateHud();
     this.addLog(`${level.name} loaded.`);
@@ -548,9 +562,12 @@ export class GameScene {
   }
 
   resetGameplayProgress() {
+    this.restoreDebugCheatBaseStats();
     this.player?.resetForNewRun?.();
     this.inventory?.reset?.();
+    this.refreshDebugCheatBaseStats();
     this.hud?.clearLog?.();
+    this.syncDebugCheatEffects();
     this.updateHud();
   }
 
@@ -1427,10 +1444,10 @@ export class GameScene {
     if (!this.player) return;
 
     console.log("debugCheatSelected", cheat.id);
-    this.addLog(`Debug cheat: ${cheat.label}.`);
 
     switch (cheat.id) {
       case "killPlayer":
+        this.addLog(`Debug cheat: ${cheat.label}.`);
         this.player.takeDamage(this.player.hp, {
           type: "debugCheat",
           id: cheat.id,
@@ -1438,10 +1455,19 @@ export class GameScene {
         break;
 
       case "takeDamage50":
+        this.addLog(`Debug cheat: ${cheat.label}.`);
         this.player.takeDamage(50, {
           type: "debugCheat",
           id: cheat.id,
         });
+        break;
+
+      case "superSpeed":
+        this.toggleSuperSpeedCheat();
+        break;
+
+      case "exterminator":
+        this.toggleExterminatorCheat();
         break;
 
       default:
@@ -1451,6 +1477,122 @@ export class GameScene {
 
     this.handleGameEvents(this.player.consumeEvents());
     this.updateHud();
+  }
+
+  getDebugCheatStates() {
+    return {
+      superSpeed: this.debugCheatState.superSpeed.active,
+      exterminator: this.debugCheatState.exterminator.active,
+    };
+  }
+
+  toggleSuperSpeedCheat() {
+    const state = this.debugCheatState.superSpeed;
+
+    if (state.active) {
+      this.disableSuperSpeedCheat();
+      this.addLog("Debug cheat disabled: Super Speed.");
+      return;
+    }
+
+    state.active = true;
+    state.baseSpeed = this.player.speed;
+    this.player.speed = state.baseSpeed * DEBUG_SUPER_SPEED_MULTIPLIER;
+    this.addLog("Debug cheat enabled: Super Speed.");
+  }
+
+  disableSuperSpeedCheat() {
+    const state = this.debugCheatState.superSpeed;
+    if (!state.active) return;
+
+    this.player.speed =
+      state.baseSpeed ?? this.player.speed / DEBUG_SUPER_SPEED_MULTIPLIER;
+    state.active = false;
+    state.baseSpeed = null;
+  }
+
+  toggleExterminatorCheat() {
+    const state = this.debugCheatState.exterminator;
+
+    if (state.active) {
+      this.disableExterminatorCheat();
+      this.addLog("Debug cheat disabled: Exterminator.");
+      return;
+    }
+
+    state.active = true;
+    state.baseAttackDamage = this.player.attackDamage;
+    this.player.attackDamage = DEBUG_EXTERMINATOR_DAMAGE;
+    this.addLog("Debug cheat enabled: Exterminator.");
+  }
+
+  disableExterminatorCheat() {
+    const state = this.debugCheatState.exterminator;
+    if (!state.active) return;
+
+    this.player.attackDamage =
+      state.baseAttackDamage ?? this.player.attackDamage;
+    state.active = false;
+    state.baseAttackDamage = null;
+  }
+
+  syncDebugCheatEffects() {
+    if (!this.player) return;
+
+    if (this.debugCheatState.superSpeed.active) {
+      this.player.speed =
+        (this.debugCheatState.superSpeed.baseSpeed ?? this.player.speed)
+        * DEBUG_SUPER_SPEED_MULTIPLIER;
+    }
+
+    if (this.debugCheatState.exterminator.active) {
+      this.player.attackDamage = DEBUG_EXTERMINATOR_DAMAGE;
+    }
+  }
+
+  restoreDebugCheatBaseStats() {
+    if (!this.player) return;
+
+    const superSpeedState = this.debugCheatState.superSpeed;
+    if (superSpeedState.active && superSpeedState.baseSpeed !== null) {
+      this.player.speed = superSpeedState.baseSpeed;
+    }
+
+    const exterminatorState = this.debugCheatState.exterminator;
+    if (
+      exterminatorState.active &&
+      exterminatorState.baseAttackDamage !== null
+    ) {
+      this.player.attackDamage = exterminatorState.baseAttackDamage;
+    }
+  }
+
+  refreshDebugCheatBaseStats() {
+    if (!this.player) return;
+
+    const superSpeedState = this.debugCheatState.superSpeed;
+    if (superSpeedState.active) {
+      superSpeedState.baseSpeed = this.player.speed;
+    }
+
+    const exterminatorState = this.debugCheatState.exterminator;
+    if (exterminatorState.active) {
+      exterminatorState.baseAttackDamage = this.player.attackDamage;
+    }
+  }
+
+  updateDebugCheatBaselinesForStatChange(result) {
+    if (!result) return;
+
+    const exterminatorState = this.debugCheatState.exterminator;
+    if (
+      result.stat === "attackDamage" &&
+      exterminatorState.active &&
+      Number.isFinite(result.amount)
+    ) {
+      exterminatorState.baseAttackDamage =
+        (exterminatorState.baseAttackDamage ?? 0) + result.amount;
+    }
   }
 
   checkLevelExitTrigger() {
@@ -1563,6 +1705,8 @@ export class GameScene {
 
         case "passiveItemApplied":
           this.addLog(`Passive applied: ${event.item.name}.`);
+          this.updateDebugCheatBaselinesForStatChange(event.result);
+          this.syncDebugCheatEffects();
           this.highlightItemStat(event.result);
           this.updateHud();
           break;

@@ -6,6 +6,11 @@ import {
 const DECORATION_DOOR_CLEARANCE = 3;
 const DEFAULT_SEED = "decorationFill";
 const TILE_KEY_PRECISION = 3;
+const PROTECTED_DECORATION_MODULE_IDS = new Set([
+  "floorDetail",
+  "stones",
+  "barrel",
+]);
 
 function clamp01(value) {
   return Math.max(0, Math.min(1, value));
@@ -166,10 +171,6 @@ export class DecorationBuilder {
     const candidateTiles = this.getCandidateTilesForEntry(room, entry);
 
     for (const tile of candidateTiles) {
-      if (this.shouldSkipPointForStairs(entry, tile, occupiedModules)) {
-        continue;
-      }
-
       const key = this.getTileKey(tile);
       if (usedTileKeys.has(key)) continue;
       usedTileKeys.add(key);
@@ -185,6 +186,9 @@ export class DecorationBuilder {
 
       const module = this.createPropModule(entry, tile, room, key);
       if (!this.isPointInsideAnyArea(module, room.walkableAreas ?? [])) continue;
+      if (!this.canPlaceDecorationModule(module, entry, occupiedModules)) {
+        continue;
+      }
       if (this.entryRequiresFreeTile(entry) && !this.canPlaceModule(module, occupiedModules)) {
         continue;
       }
@@ -361,6 +365,16 @@ export class DecorationBuilder {
   canUseClusterSpot(spot, entry, room, occupiedModules) {
     if (!this.isPointInsideAnyArea(spot, room.walkableAreas ?? [])) return false;
 
+    if (!this.canPlaceDecorationModule({
+      x: spot.x,
+      z: spot.z,
+      w: entry.w,
+      d: entry.d,
+      placementFootprint: entry.placementFootprint,
+    }, entry, occupiedModules)) {
+      return false;
+    }
+
     return this.canPlaceModule({
       x: spot.x,
       z: spot.z,
@@ -385,7 +399,15 @@ export class DecorationBuilder {
       .map((candidate) => candidate.tile);
 
     for (const anchor of anchors) {
-      if (this.shouldSkipPointForStairs(entry, anchor, occupiedModules)) continue;
+      if (!this.canPlaceDecorationModule({
+        x: anchor.x,
+        z: anchor.z,
+        w: entry.w,
+        d: entry.d,
+        placementFootprint: entry.placementFootprint,
+      }, entry, occupiedModules)) {
+        continue;
+      }
       if (!this.canPlaceAtTile(anchor, entry, occupiedModules)) continue;
 
       const cluster = this.createClusterAtAnchor({
@@ -417,10 +439,10 @@ export class DecorationBuilder {
 
     for (const point of candidates) {
       if (cluster.length >= targetSize) break;
-      if (this.shouldSkipPointForStairs(entry, point, localOccupied)) continue;
       const module = this.createPropModule(entry, point, room, this.getTileKey(point), {
         usePositionJitter: false,
       });
+      if (!this.canPlaceDecorationModule(module, entry, localOccupied)) continue;
       if (!this.canPlaceModule(module, localOccupied)) continue;
       if (!this.keepsNavigationValid(room, module, localBlocking)) continue;
 
@@ -719,6 +741,8 @@ export class DecorationBuilder {
         z: opening.z + frontVector.z * (DECORATION_DOOR_CLEARANCE / 2),
         w: isHorizontal ? width : DECORATION_DOOR_CLEARANCE,
         d: isHorizontal ? DECORATION_DOOR_CLEARANCE : width,
+        decorationProtected: true,
+        role: "doorOpeningProtection",
       };
     });
   }
@@ -792,23 +816,30 @@ export class DecorationBuilder {
     return areas.some((area) => this.areaContainsPoint(area, point));
   }
 
-  shouldSkipPointForStairs(entry, point, occupiedModules) {
-    if (!this.entryAvoidsStairTiles(entry)) return false;
+  canPlaceDecorationModule(module, entry, occupiedModules) {
+    if (!this.entryAvoidsProtectedModules(entry)) return true;
 
-    return (occupiedModules ?? []).some((module) =>
-      this.isStairsModule(module) &&
-      this.areaContainsPoint(this.createBlockingArea(module), point)
+    const placementArea = this.createPlacementArea(module);
+
+    return !(occupiedModules ?? []).some((occupiedModule) =>
+      this.isDecorationProtectedModule(occupiedModule) &&
+      this.areasOverlap(placementArea, this.createDecorationProtectedArea(occupiedModule))
     );
   }
 
-  entryAvoidsStairTiles(entry) {
-    return entry.moduleId === "floorDetail" || entry.moduleId === "stones";
+  entryAvoidsProtectedModules(entry) {
+    return PROTECTED_DECORATION_MODULE_IDS.has(entry.moduleId);
   }
 
-  isStairsModule(module) {
-    return module?.moduleId === "stairs" ||
+  isDecorationProtectedModule(module) {
+    return module?.decorationProtected ||
+      module?.moduleId === "stairs" ||
       module?.role === "entryStairs" ||
       module?.role === "exitStairs";
+  }
+
+  createDecorationProtectedArea(module) {
+    return this.createBlockingArea(module);
   }
 
   areasOverlap(a, b) {

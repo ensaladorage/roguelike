@@ -9,13 +9,26 @@ const DEBUG_CHEATS = [
     label: "Take Damage 50",
     description: "Deal 50 damage to the player.",
   },
+  {
+    id: "superSpeed",
+    label: "Super Speed",
+    description: "Toggle player movement speed x5.",
+    toggle: true,
+  },
+  {
+    id: "exterminator",
+    label: "Exterminator",
+    description: "Toggle player damage to 999999.",
+    toggle: true,
+  },
 ];
 
 const STYLE_ID = "debug-cheats-style";
 
 export class DebugCheats {
-  constructor({ onSelect } = {}) {
+  constructor({ onSelect, getState } = {}) {
     this.onSelect = onSelect;
+    this.getState = getState ?? (() => ({}));
     this.cheats = DEBUG_CHEATS;
     this.selectedIndex = 0;
     this.isOpen = false;
@@ -106,6 +119,30 @@ export class DebugCheats {
         font-size: 13px;
         font-weight: 800;
         line-height: 1.2;
+      }
+
+      .debug-cheats-title-row {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: 8px;
+      }
+
+      .debug-cheats-status {
+        min-width: 34px;
+        padding: 2px 6px;
+        border-radius: 999px;
+        background: rgba(244, 241, 232, 0.1);
+        color: rgba(244, 241, 232, 0.72);
+        font-size: 10px;
+        font-weight: 800;
+        line-height: 1;
+        text-align: center;
+      }
+
+      .debug-cheats-option.is-active .debug-cheats-status {
+        background: rgba(86, 194, 113, 0.22);
+        color: #76e293;
       }
 
       .debug-cheats-description {
@@ -222,6 +259,7 @@ export class DebugCheats {
     if (!cheat) return;
 
     this.onSelect?.(cheat);
+    this.render();
   }
 
   render() {
@@ -229,22 +267,38 @@ export class DebugCheats {
 
     this.listElement.innerHTML = "";
 
+    const state = this.getState() ?? {};
+
     this.cheats.forEach((cheat, index) => {
+      const isActive = Boolean(cheat.toggle && state[cheat.id]);
       const option = document.createElement("div");
       option.className = "debug-cheats-option";
       option.classList.toggle("is-selected", index === this.selectedIndex);
+      option.classList.toggle("is-active", isActive);
       option.setAttribute("role", "option");
       option.setAttribute("aria-selected", String(index === this.selectedIndex));
+
+      const titleRow = document.createElement("div");
+      titleRow.className = "debug-cheats-title-row";
 
       const label = document.createElement("span");
       label.className = "debug-cheats-label";
       label.textContent = cheat.label;
 
+      titleRow.appendChild(label);
+
+      if (cheat.toggle) {
+        const status = document.createElement("span");
+        status.className = "debug-cheats-status";
+        status.textContent = isActive ? "ON" : "OFF";
+        titleRow.appendChild(status);
+      }
+
       const description = document.createElement("span");
       description.className = "debug-cheats-description";
       description.textContent = cheat.description;
 
-      option.appendChild(label);
+      option.appendChild(titleRow);
       option.appendChild(description);
       this.listElement.appendChild(option);
     });

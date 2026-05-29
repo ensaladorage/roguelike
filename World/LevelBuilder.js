@@ -211,11 +211,12 @@ export class LevelBuilder {
         room,
         roomConnectionEndpoints
       );
+      const stairsDecorationModules = this.createRoomStairsDecorationModules(stairsModule);
       const generatedDecorativeModules = this.decorationBuilder.buildRoomDecorations({
         room,
         levelDefinition,
         buildOptions,
-        extraOccupiedModules: stairsModule ? [stairsModule] : [],
+        extraOccupiedModules: stairsDecorationModules,
       });
       const floorModules = stairsModule?.role === "exitStairs"
         ? this.hideFloorTileUnderModule(room.floorModules, stairsModule)
@@ -228,17 +229,7 @@ export class LevelBuilder {
       environment.decorativeModules.push(...(room.setDressingModules ?? []));
       environment.decorativeModules.push(...(room.decorativeModules ?? []));
       environment.decorativeModules.push(...room.obstacleModules);
-      if (stairsModule) {
-        environment.decorativeModules.push(stairsModule);
-        if (stairsModule.role === "exitStairs") {
-          environment.decorativeModules.push(
-            this.createExitStairsWoodStructureModule(stairsModule)
-          );
-          environment.decorativeModules.push(
-            ...this.createExitStairsDirtModules(stairsModule)
-          );
-        }
-      }
+      environment.decorativeModules.push(...stairsDecorationModules);
 
       walkableAreas.push(...room.walkableAreas.map(cloneArea));
       collisionWalls.push(...wallModules.map(cloneArea));
@@ -742,6 +733,20 @@ export class LevelBuilder {
     });
   }
 
+  createRoomStairsDecorationModules(stairsModule) {
+    if (!stairsModule) return [];
+
+    if (stairsModule.role !== "exitStairs") {
+      return [stairsModule];
+    }
+
+    return [
+      stairsModule,
+      this.createExitStairsWoodStructureModule(stairsModule),
+      ...this.createExitStairsDirtModules(stairsModule),
+    ];
+  }
+
   createStairsModuleAtOpening(opening, options = {}) {
     const offsetFromWall = options.offsetFromWall ?? ENTRY_STAIRS_OFFSET_FROM_WALL;
     const module = {
@@ -753,6 +758,7 @@ export class LevelBuilder {
       moduleId: "stairs",
       rotationY: options.rotationY ?? 0,
       generated: true,
+      decorationProtected: true,
       ...options,
     };
 
@@ -793,6 +799,7 @@ export class LevelBuilder {
         d: 1,
         moduleId: "dirt",
         generated: true,
+        decorationProtected: true,
         role: "exitStairsLeftDirt",
       },
       {
@@ -803,6 +810,7 @@ export class LevelBuilder {
         d: 1,
         moduleId: "dirt",
         generated: true,
+        decorationProtected: true,
         role: "exitStairsRightDirt",
       },
       {
@@ -813,6 +821,7 @@ export class LevelBuilder {
         d: 1,
         moduleId: "dirt",
         generated: true,
+        decorationProtected: true,
         role: "exitStairsFrontDirt",
       },
     ];
@@ -830,6 +839,7 @@ export class LevelBuilder {
       moduleId: "woodStructure",
       rotationY: EXIT_STAIRS_WOOD_STRUCTURE_ROTATION_BY_SIDE[stairsModule.side] ?? 0,
       generated: true,
+      decorationProtected: true,
       role: "exitStairsWoodStructure",
     };
   }
