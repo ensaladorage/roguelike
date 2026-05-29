@@ -72,6 +72,19 @@ function rotateModule(module, quarterTurns = 0) {
   return rotated;
 }
 
+function orientCombatLWallModule(module, quarterTurns = 0) {
+  const turns = normalizeQuarterTurns(quarterTurns);
+
+  if (module.moduleId !== "wallHalf" || turns % 2 !== 0) {
+    return module;
+  }
+
+  return {
+    ...module,
+    rotationY: module.rotationY + Math.PI,
+  };
+}
+
 function rotateArea(area, quarterTurns = 0) {
   const point = rotatePoint(area, quarterTurns);
   const footprint = rotateFootprint(area, quarterTurns);
@@ -242,7 +255,7 @@ const COMBAT_L_BASE_TEMPLATE = {
       w: 1,
       d: 6,
       side: "east",
-      rotationY: -Math.PI / 2,
+      rotationY: Math.PI / 2,
       moduleId: "wallHalf",
     },
     {
@@ -251,7 +264,7 @@ const COMBAT_L_BASE_TEMPLATE = {
       w: 6,
       d: 1,
       side: "north",
-      rotationY: 0,
+      rotationY: Math.PI,
       moduleId: "wallHalf",
     },
     {
@@ -260,7 +273,7 @@ const COMBAT_L_BASE_TEMPLATE = {
       w: 10,
       d: 1,
       side: "south",
-      rotationY: Math.PI,
+      rotationY: 0,
       moduleId: "wallHalf",
     },
     {
@@ -269,7 +282,7 @@ const COMBAT_L_BASE_TEMPLATE = {
       w: 1,
       d: 10,
       side: "west",
-      rotationY: Math.PI / 2,
+      rotationY: -Math.PI / 2,
       moduleId: "wallHalf",
     },
   ],
@@ -356,7 +369,9 @@ function createCombatLRoom({ id, name, quarterTurns = 0 }) {
     name,
     floorModules: COMBAT_L_BASE_TEMPLATE.floorModules.map((module) => rotateModule(module, quarterTurns)),
     walkableAreas: COMBAT_L_BASE_TEMPLATE.walkableAreas.map((area) => rotateArea(area, quarterTurns)),
-    wallModules: COMBAT_L_BASE_TEMPLATE.wallModules.map((module) => rotateModule(module, quarterTurns)),
+    wallModules: COMBAT_L_BASE_TEMPLATE.wallModules.map((module) =>
+      orientCombatLWallModule(rotateModule(module, quarterTurns), quarterTurns)
+    ),
     doorwayModules: COMBAT_L_BASE_TEMPLATE.doorwayModules.map((module) => rotateModule(module, quarterTurns)),
     doorOpenings: COMBAT_L_BASE_TEMPLATE.doorOpenings.map((opening) =>
       rotateDoorOpening(opening, COMBAT_L_BASE_TEMPLATE.dimensions, quarterTurns)
