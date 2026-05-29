@@ -370,7 +370,7 @@ export class GameScene {
     const definition = floorLoad?.definition;
     if (!definition) return;
 
-    const progressSnapshot = options.preserveProgress
+    const progressSnapshot = options.preserveProgress && !options.resetProgress
       ? this.createProgressSnapshot()
       : null;
     const level = this.levelBuilder.build(definition, {

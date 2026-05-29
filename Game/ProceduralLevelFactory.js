@@ -65,19 +65,11 @@ const PROCEDURAL_DECORATION_FILL = {
   ],
 };
 
-export const PROCEDURAL_LEVELS = [
-  {
-    id: "procedural_level_1",
-    tileSetId: "scenarioDefault",
-    create: createProceduralLevelOne,
-  },
-];
-
 export function createProceduralFloor(options = {}) {
-  return createProceduralLevelOne(options);
+  return createConnectedProceduralFloor(options);
 }
 
-export function createProceduralLevelOne(options = {}) {
+function createConnectedProceduralFloor(options = {}) {
   const floorIndex = getFloorIndex(options);
   const floorSeed =
     options.floorSeed ??

@@ -18,7 +18,11 @@ export class GameManager {
     this.config = this.resolveConfig(config, options);
     this.runResetConfig = {
       ...DEFAULT_RUN_RESET_CONFIG,
-      ...(options.runResetConfig ?? window.ROGUELIKE_CONFIG?.runReset ?? {}),
+      ...(
+        options.runResetConfig ??
+        globalThis.window?.ROGUELIKE_CONFIG?.runReset ??
+        {}
+      ),
     };
     this.runState = new RunState({
       mode: this.config.mode,
@@ -34,7 +38,7 @@ export class GameManager {
   }
 
   resolveConfig(config, options = {}) {
-    const params = new URLSearchParams(window.location.search);
+    const params = new URLSearchParams(globalThis.window?.location?.search ?? "");
     const requestedMode = params.get("mode");
     const mode = options.mode ?? (
       requestedMode === GAME_MODES.RUN ? GAME_MODES.RUN : config.mode
@@ -160,10 +164,6 @@ export class GameManager {
       this.scene.hud?.hideDefeatedOverlay?.();
       this.scene.updateHud();
     }
-  }
-
-  restart() {
-    this.restartCurrentMode();
   }
 
   onLevelExitReached() {
