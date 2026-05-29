@@ -177,12 +177,6 @@ export const TREASURE_ROOM_TEMPLATES = [
         rotationY: Math.PI / 2,
         modelId: "chest_01",
       },
-      {
-        x: 3.2,
-        z: 3.2,
-        rotationY: -Math.PI / 2,
-        modelId: "chest_01",
-      },
     ],
     exitMarker: null,
     decorZones: [
@@ -392,12 +386,6 @@ export const TREASURE_ROOM_TEMPLATES = [
         x: 3.2,
         z: 3.2,
         rotationY: -Math.PI / 2,
-        modelId: "chest_01",
-      },
-      {
-        x: 0,
-        z: 0,
-        rotationY: 0,
         modelId: "chest_01",
       },
     ],
