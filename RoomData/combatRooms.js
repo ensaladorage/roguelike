@@ -201,6 +201,15 @@ const COMBAT_L_BASE_TEMPLATE = {
       moduleId: "wallCorner",
     },
     {
+      x: -1,
+      z: 1,
+      w: 1,
+      d: 1,
+      corner: "southWest",
+      rotationY: Math.PI / 2,
+      moduleId: "wallCorner",
+    },
+    {
       x: 6,
       z: 1,
       w: 1,
@@ -237,9 +246,9 @@ const COMBAT_L_BASE_TEMPLATE = {
       moduleId: "wallHalf",
     },
     {
-      x: 3,
+      x: 2.5,
       z: 1,
-      w: 5,
+      w: 6,
       d: 1,
       side: "north",
       rotationY: 0,
