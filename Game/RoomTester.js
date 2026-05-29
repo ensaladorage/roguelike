@@ -1,3 +1,5 @@
+// Edit ROOM_TESTER_LEVELS while GAME_MODE is "tester" to debug manual room chains.
+// Place rooms so opposite openings touch in world space; LevelBuilder will resolve the connector.
 export const ROOM_TESTER_LEVELS = [
   {
     kind: "assembled",
@@ -74,3 +76,7 @@ export const ROOM_TESTER_LEVELS = [
     ],
   },
 ];
+
+export function getRoomTesterLevel(levelIndex = 0) {
+  return ROOM_TESTER_LEVELS[levelIndex] ?? ROOM_TESTER_LEVELS[0] ?? null;
+}

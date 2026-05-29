@@ -1,9 +1,11 @@
 import { flatDistance } from "./Utils.js";
+import { GAME_CONFIG, GAME_MODES } from "./GameConfig.js";
+import { ROOM_TESTER_LEVELS, getRoomTesterLevel } from "./RoomTester.js";
+import { createProceduralFloor } from "./ProceduralLevelFactory.js";
+import { RunState, createRunSeed } from "./RunState.js";
+import { ENEMY_DIFFICULTY } from "../CharacterData/enemyDefinitions.js";
 
-export const GAME_MODES = {
-  TESTER: "tester",
-  RUN: "run",
-};
+export { GAME_MODES } from "./GameConfig.js";
 
 const DEFAULT_RUN_RESET_CONFIG = {
   reuseSeedOnRestart: false,
@@ -11,23 +13,37 @@ const DEFAULT_RUN_RESET_CONFIG = {
 const DEFEATED_RESET_DELAY_MS = 2000;
 
 export class GameManager {
-  constructor(scene, options = {}) {
+  constructor(scene, config = GAME_CONFIG, options = {}) {
     this.scene = scene;
-    this.mode = options.mode ?? GAME_MODES.TESTER;
+    this.config = this.resolveConfig(config, options);
+    this.runResetConfig = {
+      ...DEFAULT_RUN_RESET_CONFIG,
+      ...(options.runResetConfig ?? window.ROGUELIKE_CONFIG?.runReset ?? {}),
+    };
+    this.runState = new RunState({
+      mode: this.config.mode,
+      runSeed: this.config.run?.runSeed ?? options.runSeed ?? createRunSeed(),
+    });
     this.isGameOver = false;
     this.isResetting = false;
     this.resetTimer = null;
     this.combatStartRange = 1;
     this.enemyMovementPauseReason = "playerCombat";
-    this.runResetConfig = {
-      ...DEFAULT_RUN_RESET_CONFIG,
-      ...(options.runResetConfig ?? {}),
+
+    this.initializeModeState();
+  }
+
+  resolveConfig(config, options = {}) {
+    const params = new URLSearchParams(window.location.search);
+    const requestedMode = params.get("mode");
+    const mode = options.mode ?? (
+      requestedMode === GAME_MODES.RUN ? GAME_MODES.RUN : config.mode
+    );
+
+    return {
+      ...config,
+      mode,
     };
-    this.runState = this.createRunState({
-      mode: this.mode,
-      runSeed: options.runSeed ?? this.scene.runSeed,
-      floorIndex: this.scene.levelIndex ?? 0,
-    });
   }
 
   update() {
@@ -107,6 +123,7 @@ export class GameManager {
     if (this.isGameOver) return;
 
     this.isGameOver = true;
+    this.runState.markLost();
     this.clearResetTimer();
     this.scene.hud?.showDefeatedOverlay?.();
     this.scene.addLog("You died. Restarting...");
@@ -124,11 +141,19 @@ export class GameManager {
     this.resumeEnemyMovement(this.scene.enemies);
 
     try {
-      if (this.mode === GAME_MODES.RUN) {
-        this.restartRun();
+      if (this.isTesterMode()) {
+        this.startTester({
+          levelIndex: this.config.tester?.levelIndex ?? 0,
+        });
       } else {
-        this.reloadTesterFloor();
+        this.startRun({
+          runSeed: this.getRestartRunSeed(),
+          floorIndex: this.config.run?.startFloorIndex ?? 1,
+        });
       }
+
+      this.scene.resetGameplayProgress();
+      this.scene.loadLevel();
     } finally {
       this.isGameOver = false;
       this.isResetting = false;
@@ -137,73 +162,179 @@ export class GameManager {
     }
   }
 
-  restartRun() {
-    const runSeed = this.getRestartRunSeed();
-
-    this.mode = GAME_MODES.RUN;
-    this.runState = this.createRunState({
-      mode: GAME_MODES.RUN,
-      runSeed,
-      floorIndex: 0,
-      status: "active",
-    });
-
-    this.scene.restartRun({
-      runSeed,
-      resetProgress: true,
-      resetLog: true,
-    });
-  }
-
-  reloadTesterFloor() {
-    this.mode = GAME_MODES.TESTER;
-    this.runState = this.createRunState({
-      mode: GAME_MODES.TESTER,
-      runSeed: this.scene.runSeed,
-      floorIndex: this.scene.levelIndex,
-      status: "active",
-    });
-
-    this.scene.reloadTesterFloor({
-      resetProgress: true,
-      resetLog: true,
-    });
+  restart() {
+    this.restartCurrentMode();
   }
 
   onLevelExitReached() {
     if (this.isGameOver) return;
 
-    this.scene.addLog("Stairs reached. Rebuilding level 1...");
     this.resumeEnemyMovement(this.scene.enemies);
-    this.scene.reloadCurrentLevel();
-    this.syncRunStateFromScene();
+
+    if (this.isTesterMode()) {
+      this.scene.addLog("Stairs reached. Rebuilding tester floor...");
+      this.scene.reloadCurrentLevel({ preserveProgress: true });
+      return;
+    }
+
+    const nextFloorIndex = this.runState.currentFloorIndex + 1;
+    const floorPlan = this.getRunFloorPlan(nextFloorIndex);
+
+    this.runState.setCurrentFloor({
+      floorIndex: nextFloorIndex,
+      floorSeed: this.createFloorSeed(nextFloorIndex),
+      floorType: floorPlan.floorType,
+      difficultyTier: floorPlan.difficultyTier,
+    });
+
+    if (!floorPlan.implemented) {
+      this.scene.addLog(`${this.capitalize(floorPlan.floorType)} floor is reserved for a future update.`);
+      console.log("futureFloorReached", this.runState.createSnapshot());
+      return;
+    }
+
+    this.scene.addLog(`Stairs reached. Loading floor ${nextFloorIndex}...`);
+    this.scene.loadLevel({ preserveProgress: true });
+  }
+
+  initializeModeState() {
+    if (this.config.mode === GAME_MODES.RUN) {
+      this.startRun({
+        runSeed: this.config.run?.runSeed ?? createRunSeed(),
+        floorIndex: this.config.run?.startFloorIndex ?? 1,
+      });
+      return;
+    }
+
+    this.startTester({
+      levelIndex: this.config.tester?.levelIndex ?? 0,
+    });
+  }
+
+  startTester({ levelIndex = 0 } = {}) {
+    this.runState.setMode(GAME_MODES.TESTER);
+    this.runState.markActive();
+    this.runState.setCurrentFloor({
+      floorIndex: levelIndex + 1,
+      floorSeed: `tester:${levelIndex}:${this.runState.runSeed}`,
+      floorType: GAME_MODES.TESTER,
+      difficultyTier: ENEMY_DIFFICULTY.EASY,
+    });
+  }
+
+  startRun({ runSeed = createRunSeed(), floorIndex = 1 } = {}) {
+    const floorPlan = this.getRunFloorPlan(floorIndex);
+
+    this.runState.setMode(GAME_MODES.RUN);
+    this.runState.setRunSeed(runSeed);
+    this.runState.markActive();
+    this.runState.setCurrentFloor({
+      floorIndex,
+      floorSeed: this.createFloorSeed(floorIndex),
+      floorType: floorPlan.floorType,
+      difficultyTier: floorPlan.difficultyTier,
+    });
+  }
+
+  getPreloadTileSetIds() {
+    if (this.isTesterMode()) {
+      return [
+        ...new Set(
+          ROOM_TESTER_LEVELS.map((level) => level.tileSetId ?? "scenarioDefault")
+        ),
+      ];
+    }
+
+    return ["scenarioDefault"];
+  }
+
+  resolveFloor() {
+    const snapshot = this.runState.createSnapshot();
+
+    if (this.isTesterMode()) {
+      const levelIndex = Math.max(0, snapshot.currentFloorIndex - 1);
+
+      return {
+        ...snapshot,
+        levelIndex,
+        definition: getRoomTesterLevel(levelIndex),
+      };
+    }
+
+    const floorPlan = this.getRunFloorPlan(snapshot.currentFloorIndex);
+
+    if (!floorPlan.implemented) {
+      return {
+        ...snapshot,
+        definition: null,
+      };
+    }
+
+    return {
+      ...snapshot,
+      levelIndex: snapshot.currentFloorIndex,
+      definition: createProceduralFloor({
+        runSeed: snapshot.runSeed,
+        floorSeed: snapshot.currentFloorSeed,
+        floorIndex: snapshot.currentFloorIndex,
+        floorType: snapshot.floorType,
+        difficultyTier: snapshot.difficultyTier,
+      }),
+    };
+  }
+
+  getRunFloorPlan(floorIndex) {
+    const normalFloorCount = this.config.run?.normalFloorCount ?? 10;
+    const shopFloorIndex = this.config.run?.shopFloorIndex ?? normalFloorCount + 1;
+    const bossFloorIndex = this.config.run?.bossFloorIndex ?? shopFloorIndex + 1;
+
+    if (floorIndex <= normalFloorCount) {
+      return {
+        floorType: "procedural",
+        difficultyTier: this.getDifficultyTierForFloor(floorIndex),
+        implemented: true,
+      };
+    }
+
+    if (floorIndex === shopFloorIndex) {
+      return {
+        floorType: "shop",
+        difficultyTier: ENEMY_DIFFICULTY.EASY,
+        implemented: false,
+      };
+    }
+
+    if (floorIndex === bossFloorIndex) {
+      return {
+        floorType: "boss",
+        difficultyTier: ENEMY_DIFFICULTY.HARD,
+        implemented: false,
+      };
+    }
+
+    return {
+      floorType: "complete",
+      difficultyTier: ENEMY_DIFFICULTY.HARD,
+      implemented: false,
+    };
+  }
+
+  getDifficultyTierForFloor(floorIndex) {
+    if (floorIndex >= 8) return ENEMY_DIFFICULTY.HARD;
+    if (floorIndex >= 4) return ENEMY_DIFFICULTY.MEDIUM;
+    return ENEMY_DIFFICULTY.EASY;
   }
 
   getRestartRunSeed() {
     if (this.runResetConfig.reuseSeedOnRestart) {
-      return this.runState.runSeed ?? this.scene.runSeed;
+      return this.runState.runSeed ?? createRunSeed();
     }
 
-    return this.scene.createRunSeed();
+    return createRunSeed();
   }
 
-  createRunState({
-    mode = GAME_MODES.TESTER,
-    runSeed = null,
-    floorIndex = 0,
-    status = "active",
-  } = {}) {
-    const safeFloorIndex = Math.max(0, floorIndex ?? 0);
-
-    return {
-      mode,
-      runSeed,
-      currentFloorIndex: safeFloorIndex,
-      currentFloorSeed: runSeed ? `${runSeed}:floor:${safeFloorIndex + 1}` : null,
-      floorType: mode === GAME_MODES.RUN ? "combat" : "tester",
-      difficultyTier: "easy",
-      status,
-    };
+  createFloorSeed(floorIndex) {
+    return `${this.runState.runSeed}:floor:${String(floorIndex).padStart(2, "0")}`;
   }
 
   clearResetTimer() {
@@ -213,12 +344,12 @@ export class GameManager {
     this.resetTimer = null;
   }
 
-  syncRunStateFromScene(status = "active") {
-    this.runState = this.createRunState({
-      mode: this.mode,
-      runSeed: this.scene.runSeed,
-      floorIndex: this.scene.levelIndex,
-      status,
-    });
+  isTesterMode() {
+    return this.runState.mode === GAME_MODES.TESTER;
+  }
+
+  capitalize(value) {
+    const text = String(value ?? "");
+    return text.charAt(0).toUpperCase() + text.slice(1);
   }
 }

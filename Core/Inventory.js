@@ -147,9 +147,9 @@ export class Inventory {
   }
 
   reset() {
-    this.passives = new Map();
-    this.consumables = new Map();
-    this.knownConsumables = new Set();
+    this.passives.clear();
+    this.consumables.clear();
+    this.knownConsumables.clear();
     this.events = [];
   }
 
