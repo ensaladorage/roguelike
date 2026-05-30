@@ -45,14 +45,14 @@ export const ROOM_TESTER_LEVELS = [
         },
       ],
     },
-    playerStart: { x: -8, z: -17 },
+    playerStart: { x: -7, z: -16 },
     floorSize: 34,
     floorCenter: { x: 0, z: 0 },
     rooms: [
       {
         id: "TesterEnter",
         templateId: "enter_room_north_south_01",
-        position: { x: -8, z: -16 },
+        position: { x: -7, z: -13 },
         rotationY: 0,
       },
       {
@@ -64,7 +64,7 @@ export const ROOM_TESTER_LEVELS = [
       {
         id: "TesterExit",
         templateId: "exit_room_north_south_01",
-        position: { x: 8, z: -15 },
+        position: { x: 7, z: -12 },
         rotationY: 0,
       },
     ],
