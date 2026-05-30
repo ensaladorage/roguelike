@@ -664,7 +664,10 @@ export class LevelBuilder {
       patrolPauseDurations:
         enemyDefinition?.patrolPauseDurations ?? spawn.patrolPauseDurations,
       patrol: (spawn.patrol ?? []).map((point) => ({ ...point })),
-      patrolAreas: room.walkableAreas.map(cloneArea),
+      patrolAreas: (spawn.patrolAreas?.length
+        ? spawn.patrolAreas
+        : room.walkableAreas
+      ).map(cloneArea),
     };
   }
 

@@ -713,6 +713,11 @@ export class DecorationBuilder {
       ...(room.obstacleModules ?? []),
       ...(room.chestSpawns ?? []).map((spawn) => ({ ...spawn, w: 1, d: 1 })),
       ...(room.enemySpawns ?? []).map((spawn) => ({ ...spawn, w: 1, d: 1 })),
+      ...(room.decorationProtectedAreas ?? []).map((area) => ({
+        ...area,
+        decorationProtected: true,
+        role: "roomDecorationProtection",
+      })),
       ...(levelDefinition.playerStart
         ? [{ ...levelDefinition.playerStart, w: 1, d: 1 }]
         : []),

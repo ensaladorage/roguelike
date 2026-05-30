@@ -107,6 +107,9 @@ function transformEnemySpawn(enemySpawn, placement, quarterTurns) {
     patrol: (enemySpawn.patrol ?? []).map((point) =>
       transformPoint(point, placement, quarterTurns)
     ),
+    patrolAreas: (enemySpawn.patrolAreas ?? []).map((area) =>
+      transformArea(area, placement, quarterTurns)
+    ),
   };
 }
 
@@ -164,6 +167,9 @@ export class RoomTemplateLibrary {
       ),
       decorZones: (template.decorZones ?? []).map((zone) =>
         transformArea(zone, placement, quarterTurns)
+      ),
+      decorationProtectedAreas: (template.decorationProtectedAreas ?? []).map((area) =>
+        transformArea(area, placement, quarterTurns)
       ),
       walkableAreas: template.walkableAreas.map((area) =>
         transformArea(area, placement, quarterTurns)
