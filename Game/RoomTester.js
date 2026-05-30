@@ -4,7 +4,7 @@ export const ROOM_TESTER_LEVELS = [
   {
     kind: "assembled",
     tileSetId: "scenarioDefault",
-    name: "Room Tester: enter + combat_obstgacle_02 + exit",
+    name: "Room Tester: enter + combat_02 + exit",
     connectorStyleId: "openCorridor",
     enemyDifficulty: "easy",
     decorationFill: {
@@ -45,26 +45,26 @@ export const ROOM_TESTER_LEVELS = [
         },
       ],
     },
-    playerStart: { x: -13, z: 0 },
+    playerStart: { x: -8, z: -17 },
     floorSize: 34,
     floorCenter: { x: 0, z: 0 },
     rooms: [
       {
         id: "TesterEnter",
-        templateId: "enter_room_east_west_01",
-        position: { x: -12, z: 0 },
+        templateId: "enter_room_north_south_01",
+        position: { x: -8, z: -16 },
         rotationY: 0,
       },
       {
-        id: "TesterCombatObstacle02",
-        templateId: "combat_obstgacle_02",
+        id: "TesterCombat02",
+        templateId: "combat_02",
         position: { x: 0, z: 0 },
         rotationY: 0,
       },
       {
         id: "TesterExit",
-        templateId: "exit_room_east_west_01",
-        position: { x: 12, z: 0 },
+        templateId: "exit_room_north_south_01",
+        position: { x: 8, z: -15 },
         rotationY: 0,
       },
     ],
