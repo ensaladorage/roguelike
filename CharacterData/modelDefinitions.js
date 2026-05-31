@@ -98,7 +98,7 @@ export const MODEL_DEFINITIONS = {
       textureId: "charactersColormap",
       openAnimationName: "open",
       openAnimationIndex: 1,
-      scale: 1,
+      scale: 1.1,
     },
   },
   [MODEL_CATEGORIES.COLLECTIBLE]: {
