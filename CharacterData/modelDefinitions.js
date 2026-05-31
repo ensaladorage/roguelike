@@ -9,6 +9,7 @@ export const MODEL_CATEGORIES = {
 export const DEFAULT_PLAYER_MODEL_ID = "player_human_01";
 export const DEFAULT_ENEMY_MODEL_ID = "enemy_hog_01";
 export const DEFAULT_CHEST_MODEL_ID = "chest_01";
+export const EPIC_CHEST_MODEL_ID = "chest_epic_01";
 export const DEFAULT_COIN_MODEL_ID = "coin_01";
 
 export const MODEL_TEXTURE_DEFINITIONS = {
@@ -99,6 +100,17 @@ export const MODEL_DEFINITIONS = {
       openAnimationName: "open",
       openAnimationIndex: 1,
       scale: 1.1,
+    },
+    [EPIC_CHEST_MODEL_ID]: {
+      id: EPIC_CHEST_MODEL_ID,
+      category: MODEL_CATEGORIES.INTERACTABLE,
+      assetPath: "Assets/Models/Scenario/chest-epic.glb",
+      assetVersion: "epic-01",
+      textureId: "charactersColormap",
+      openAnimationName: "open",
+      openAnimationIndex: 1,
+      scale: 1.1,
+      chestTier: "epic",
     },
   },
   [MODEL_CATEGORIES.COLLECTIBLE]: {
