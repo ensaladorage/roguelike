@@ -3,6 +3,7 @@ export const TREASURE_ROOM_TEMPLATES = [
     id: "treasure_01",
     type: "treasure",
     name: "Four-Way Treasure Room 01",
+    tags: ["treasure", "standard", "open", "four_way"],
     dimensions: { w: 11, d: 11 },
     floorModules: [
       {
@@ -195,6 +196,7 @@ export const TREASURE_ROOM_TEMPLATES = [
     id: "treasure_02",
     type: "treasure",
     name: "treasure_02",
+    tags: ["treasure", "standard", "open", "guarded", "easy", "four_way"],
     dimensions: { w: 11, d: 11 },
     floorModules: [
       {
@@ -406,6 +408,7 @@ export const TREASURE_ROOM_TEMPLATES = [
     id: "treasure_03",
     type: "treasure",
     name: "treasure_03",
+    tags: ["treasure", "small", "open", "four_way"],
     dimensions: { w: 7, d: 7 },
     floorModules: [
       {
@@ -604,6 +607,7 @@ export const TREASURE_ROOM_TEMPLATES = [
     id: "treasure_04",
     type: "treasure",
     name: "treasure_04",
+    tags: ["treasure", "standard", "open", "four_way"],
     dimensions: { w: 15, d: 7 },
     floorModules: [
       {
@@ -808,6 +812,7 @@ export const TREASURE_ROOM_TEMPLATES = [
     id: "treasure_side_01",
     type: "treasure",
     name: "Side Treasure Room 01",
+    tags: ["treasure", "standard", "open", "dead_end", "west"],
     dimensions: { w: 9, d: 9 },
     floorModules: [
       {
@@ -946,6 +951,7 @@ export const TREASURE_ROOM_TEMPLATES = [
     id: "treasure_side_02",
     type: "treasure",
     name: "Side Treasure Room 02",
+    tags: ["treasure", "standard", "open", "easy", "dead_end", "west"],
     dimensions: { w: 9, d: 9 },
     floorModules: [
       {

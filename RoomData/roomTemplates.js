@@ -241,7 +241,9 @@ function createPerimeterModules({
 
 function createRectRoomTemplate({
   id,
+  type = "utility",
   name,
+  tags = [],
   dimensions,
   floorModules,
   walkableAreas,
@@ -264,7 +266,9 @@ function createRectRoomTemplate({
 
   return {
     id,
+    type,
     name,
+    tags,
     dimensions,
     floorModules: floorModules ?? [
       {
@@ -302,7 +306,9 @@ export const ROOM_TEMPLATES = [
   ...EXIT_ROOM_TEMPLATES,
   createRectRoomTemplate({
     id: "corridor_straight",
+    type: "connector",
     name: "Straight Corridor",
+    tags: ["connector", "small", "narrow", "three_way"],
     dimensions: { w: 5, d: 10 },
     doorOpenings: [
       { side: "north", offset: 0, width: 1 },
@@ -312,7 +318,9 @@ export const ROOM_TEMPLATES = [
   }),
   createRectRoomTemplate({
     id: "combat_room_basic",
+    type: "combat",
     name: "Combat Room",
+    tags: ["combat", "standard", "open", "obstacle", "guarded", "easy", "north_south"],
     dimensions: { w: 11, d: 9 },
     doorOpenings: [
       { side: "north", offset: 0, width: 1 },
@@ -350,7 +358,9 @@ export const ROOM_TEMPLATES = [
   }),
   createRectRoomTemplate({
     id: "exit_room_basic",
+    type: "exit",
     name: "Exit Room",
+    tags: ["exit", "standard", "open", "treasure", "dead_end", "south"],
     dimensions: { w: 9, d: 9 },
     doorOpenings: [
       { side: "south", offset: 0, width: 1 },
@@ -365,7 +375,9 @@ export const ROOM_TEMPLATES = [
   }),
   createRectRoomTemplate({
     id: "half_wall_alcove",
+    type: "treasure",
     name: "Side Alcove",
+    tags: ["treasure", "small", "open", "dead_end", "west"],
     dimensions: { w: 7, d: 7 },
     wallModuleId: "wallNarrow",
     cornerModuleId: "wallCorner",

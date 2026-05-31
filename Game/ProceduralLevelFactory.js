@@ -2,6 +2,7 @@ import { ENEMY_DIFFICULTY } from "../CharacterData/enemyDefinitions.js";
 import { COMBAT_ROOM_TEMPLATES } from "../RoomData/combatRooms.js";
 import { ENTER_ROOM_TEMPLATES } from "../RoomData/enterRooms.js";
 import { EXIT_ROOM_TEMPLATES } from "../RoomData/exitRooms.js";
+import { filterRoomsByTags } from "../RoomData/roomTagFilters.js";
 import { TREASURE_ROOM_TEMPLATES } from "../RoomData/treasureRooms.js";
 
 const MAX_GENERATION_ATTEMPTS = 120;
@@ -104,7 +105,10 @@ function tryCreateProceduralLevelOne(rng, options, attempt) {
     COMBAT_ROOM_COUNT.min,
     COMBAT_ROOM_COUNT.max
   );
-  const enterTemplate = pickOne(rng, ENTER_ROOM_TEMPLATES);
+  const enterTemplates = filterRoomsByTags(ENTER_ROOM_TEMPLATES, "enter", options);
+  if (enterTemplates.length === 0) return null;
+
+  const enterTemplate = pickOne(rng, enterTemplates);
   const rooms = [];
 
   const enterPlacement = createRoomPlacement({
@@ -123,6 +127,7 @@ function tryCreateProceduralLevelOne(rng, options, attempt) {
       combat: combatCount,
       treasure: treasureCount,
     },
+    options,
   });
 
   if (!middleChain) return null;
@@ -132,6 +137,7 @@ function tryCreateProceduralLevelOne(rng, options, attempt) {
     rooms: middleChain.rooms,
     currentRoom: middleChain.currentRoom,
     usedOpenings: middleChain.usedOpenings,
+    options,
   });
 
   if (!exitPlacement) return null;
@@ -167,6 +173,7 @@ function tryCreateProceduralLevelOne(rng, options, attempt) {
     name: `Procedural Floor ${floorIndex} (${roomSummary})`,
     connectorStyleId: "openCorridor",
     enemyDifficulty: difficultyTier,
+    roomTagFilters: options.roomTagFilters ?? options.roomTags ?? null,
     decorationFill: PROCEDURAL_DECORATION_FILL,
     playerStart,
     floorSize,
@@ -180,6 +187,7 @@ function tryCreateProceduralLevelOne(rng, options, attempt) {
       roomCount: rooms.length,
       treasureCount,
       combatCount,
+      roomTagFilters: options.roomTagFilters ?? options.roomTags ?? null,
     },
     rooms: placements,
   };
@@ -191,6 +199,7 @@ function buildMiddleRoomChain({
   currentRoom,
   usedOpenings,
   remainingCounts,
+  options,
 }) {
   if (remainingCounts.combat <= 0 && remainingCounts.treasure <= 0) {
     return {
@@ -206,6 +215,7 @@ function buildMiddleRoomChain({
     currentRoom,
     usedOpenings,
     remainingCounts,
+    options,
   });
 
   for (const candidate of candidates) {
@@ -224,6 +234,7 @@ function buildMiddleRoomChain({
       currentRoom: candidate.continuesMainPath ? candidate.room : currentRoom,
       usedOpenings: nextUsedOpenings,
       remainingCounts: nextRemainingCounts,
+      options,
     });
 
     if (result) return result;
@@ -232,14 +243,17 @@ function buildMiddleRoomChain({
   return null;
 }
 
-function placeExitRoom({ rng, rooms, currentRoom, usedOpenings }) {
+function placeExitRoom({ rng, rooms, currentRoom, usedOpenings, options }) {
+  const templates = filterRoomsByTags(EXIT_ROOM_TEMPLATES, "exit", options);
+  if (templates.length === 0) return null;
+
   const candidates = getCompatibleRoomCandidates({
     rng,
     rooms,
     sourceRooms: [currentRoom],
     usedOpenings,
     type: "exit",
-    templates: EXIT_ROOM_TEMPLATES,
+    templates,
     continuesMainPath: true,
   });
 
@@ -252,11 +266,12 @@ function getMiddleRoomCandidates({
   currentRoom,
   usedOpenings,
   remainingCounts,
+  options,
 }) {
   const candidates = [];
   const templateGroups = {
-    combat: COMBAT_ROOM_TEMPLATES,
-    treasure: TREASURE_ROOM_TEMPLATES,
+    combat: filterRoomsByTags(COMBAT_ROOM_TEMPLATES, "combat", options),
+    treasure: filterRoomsByTags(TREASURE_ROOM_TEMPLATES, "treasure", options),
   };
 
   for (const type of shuffle(rng, Object.keys(templateGroups))) {
@@ -416,6 +431,7 @@ function createRoomPlacement({ id, template, position }) {
     id,
     templateId: template.id,
     type: template.type,
+    tags: [...(template.tags ?? [])],
     position,
     rotationY: 0,
     dimensions,

@@ -3,6 +3,12 @@ export const ITEM_TYPES = {
   CONSUMABLE: "consumable",
 };
 
+export const ITEM_RARITIES = {
+  COMMON: "common",
+  RARE: "rare",
+  EPIC: "epic",
+};
+
 export const ITEM_EFFECTS = {
   DAMAGE_UP: "damageUp",
   ATTACK_SPEED_UP: "attackSpeedUp",
@@ -16,6 +22,7 @@ export const ITEM_DEFINITIONS = {
     id: "steak",
     name: "Steak",
     type: ITEM_TYPES.PASSIVE,
+    rarity: ITEM_RARITIES.COMMON,
     hudSlot: 4,
     imagePath: "Assets/Images/Steak.png",
     effect: ITEM_EFFECTS.DAMAGE_UP,
@@ -28,6 +35,7 @@ export const ITEM_DEFINITIONS = {
     id: "chili",
     name: "Chili",
     type: ITEM_TYPES.PASSIVE,
+    rarity: ITEM_RARITIES.RARE,
     hudSlot: 5,
     imagePath: "Assets/Images/Chili.png",
     effect: ITEM_EFFECTS.ATTACK_SPEED_UP,
@@ -41,12 +49,12 @@ export const ITEM_DEFINITIONS = {
     id: "ramen",
     name: "Ramen",
     type: ITEM_TYPES.PASSIVE,
+    rarity: ITEM_RARITIES.EPIC,
     hudSlot: 3,
     imagePath: "Assets/Images/Ramen.png",
     effect: ITEM_EFFECTS.MAX_HP_UP,
     modifiers: {
       maxHp: 25,
-      heal: 25,
     },
   },
 
@@ -54,6 +62,7 @@ export const ITEM_DEFINITIONS = {
     id: "energyDrink",
     name: "Energy Drink",
     type: ITEM_TYPES.CONSUMABLE,
+    rarity: ITEM_RARITIES.RARE,
     hudSlot: 1,
     useSlot: 1,
     imagePath: "Assets/Images/EnergyDrink.png",
@@ -70,6 +79,7 @@ export const ITEM_DEFINITIONS = {
     id: "purpleShroom",
     name: "Purple Shroom",
     type: ITEM_TYPES.CONSUMABLE,
+    rarity: ITEM_RARITIES.COMMON,
     hudSlot: 2,
     useSlot: 2,
     imagePath: "Assets/Images/PurpleShroom.png",
@@ -102,4 +112,14 @@ export function getItemDefinitionsByType(type) {
   return Object.values(ITEM_DEFINITIONS).filter(
     (definition) => definition.type === type
   );
+}
+
+export function getItemDefinitionsByRarity(rarity) {
+  return Object.values(ITEM_DEFINITIONS).filter(
+    (definition) => definition.rarity === rarity
+  );
+}
+
+export function getItemIdsByRarity(rarity) {
+  return getItemDefinitionsByRarity(rarity).map((definition) => definition.id);
 }

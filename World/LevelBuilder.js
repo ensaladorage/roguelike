@@ -3,6 +3,11 @@ import {
   ENEMY_DIFFICULTY,
   pickEnemyDefinitionForDifficulty,
 } from "../CharacterData/enemyDefinitions.js";
+import {
+  getRoomTagFilterForType,
+  hasRoomTagFilter,
+  roomMatchesTagFilter,
+} from "../RoomData/roomTagFilters.js";
 
 function cloneArea(area) {
   return {
@@ -208,6 +213,13 @@ export class LevelBuilder {
     const rooms = (levelDefinition.rooms ?? []).map((roomPlacement) =>
       this.roomTemplateLibrary.resolveRoomPlacement(roomPlacement)
     );
+    this.validateRoomTagFilters(rooms, {
+      roomTagFilters:
+        levelDefinition.roomTagFilters ??
+        buildOptions.roomTagFilters ??
+        buildOptions.roomTags ??
+        null,
+    });
     const connectorStyle = this.getConnectorStyle(levelDefinition.connectorStyleId);
     const connections = this.detectRoomConnections(rooms, connectorStyle);
     const endpointsByRoom = this.groupConnectionEndpointsByRoom(connections);
@@ -315,11 +327,31 @@ export class LevelBuilder {
       enemies,
       exit,
       connections,
+      roomTags: rooms.map((room) => ({
+        id: room.id,
+        templateId: room.templateId,
+        type: room.type,
+        tags: [...(room.tags ?? [])],
+      })),
     };
   }
 
   getConnectorStyle(connectorStyleId = "openCorridor") {
     return CONNECTOR_STYLES[connectorStyleId] ?? CONNECTOR_STYLES.openCorridor;
+  }
+
+  validateRoomTagFilters(rooms, options = {}) {
+    for (const room of rooms) {
+      const filter = getRoomTagFilterForType(room.type, options);
+
+      if (!hasRoomTagFilter(filter)) continue;
+
+      if (!roomMatchesTagFilter(room, filter)) {
+        throw new Error(
+          `Room ${room.templateId} does not match ${room.type} tag filters.`
+        );
+      }
+    }
   }
 
   detectRoomConnections(rooms, connectorStyle) {

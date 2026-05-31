@@ -144,6 +144,7 @@ export class RoomTemplateLibrary {
       templateId: template.id,
       type: template.type,
       name: template.name,
+      tags: [...(template.tags ?? [])],
       dimensions: quarterTurns % 2 === 1
         ? { w: template.dimensions.d, d: template.dimensions.w }
         : { ...template.dimensions },

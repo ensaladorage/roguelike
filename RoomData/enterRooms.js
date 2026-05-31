@@ -3,6 +3,7 @@ export const ENTER_ROOM_TEMPLATES = [
     id: "enter_room_north_south_01",
     type: "enter",
     name: "North/South Entrance 01",
+    tags: ["enter", "small", "narrow", "north_south"],
     dimensions: { w: 5, d: 11 },
     floorModules: [
       {
@@ -111,6 +112,7 @@ export const ENTER_ROOM_TEMPLATES = [
     id: "enter_room_east_west_01",
     type: "enter",
     name: "East/West Entrance 01",
+    tags: ["enter", "small", "open", "east_west"],
     dimensions: { w: 7, d: 7 },
     floorModules: [
       {

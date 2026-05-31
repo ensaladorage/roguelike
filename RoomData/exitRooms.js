@@ -3,6 +3,7 @@ export const EXIT_ROOM_TEMPLATES = [
     id: "exit_room_north_south_01",
     type: "exit",
     name: "North/South Exit 01",
+    tags: ["exit", "standard", "open", "north_south", "treasure"],
     dimensions: { w: 9, d: 9 },
     floorModules: [
       {
@@ -173,6 +174,7 @@ export const EXIT_ROOM_TEMPLATES = [
     id: "exit_room_east_west_01",
     type: "exit",
     name: "East/West Exit 01",
+    tags: ["exit", "small", "open", "east_west", "treasure"],
     dimensions: { w: 7, d: 7 },
     floorModules: [
       {
@@ -343,6 +345,7 @@ export const EXIT_ROOM_TEMPLATES = [
     id: "exit_room_north_south_02",
     type: "exit",
     name: "North/South Exit 02",
+    tags: ["exit", "small", "narrow", "north_south"],
     dimensions: { w: 5, d: 11 },
     floorModules: [
       {
@@ -470,6 +473,7 @@ export const EXIT_ROOM_TEMPLATES = [
     id: "exit_room_east_west_02",
     type: "exit",
     name: "East/West Exit 02",
+    tags: ["exit", "small", "narrow", "east_west"],
     dimensions: { w: 11, d: 5 },
     floorModules: [
       {

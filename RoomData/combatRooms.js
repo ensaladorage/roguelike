@@ -156,6 +156,7 @@ function rotateChestSpawn(chestSpawn, quarterTurns = 0) {
 
 const COMBAT_L_BASE_TEMPLATE = {
   type: "combat",
+  tags: ["combat", "large", "narrow", "easy", "guarded"],
   dimensions: { w: 13, d: 13 },
   floorModules: [
     {
@@ -362,11 +363,12 @@ const COMBAT_L_BASE_TEMPLATE = {
   obstacleModules: [],
 };
 
-function createCombatLRoom({ id, name, quarterTurns = 0 }) {
+function createCombatLRoom({ id, name, quarterTurns = 0, tags = [] }) {
   return {
     ...COMBAT_L_BASE_TEMPLATE,
     id,
     name,
+    tags: [...COMBAT_L_BASE_TEMPLATE.tags, ...tags],
     floorModules: COMBAT_L_BASE_TEMPLATE.floorModules.map((module) => rotateModule(module, quarterTurns)),
     walkableAreas: COMBAT_L_BASE_TEMPLATE.walkableAreas.map((area) => rotateArea(area, quarterTurns)),
     wallModules: COMBAT_L_BASE_TEMPLATE.wallModules.map((module) =>
@@ -391,6 +393,7 @@ export const COMBAT_ROOM_TEMPLATES = [
     id: "combat_01",
     type: "combat",
     name: "East/West Combat Room 01",
+    tags: ["combat", "large", "open", "ambush", "easy", "east_west"],
     dimensions: { w: 15, d: 9 },
     floorModules: [
       {
@@ -574,6 +577,7 @@ export const COMBAT_ROOM_TEMPLATES = [
     id: "combat_02",
     type: "combat",
     name: "North U Corridor Combat Room 02",
+    tags: ["combat", "large", "narrow", "ambush", "guarded", "easy", "north"],
     dimensions: { w: 21, d: 15 },
     floorModules: [
       {
@@ -879,6 +883,7 @@ export const COMBAT_ROOM_TEMPLATES = [
     id: "combat_03",
     type: "combat",
     name: "Small North/South Combat Room 03",
+    tags: ["combat", "small", "open", "easy", "north_south"],
     dimensions: { w: 9, d: 7 },
     floorModules: [
       {
@@ -1058,6 +1063,7 @@ export const COMBAT_ROOM_TEMPLATES = [
     id: "combat_04",
     type: "combat",
     name: "Four-Way Rock Ring Combat Room 04",
+    tags: ["combat", "standard", "open", "obstacle", "easy", "four_way"],
     dimensions: { w: 13, d: 13 },
     floorModules: [
       {
@@ -1367,26 +1373,31 @@ export const COMBAT_ROOM_TEMPLATES = [
     id: "combat_L_01",
     name: "L Combat Room 01 North/East",
     quarterTurns: 0,
+    tags: ["north_east"],
   }),
   createCombatLRoom({
     id: "combat_L_02",
     name: "L Combat Room 02 North/West",
     quarterTurns: 3,
+    tags: ["north_west"],
   }),
   createCombatLRoom({
     id: "combat_L_03",
     name: "L Combat Room 03 East/South",
     quarterTurns: 1,
+    tags: ["east_south"],
   }),
   createCombatLRoom({
     id: "combat_L_04",
     name: "L Combat Room 04 South/West",
     quarterTurns: 2,
+    tags: ["south_west"],
   }),
   {
     id: "combat_ambush_01",
     type: "combat",
     name: "Ambush Combat Room 01",
+    tags: ["combat", "standard", "narrow", "ambush", "guarded", "easy", "east_west"],
     dimensions: { w: 11, d: 11 },
     floorModules: [
       {
@@ -1755,6 +1766,7 @@ export const COMBAT_ROOM_TEMPLATES = [
     id: "combat_obstgacle_02",
     type: "combat",
     name: "Narrow S-Cover Combat Room 02",
+    tags: ["combat", "large", "narrow", "obstacle", "ambush", "easy", "east_west"],
     dimensions: { w: 17, d: 7 },
     floorModules: [
       {
@@ -2035,6 +2047,7 @@ export const COMBAT_ROOM_TEMPLATES = [
     id: "combat_obstacle_01",
     type: "combat",
     name: "Obstacle Combat Room 01",
+    tags: ["combat", "standard", "open", "obstacle", "guarded", "easy", "north_south"],
     dimensions: { w: 11, d: 11 },
     floorModules: [
       {
@@ -2225,6 +2238,7 @@ export const COMBAT_ROOM_TEMPLATES = [
     id: "combat_side_01",
     type: "combat",
     name: "Side Combat Room 01",
+    tags: ["combat", "standard", "open", "easy", "dead_end", "south"],
     dimensions: { w: 9, d: 9 },
     floorModules: [
       {
@@ -2372,6 +2386,7 @@ export const COMBAT_ROOM_TEMPLATES = [
     id: "combat_side_02",
     type: "combat",
     name: "Side Combat Room 02",
+    tags: ["combat", "standard", "open", "treasure", "dead_end", "south"],
     dimensions: { w: 9, d: 9 },
     floorModules: [
       {

@@ -85,7 +85,7 @@ export class ItemEffects {
     if (!player) return this.missingPlayerResult();
 
     const maxHpIncrease = definition.modifiers?.maxHp ?? 0;
-    const heal = definition.modifiers?.heal ?? maxHpIncrease;
+    const heal = definition.modifiers?.heal ?? 0;
 
     player.maxHp += maxHpIncrease;
     player.hp = Math.min(player.maxHp, player.hp + heal);

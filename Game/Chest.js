@@ -1,20 +1,31 @@
 import * as THREE from "three";
 import { flatDistance } from "./Utils.js";
 import { DEFAULT_CHEST_MODEL_ID } from "../CharacterData/modelDefinitions.js";
+import {
+  ITEM_RARITIES,
+  getItemIdsByRarity,
+} from "../CharacterData/itemDefinitions.js";
 import { splitCoinValueIntoTypes } from "./Coin.js";
 
 export const CHEST_REWARD = {
   itemChancePercent: 80,
   itemRollCount: 1,
-  itemPool: [
-    "steak",
-    "chili",
-    "ramen",
-    "purpleShroom",
-  ],
-  potionDropItemId: "energyDrink",
-  potionDropChancePercent: 20,
-  potionDropRadius: 0.9,
+  progressionMinFloor: 1,
+  progressionMaxFloor: 10,
+  rarityChancePercentByFloor: {
+    [ITEM_RARITIES.COMMON]: {
+      floor1: 88,
+      floor10: 55,
+    },
+    [ITEM_RARITIES.RARE]: {
+      floor1: 10,
+      floor10: 32,
+    },
+    [ITEM_RARITIES.EPIC]: {
+      floor1: 2,
+      floor10: 13,
+    },
+  },
 };
 
 export const CHEST_COIN_DROP = {
@@ -23,33 +34,45 @@ export const CHEST_COIN_DROP = {
   radius: 0.62,
 };
 
-export function getChestReward(overrides = {}) {
+export function getChestReward(overrides = {}, context = {}) {
   const rewardConfig = {
     ...CHEST_REWARD,
     ...overrides,
+    rarityChancePercentByFloor: mergeRarityChanceConfig(
+      CHEST_REWARD.rarityChancePercentByFloor,
+      overrides.rarityChancePercentByFloor ?? overrides.rarityWeightsByFloor
+    ),
   };
-  const itemIds = rollChestItems(rewardConfig);
+  const itemIds = rollChestItems(rewardConfig, context);
 
   return {
     itemIds,
   };
 }
 
-function rollChestItems(rewardConfig) {
-  const itemPool = rewardConfig.itemPool ?? [];
+function rollChestItems(rewardConfig, context = {}) {
+  const progressFloor = getRewardProgressFloor(rewardConfig, context);
   const rollCount = Math.max(0, Math.floor(rewardConfig.itemRollCount ?? 0));
   const itemIds = [];
 
   for (let rollIndex = 0; rollIndex < rollCount; rollIndex += 1) {
     const itemDropRoll = rollPercentChance(rewardConfig.itemChancePercent);
-    const itemId =
-      itemPool.length > 0 && itemDropRoll.success
-        ? itemPool[Math.floor(Math.random() * itemPool.length)]
-        : null;
+    const rarityRoll = itemDropRoll.success
+      ? rollChestRarity(rewardConfig, progressFloor)
+      : null;
+    const itemPool = rarityRoll
+      ? getChestItemPoolForRarity(rewardConfig, rarityRoll.rarity)
+      : [];
+    const itemId = itemPool.length > 0
+      ? itemPool[Math.floor(Math.random() * itemPool.length)]
+      : null;
 
     console.log("chestItemDropRoll", {
       rollIndex,
       itemId,
+      rarity: rarityRoll?.rarity ?? null,
+      progressFloor,
+      rarityChancePercent: rarityRoll?.chances ?? null,
       chancePercent: rewardConfig.itemChancePercent,
       roll: itemDropRoll.value,
       spawned: Boolean(itemId),
@@ -61,6 +84,101 @@ function rollChestItems(rewardConfig) {
   }
 
   return itemIds;
+}
+
+function getRewardProgressFloor(rewardConfig, context = {}) {
+  const minFloor = rewardConfig.progressionMinFloor ?? 1;
+  const maxFloor = rewardConfig.progressionMaxFloor ?? 10;
+  const rawFloor = context.floorIndex ?? context.progressFloor ?? minFloor;
+  const numericFloor = Number.parseFloat(rawFloor);
+
+  if (!Number.isFinite(numericFloor)) return minFloor;
+
+  return Math.max(minFloor, Math.min(maxFloor, numericFloor));
+}
+
+function rollChestRarity(rewardConfig, progressFloor) {
+  const chances = getChestRarityChances(rewardConfig, progressFloor);
+  const totalChance = Object.values(chances).reduce(
+    (sum, chance) => sum + chance,
+    0
+  );
+
+  if (totalChance <= 0) {
+    return {
+      rarity: ITEM_RARITIES.COMMON,
+      chances,
+      roll: 0,
+    };
+  }
+
+  const roll = Math.random() * totalChance;
+  let cursor = 0;
+
+  for (const rarity of Object.values(ITEM_RARITIES)) {
+    cursor += chances[rarity] ?? 0;
+
+    if (roll <= cursor) {
+      return {
+        rarity,
+        chances,
+        roll: Number(roll.toFixed(2)),
+      };
+    }
+  }
+
+  return {
+    rarity: ITEM_RARITIES.COMMON,
+    chances,
+    roll: Number(roll.toFixed(2)),
+  };
+}
+
+function getChestRarityChances(rewardConfig, progressFloor) {
+  return Object.fromEntries(
+    Object.values(ITEM_RARITIES).map((rarity) => [
+      rarity,
+      getProgressiveRarityChance(rewardConfig, rarity, progressFloor),
+    ])
+  );
+}
+
+function getProgressiveRarityChance(rewardConfig, rarity, progressFloor) {
+  const chanceConfig =
+    rewardConfig.rarityChancePercentByFloor?.[rarity] ??
+    rewardConfig.rarityWeightsByFloor?.[rarity] ??
+    0;
+
+  if (typeof chanceConfig === "number") return normalizePercentChance(chanceConfig);
+
+  const minFloor = rewardConfig.progressionMinFloor ?? 1;
+  const maxFloor = rewardConfig.progressionMaxFloor ?? 10;
+  const startChance = Number.parseFloat(chanceConfig.floor1 ?? chanceConfig.start ?? 0);
+  const endChance = Number.parseFloat(chanceConfig.floor10 ?? chanceConfig.end ?? startChance);
+  const safeStart = Number.isFinite(startChance) ? startChance : 0;
+  const safeEnd = Number.isFinite(endChance) ? endChance : safeStart;
+  const progress =
+    maxFloor === minFloor
+      ? 1
+      : (progressFloor - minFloor) / (maxFloor - minFloor);
+
+  return normalizePercentChance(safeStart + (safeEnd - safeStart) * progress);
+}
+
+function getChestItemPoolForRarity(rewardConfig, rarity) {
+  return rewardConfig.itemPoolsByRarity?.[rarity] ?? getItemIdsByRarity(rarity);
+}
+
+function mergeRarityChanceConfig(defaultConfig, overrideConfig = {}) {
+  return Object.fromEntries(
+    Object.values(ITEM_RARITIES).map((rarity) => [
+      rarity,
+      {
+        ...(defaultConfig?.[rarity] ?? {}),
+        ...(overrideConfig?.[rarity] ?? {}),
+      },
+    ])
+  );
 }
 
 function rollPercentChance(chancePercent) {
@@ -154,7 +272,6 @@ export class ChestManager {
     if (lid) lid.rotation.x = -0.85;
 
     this.spawnCoins(chest);
-    this.spawnPotionDrop(chest);
     this.collectChestItem(chest);
 
     this.scene.updateHud();
@@ -166,7 +283,9 @@ export class ChestManager {
   collectChestItem(chest) {
     if (!this.scene.inventory) return;
 
-    const reward = getChestReward(chest.rewardOverrides);
+    const reward = getChestReward(chest.rewardOverrides, {
+      floorIndex: this.getRewardProgressFloor(),
+    });
     const itemIds = reward.itemIds ?? [];
 
     console.log("chestItemsGranted", {
@@ -187,42 +306,12 @@ export class ChestManager {
     }
   }
 
-  spawnPotionDrop(chest) {
-    const roll = this.rollPotionDrop();
-    console.log("chestPotionDropRoll", {
-      itemId: CHEST_REWARD.potionDropItemId,
-      chancePercent: CHEST_REWARD.potionDropChancePercent,
-      roll: roll.value,
-      spawned: roll.success,
-    });
-
-    if (!roll.success || !this.scene.itemDropManager) return;
-
-    const origin = chest.model.position.clone();
-    const forward = new THREE.Vector3(0, 0, 1)
-      .applyAxisAngle(new THREE.Vector3(0, 1, 0), chest.model.rotation.y)
-      .normalize();
-
-    const position = origin
-      .clone()
-      .addScaledVector(forward, CHEST_REWARD.potionDropRadius);
-
-    this.scene.itemDropManager.addItemDrops([
-      {
-        itemId: CHEST_REWARD.potionDropItemId,
-        position: new THREE.Vector3(position.x, 0, position.z),
-        fallbackOrigin: origin,
-      },
-    ]);
-
-    console.log("chestPotionDropped", {
-      itemId: CHEST_REWARD.potionDropItemId,
-      chancePercent: CHEST_REWARD.potionDropChancePercent,
-    });
-  }
-
-  rollPotionDrop() {
-    return rollPercentChance(CHEST_REWARD.potionDropChancePercent);
+  getRewardProgressFloor() {
+    return (
+      this.scene.currentFloorLoad?.currentFloorIndex ??
+      this.scene.levelIndex ??
+      1
+    );
   }
 
   // =========================

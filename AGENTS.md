@@ -25,8 +25,8 @@ Build a browser-based top-down 3D roguelike with:
 * Game state and level progression live in `Game/GameManager.js`.
 * Inventory state lives in `Core/Inventory.js`.
 * Item effect logic lives in `Core/ItemEffects.js`.
-* Chest logic lives in `World/Chest.js`.
-* Coin logic lives in `World/Coin.js`.
+* Chest logic lives in `Game/Chest.js`.
+* Coin logic lives in `Game/Coin.js`.
 * Ground item drop visuals and pickup wiring live in `World/ItemDrop.js`.
 * Level assembly lives in `World/LevelBuilder.js`.
 * Procedural floor creation lives in `Game/ProceduralLevelFactory.js`.
@@ -93,10 +93,11 @@ Build a browser-based top-down 3D roguelike with:
   * `enterRooms.js`
   * `combatRooms.js`
   * `treasureRooms.js`
-  * `exitRooms.js`
-* `Data/roomTemplates.js` is the room template registry.
+* `exitRooms.js`
+* `RoomData/roomTemplates.js` is the room template registry.
 * Seeded decoration is built by `World/DecorationBuilder.js` using `World/PropPlacementRules.js`.
 * Room-composition smoke tests should use `Game/RoomTester.js`.
+* Room tag filtering helpers live in `RoomData/roomTagFilters.js`.
 
 ---
 
@@ -106,6 +107,7 @@ New rooms must be reusable room templates and must declare:
 
 * `id`
 * `type`
+* `tags`
 * `dimensions`
 * `openings`
 * `walkableAreas`
@@ -123,6 +125,7 @@ Rules:
 * Do not put ordinary decorative props directly in room templates.
 * Use `setDressingModules` only for fixed authored room markers, such as exit banners or stairs.
 * Use `decorZones` as semantic decoration hints, not concrete prop placement.
+* Use room `tags` for procedural selection intent, such as size, openness, obstacles, enemy difficulty, reward/chest behavior, and connection orientation.
 * Each new room should be testable in a simple floor with a matching enter and exit room orientation.
 * Prefer readable handcrafted layouts over dense geometry.
 * Openings must align cleanly with shared connectors.
@@ -203,7 +206,8 @@ Rules:
 
 ## Item Rules
 
-* Items are data-driven through `Data/itemDefinitions.js`.
+* Items are data-driven through `CharacterData/itemDefinitions.js`.
+* Item rarity definitions live in `CharacterData/itemDefinitions.js` -> `ITEM_RARITIES`.
 * Do not create one script per item.
 * Passive items modify player stats through `Core/ItemEffects.js`.
 * Consumables are stored and limited by `Core/Inventory.js`.
@@ -217,6 +221,8 @@ Rules:
 * Scene only routes item events, updates HUD, plays feedback, and wires managers.
 * Consumable HUD icons should appear after discovery and remain visible even at count 0.
 * Item HUD order and use slots should be data-driven from item definitions.
+* Chest item reward rarity percentages live in `Game/Chest.js` -> `CHEST_REWARD.rarityChancePercentByFloor`.
+* Enemy potion drops use a fixed percent in `World/EnemyAI.js` -> `ENEMY_POTION_DROP.chancePercent`; do not scale enemy potion chance with chest rarity progression.
 * Food-themed item examples:
 
   * steak: damage up
@@ -231,11 +237,11 @@ Rules:
 
 * Chests may drop physical coins, items, or consumables.
 * Chests must not grant instant gold directly; chest gold comes from physical coin drops collected by the player.
-* Chest rewards should be controlled by `World/Chest.js` or reward config, not hardcoded in room templates.
+* Chest rewards should be controlled by `Game/Chest.js` or reward config, not hardcoded in room templates.
 * Room templates place chests; they should not define default reward values unless using explicit overrides.
 * Enemy loot decisions live in `EnemyAI.js` and must be emitted as events.
 * Scene renders dropped loot and handles pickup wiring only.
-* Coin type definitions and denomination values live in `World/Coin.js`.
+* Coin type definitions and denomination values live in `Game/Coin.js`.
 * Enemy/chest coin drops should roll a configurable total gold value, then convert it into useful coin denominations.
 * Coin and item drops should:
 
