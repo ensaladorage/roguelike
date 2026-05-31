@@ -200,21 +200,17 @@ function buildMiddleRoomChain({
     };
   }
 
-  const candidates = getCompatibleRoomCandidates({
+  const candidates = getMiddleRoomCandidates({
     rng,
     rooms,
     currentRoom,
     usedOpenings,
     remainingCounts,
-    templateGroups: {
-      combat: COMBAT_ROOM_TEMPLATES,
-      treasure: TREASURE_ROOM_TEMPLATES,
-    },
   });
 
   for (const candidate of candidates) {
     const nextUsedOpenings = new Set(usedOpenings);
-    nextUsedOpenings.add(getOpeningUseKey(currentRoom.id, candidate.targetOpening));
+    nextUsedOpenings.add(getOpeningUseKey(candidate.sourceRoom.id, candidate.targetOpening));
     nextUsedOpenings.add(getOpeningUseKey(candidate.room.id, candidate.incomingOpening));
 
     const nextRemainingCounts = {
@@ -225,7 +221,7 @@ function buildMiddleRoomChain({
     const result = buildMiddleRoomChain({
       rng,
       rooms: [...rooms, candidate.room],
-      currentRoom: candidate.room,
+      currentRoom: candidate.continuesMainPath ? candidate.room : currentRoom,
       usedOpenings: nextUsedOpenings,
       remainingCounts: nextRemainingCounts,
     });
@@ -240,33 +236,80 @@ function placeExitRoom({ rng, rooms, currentRoom, usedOpenings }) {
   const candidates = getCompatibleRoomCandidates({
     rng,
     rooms,
-    currentRoom,
+    sourceRooms: [currentRoom],
     usedOpenings,
-    remainingCounts: { exit: 1 },
-    templateGroups: {
-      exit: EXIT_ROOM_TEMPLATES,
-    },
+    type: "exit",
+    templates: EXIT_ROOM_TEMPLATES,
+    continuesMainPath: true,
   });
 
   return candidates[0] ?? null;
 }
 
-function getCompatibleRoomCandidates({
+function getMiddleRoomCandidates({
   rng,
   rooms,
   currentRoom,
   usedOpenings,
   remainingCounts,
-  templateGroups,
 }) {
-  const freeOpenings = getFreeOpenings(currentRoom, usedOpenings);
+  const candidates = [];
+  const templateGroups = {
+    combat: COMBAT_ROOM_TEMPLATES,
+    treasure: TREASURE_ROOM_TEMPLATES,
+  };
+
+  for (const type of shuffle(rng, Object.keys(templateGroups))) {
+    if ((remainingCounts[type] ?? 0) <= 0) continue;
+
+    const templates = templateGroups[type];
+    const mainPathTemplates = templates.filter((template) => !isDeadEndTemplate(template));
+    const deadEndTemplates = templates.filter(isDeadEndTemplate);
+
+    candidates.push(
+      ...getCompatibleRoomCandidates({
+        rng,
+        rooms,
+        sourceRooms: [currentRoom],
+        usedOpenings,
+        type,
+        templates: mainPathTemplates,
+        continuesMainPath: true,
+      })
+    );
+
+    candidates.push(
+      ...getCompatibleRoomCandidates({
+        rng,
+        rooms,
+        sourceRooms: rooms,
+        usedOpenings,
+        type,
+        templates: deadEndTemplates,
+        continuesMainPath: false,
+      })
+    );
+  }
+
+  return shuffle(rng, candidates);
+}
+
+function getCompatibleRoomCandidates({
+  rng,
+  rooms,
+  sourceRooms,
+  usedOpenings,
+  type,
+  templates,
+  continuesMainPath,
+}) {
   const candidates = [];
 
-  for (const targetOpening of shuffle(rng, freeOpenings)) {
-    for (const type of shuffle(rng, Object.keys(templateGroups))) {
-      if ((remainingCounts[type] ?? 0) <= 0) continue;
+  for (const sourceRoom of shuffle(rng, sourceRooms)) {
+    const freeOpenings = getFreeOpenings(sourceRoom, usedOpenings);
 
-      for (const template of shuffle(rng, templateGroups[type])) {
+    for (const targetOpening of shuffle(rng, freeOpenings)) {
+      for (const template of shuffle(rng, templates)) {
         const incomingOpenings = getTemplateOpenings(template).filter(
           (opening) => opening.side === OPPOSITE_SIDE[targetOpening.side]
         );
@@ -284,9 +327,11 @@ function getCompatibleRoomCandidates({
 
           candidates.push({
             type,
+            sourceRoom,
             room,
             targetOpening,
             incomingOpening: room.openings[incomingOpening.openingIndex],
+            continuesMainPath,
           });
         }
       }
@@ -294,6 +339,10 @@ function getCompatibleRoomCandidates({
   }
 
   return shuffle(rng, candidates);
+}
+
+function isDeadEndTemplate(template) {
+  return (template.doorOpenings?.length ?? 0) === 1;
 }
 
 function createPlacedRoomFromConnection({

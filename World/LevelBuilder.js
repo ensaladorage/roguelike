@@ -64,6 +64,12 @@ const CONNECTOR_STYLES = {
     floorModuleId: "floor",
     sideWallModuleId: "wallCorner",
     archModuleId: "woodSupport",
+    lanternModuleId: "lantern",
+    lanternWallInset: 0.45,
+    lanternForwardOffset: 0,
+    lanternY: 0,
+    lanternScale: 1,
+    lanternPointLight: {},
   },
 };
 
@@ -570,11 +576,19 @@ export class LevelBuilder {
       moduleId: style.archModuleId,
       connectionId: connection.id,
     };
+    const lanternModules = this.createConnectionLanternModules({
+      x,
+      z,
+      isHorizontal,
+      sideWallOffset,
+      style,
+      connectionId: connection.id,
+    });
 
     return {
       floorModules: [floorModule],
       wallModules: sideWallModules,
-      decorativeModules: [archModule],
+      decorativeModules: [archModule, ...lanternModules],
       walkableAreas: [
         {
           x,
@@ -587,6 +601,70 @@ export class LevelBuilder {
         this.createConnectorWallCollision(module, collisionWallThickness, isHorizontal)
       ),
     };
+  }
+
+  createConnectionLanternModules({
+    x,
+    z,
+    isHorizontal,
+    sideWallOffset,
+    style,
+    connectionId,
+  }) {
+    if (!style.lanternModuleId) return [];
+
+    const wallInset = style.lanternWallInset ?? 0.45;
+    const forwardOffset = style.lanternForwardOffset ?? 0;
+    const pointLight = style.lanternPointLight ?? {};
+    const base = {
+      w: 1,
+      d: 1,
+      y: style.lanternY ?? 0,
+      moduleId: style.lanternModuleId,
+      scaleMultiplier: style.lanternScale ?? 1,
+      connectionId,
+      pointLight,
+    };
+
+    if (isHorizontal) {
+      return [
+        {
+          ...base,
+          x: x - sideWallOffset + wallInset,
+          z: z + forwardOffset,
+          side: "west",
+          rotationY: Math.PI / 2,
+          role: "connectionLanternWest",
+        },
+        {
+          ...base,
+          x: x + sideWallOffset - wallInset,
+          z: z + forwardOffset,
+          side: "east",
+          rotationY: -Math.PI / 2,
+          role: "connectionLanternEast",
+        },
+      ];
+    }
+
+    return [
+      {
+        ...base,
+        x: x + forwardOffset,
+        z: z - sideWallOffset + wallInset,
+        side: "north",
+        rotationY: Math.PI,
+        role: "connectionLanternNorth",
+      },
+      {
+        ...base,
+        x: x + forwardOffset,
+        z: z + sideWallOffset - wallInset,
+        side: "south",
+        rotationY: 0,
+        role: "connectionLanternSouth",
+      },
+    ];
   }
 
   createConnectorWallCollision(module, collisionWallThickness, isHorizontal) {

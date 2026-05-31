@@ -118,6 +118,20 @@ export const TILESET_DEFINITIONS = {
           color: 0x343a3d,
         },
       },
+      lantern: {
+        id: "lantern",
+        placementMode: "single",
+        assetPath: "Assets/Models/lantern-glass.glb",
+        assetTexturePath: "Assets/Models/Textures/enemies-colormap.png",
+        preserveOriginalScale: true,
+        footprint: { w: 1, d: 1, height: 0.8 },
+        fallback: {
+          kind: "decor",
+          color: 0xf0b35a,
+        },
+        positionY: 0,
+        pointLightType: "lantern",
+      },
       banner: {
         id: "banner",
         placementMode: "single",

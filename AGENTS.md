@@ -65,7 +65,8 @@ Build a browser-based top-down 3D roguelike with:
 ## Model and Asset Rules
 
 * Gameplay model definitions live in `Data/modelDefinitions.js`.
-* Environment/tile asset definitions live in `Data/tileSetDefinitions.js`.
+* Environment/tile asset definitions live in `RoomData/tileSetDefinitions.js`.
+* Tile assets that need a non-default colormap should declare `assetTexturePath` in their tile definition.
 * Do not hardcode `.glb` asset paths in `Scene.js`.
 * Use semantic model ids such as:
 
@@ -142,6 +143,7 @@ Rules:
 * Connectors are not standalone levels.
 * Connector styles should live in builder-owned data.
 * Connector collision must allow click-to-move pathfinding to pass cleanly.
+* Connector set dressing such as lanterns should be generated from `LevelBuilder` connector style parameters; their point lights are owned by `UI/VFX.js`.
 
 ---
 

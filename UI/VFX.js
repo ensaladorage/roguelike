@@ -10,12 +10,23 @@ export const VFX_DEFAULTS = {
     puffOpacity: 0.34,
     rise: 0.42,
   },
+  pointLights: {
+    lantern: {
+      color: 0xffb45a,
+      intensity: 1.4,
+      distance: 5,
+      decay: 2,
+      y: 1.15,
+      castShadow: false,
+    },
+  },
 };
 
 export class VFX {
   constructor({ root = null } = {}) {
     this.root = root;
     this.effects = [];
+    this.pointLights = [];
   }
 
   setRoot(root) {
@@ -117,6 +128,35 @@ export class VFX {
     });
   }
 
+  addPointLight(type, target, options = {}) {
+    if (!this.root) return null;
+
+    const defaults =
+      VFX_DEFAULTS.pointLights[type] ?? VFX_DEFAULTS.pointLights.lantern;
+    const config = {
+      ...defaults,
+      ...options,
+    };
+    const origin = this.getTargetPosition(target);
+    if (!origin) return null;
+
+    const light = new THREE.PointLight(
+      config.color,
+      config.intensity,
+      config.distance,
+      config.decay
+    );
+
+    light.castShadow = config.castShadow;
+    light.position.set(origin.x, config.y, origin.z);
+    light.userData.type = type;
+
+    this.root.add(light);
+    this.pointLights.push(light);
+
+    return light;
+  }
+
   update(delta, camera) {
     this.effects = this.effects.filter((effect) => {
       effect.elapsed += delta;
@@ -172,6 +212,13 @@ export class VFX {
     }
 
     this.effects = [];
+
+    for (const light of this.pointLights) {
+      light.removeFromParent();
+      light.dispose?.();
+    }
+
+    this.pointLights = [];
   }
 
   getTargetPosition(target) {

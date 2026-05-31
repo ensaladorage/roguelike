@@ -7,24 +7,41 @@ export class ModularTileBuilder {
   constructor(scene) {
     this.scene = scene;
     this.loadingManager = new THREE.LoadingManager();
-    this.loadingManager.setURLModifier((url) => {
-      if (url.endsWith("Textures/colormap.png")) {
-        return "Assets/Models/Textures/characters-colormap.png";
-      }
-
-      if (url.startsWith("Textures/")) {
-        return `Assets/Models/${url}`;
-      }
-
-      return url.replace(
-        "Assets/Models/Scenario/Textures/",
-        "Assets/Models/Textures/"
-      );
-    });
+    this.loadingManager.setURLModifier((url) => this.resolveAssetUrl(url));
     this.loader = new GLTFLoader(this.loadingManager);
     this.assetCache = new Map();
     this.assetMeta = new Map();
     this.warnedAssets = new Set();
+  }
+
+  resolveAssetUrl(url, definition = null) {
+    if (url.endsWith("Textures/colormap.png") && definition?.assetTexturePath) {
+      return definition.assetTexturePath;
+    }
+
+    if (url.endsWith("Textures/colormap.png")) {
+      return "Assets/Models/Textures/characters-colormap.png";
+    }
+
+    if (url.startsWith("Textures/")) {
+      return `Assets/Models/${url}`;
+    }
+
+    return url.replace(
+      "Assets/Models/Scenario/Textures/",
+      "Assets/Models/Textures/"
+    );
+  }
+
+  createLoaderForDefinition(definition) {
+    if (!definition?.assetTexturePath) return this.loader;
+
+    const loadingManager = new THREE.LoadingManager();
+    loadingManager.setURLModifier((url) =>
+      this.resolveAssetUrl(url, definition)
+    );
+
+    return new GLTFLoader(loadingManager);
   }
 
   async preloadTileSet(tileSetId) {
@@ -37,7 +54,8 @@ export class ModularTileBuilder {
         if (this.assetCache.has(definition.assetPath)) return;
 
         try {
-          const gltf = await this.loader.loadAsync(definition.assetPath);
+          const loader = this.createLoaderForDefinition(definition);
+          const gltf = await loader.loadAsync(definition.assetPath);
           this.prepareAsset(gltf.scene);
           this.assetCache.set(definition.assetPath, gltf);
           this.assetMeta.set(definition.assetPath, this.measureAsset(gltf.scene));
@@ -165,6 +183,7 @@ export class ModularTileBuilder {
       if (!object) continue;
 
       this.scene.levelGroup.add(object);
+      this.createPointLightForModule(modulePiece, definition);
 
       if (this.blocksSight(definition)) {
         wallMeshes.push(object);
@@ -180,6 +199,16 @@ export class ModularTileBuilder {
     }
 
     return this.createFallbackInstance(piece, definition);
+  }
+
+  createPointLightForModule(piece, definition) {
+    if (!definition.pointLightType) return;
+    if (typeof this.scene.vfx?.addPointLight !== "function") return;
+
+    this.scene.vfx.addPointLight(definition.pointLightType, piece, {
+      ...(definition.pointLight ?? {}),
+      ...(piece.pointLight ?? {}),
+    });
   }
 
   createAssetInstance(piece, definition, assetScene) {
