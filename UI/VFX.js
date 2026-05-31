@@ -13,10 +13,12 @@ export const VFX_DEFAULTS = {
   pointLights: {
     lantern: {
       color: 0xffb45a,
-      intensity: 1.4,
+      intensity: 1.2,
       distance: 5,
       decay: 2,
-      y: 1.15,
+      y: 0.5,
+      xOffset: 0.1,
+      zOffset: -0.08,
       castShadow: false,
     },
   },
@@ -148,7 +150,11 @@ export class VFX {
     );
 
     light.castShadow = config.castShadow;
-    light.position.set(origin.x, config.y, origin.z);
+    light.position.set(
+      origin.x + (config.xOffset ?? 0),
+      config.y,
+      origin.z + (config.zOffset ?? 0)
+    );
     light.userData.type = type;
 
     this.root.add(light);

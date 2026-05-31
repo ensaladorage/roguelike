@@ -53,6 +53,12 @@ const EXIT_STAIRS_WOOD_STRUCTURE_ROTATION_BY_SIDE = {
   west: Math.PI / 2,
   east: -Math.PI / 2,
 };
+const LANTERN_ROTATION_BY_SIDE = {
+  north: Math.PI,
+  south: 0,
+  west: Math.PI / 2,
+  east: -Math.PI / 2,
+};
 const CONNECTOR_STYLES = {
   openCorridor: {
     id: "openCorridor",
@@ -64,10 +70,13 @@ const CONNECTOR_STYLES = {
     floorModuleId: "floor",
     sideWallModuleId: "wallCorner",
     archModuleId: "woodSupport",
+    archForwardOffset: 0.93,
+    archY: 0,
+    archScale: 1,
     lanternModuleId: "lantern",
-    lanternWallInset: 0.45,
-    lanternForwardOffset: 0,
-    lanternY: 0,
+    lanternWallInset: 0,
+    lanternForwardOffset: 1.08,
+    lanternY: 0.5,
     lanternScale: 1,
     lanternPointLight: {},
   },
@@ -510,7 +519,6 @@ export class LevelBuilder {
     const collisionWallThickness = style.collisionWallThickness ?? wallThickness;
     const sideWallOffset = style.sideWallOffset ?? length / 2;
     const wallRotationY = isHorizontal ? Math.PI / 2 : 0;
-    const archRotationY = isHorizontal ? 0 : Math.PI / 2;
 
     const floorModule = {
       x,
@@ -567,15 +575,13 @@ export class LevelBuilder {
           },
         ];
 
-    const archModule = {
+    const archModules = this.createConnectionArchModules({
       x,
       z,
-      w: 1,
-      d: 1,
-      rotationY: archRotationY,
-      moduleId: style.archModuleId,
+      isHorizontal,
+      style,
       connectionId: connection.id,
-    };
+    });
     const lanternModules = this.createConnectionLanternModules({
       x,
       z,
@@ -588,7 +594,7 @@ export class LevelBuilder {
     return {
       floorModules: [floorModule],
       wallModules: sideWallModules,
-      decorativeModules: [archModule, ...lanternModules],
+      decorativeModules: [...archModules, ...lanternModules],
       walkableAreas: [
         {
           x,
@@ -603,6 +609,32 @@ export class LevelBuilder {
     };
   }
 
+  createConnectionArchModules({ x, z, isHorizontal, style, connectionId }) {
+    if (!style.archModuleId) return [];
+
+    const forwardOffset = style.archForwardOffset ?? 0;
+    const forwardOffsets = forwardOffset === 0
+      ? [0]
+      : [forwardOffset, -forwardOffset];
+    const rotationY = isHorizontal ? 0 : Math.PI / 2;
+    const base = {
+      w: 1,
+      d: 1,
+      y: style.archY ?? 0,
+      rotationY,
+      moduleId: style.archModuleId,
+      scaleMultiplier: style.archScale ?? 1,
+      connectionId,
+    };
+
+    return forwardOffsets.map((offset, offsetIndex) => ({
+      ...base,
+      x: x + (isHorizontal ? 0 : offset),
+      z: z + (isHorizontal ? offset : 0),
+      role: offsetIndex === 0 ? "connectionArchA" : "connectionArchB",
+    }));
+  }
+
   createConnectionLanternModules({
     x,
     z,
@@ -615,6 +647,9 @@ export class LevelBuilder {
 
     const wallInset = style.lanternWallInset ?? 0.45;
     const forwardOffset = style.lanternForwardOffset ?? 0;
+    const forwardOffsets = forwardOffset === 0
+      ? [0]
+      : [forwardOffset, -forwardOffset];
     const pointLight = style.lanternPointLight ?? {};
     const base = {
       w: 1,
@@ -626,45 +661,49 @@ export class LevelBuilder {
       pointLight,
     };
 
-    if (isHorizontal) {
+    return forwardOffsets.flatMap((offset, offsetIndex) => {
+      const roleSuffix = offsetIndex === 0 ? "A" : "B";
+
+      if (isHorizontal) {
+        return [
+          {
+            ...base,
+            x: x - sideWallOffset + wallInset,
+            z: z + offset,
+            side: "west",
+            rotationY: LANTERN_ROTATION_BY_SIDE.west,
+            role: `connectionLanternWest${roleSuffix}`,
+          },
+          {
+            ...base,
+            x: x + sideWallOffset - wallInset,
+            z: z + offset,
+            side: "east",
+            rotationY: LANTERN_ROTATION_BY_SIDE.east,
+            role: `connectionLanternEast${roleSuffix}`,
+          },
+        ];
+      }
+
       return [
         {
           ...base,
-          x: x - sideWallOffset + wallInset,
-          z: z + forwardOffset,
-          side: "west",
-          rotationY: Math.PI / 2,
-          role: "connectionLanternWest",
+          x: x + offset,
+          z: z - sideWallOffset + wallInset,
+          side: "north",
+          rotationY: LANTERN_ROTATION_BY_SIDE.north,
+          role: `connectionLanternNorth${roleSuffix}`,
         },
         {
           ...base,
-          x: x + sideWallOffset - wallInset,
-          z: z + forwardOffset,
-          side: "east",
-          rotationY: -Math.PI / 2,
-          role: "connectionLanternEast",
+          x: x + offset,
+          z: z + sideWallOffset - wallInset,
+          side: "south",
+          rotationY: LANTERN_ROTATION_BY_SIDE.south,
+          role: `connectionLanternSouth${roleSuffix}`,
         },
       ];
-    }
-
-    return [
-      {
-        ...base,
-        x: x + forwardOffset,
-        z: z - sideWallOffset + wallInset,
-        side: "north",
-        rotationY: Math.PI,
-        role: "connectionLanternNorth",
-      },
-      {
-        ...base,
-        x: x + forwardOffset,
-        z: z + sideWallOffset - wallInset,
-        side: "south",
-        rotationY: 0,
-        role: "connectionLanternSouth",
-      },
-    ];
+    });
   }
 
   createConnectorWallCollision(module, collisionWallThickness, isHorizontal) {

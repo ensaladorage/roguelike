@@ -10,6 +10,8 @@ export const PLAYER_STATES = {
 const OCCLUSION_RING_INNER_RADIUS = 0.42;
 const OCCLUSION_RING_OUTER_RADIUS = 0.5;
 const OCCLUSION_RING_Y = 0.06;
+const OCCLUSION_SAMPLE_HEIGHTS = [0.12, 0.42, 0.75];
+const OCCLUSION_MIN_COVERED_SAMPLES = 1;
 const MIN_ATTACK_SPEED = 0.1;
 const BASE_PLAYER_STATS = {
   maxHp: 100,
@@ -164,12 +166,13 @@ export class Player {
       return;
     }
 
-    const coveredSamples = [
-      this.isOcclusionSampleCovered(camera, wallMeshes, 0.2),
-      this.isOcclusionSampleCovered(camera, wallMeshes, 0.75),
-    ];
+    const coveredSamples = OCCLUSION_SAMPLE_HEIGHTS.map((sampleY) =>
+      this.isOcclusionSampleCovered(camera, wallMeshes, sampleY)
+    );
+    const coveredCount = coveredSamples.filter(Boolean).length;
 
-    this.occlusionMarker.visible = coveredSamples.every(Boolean);
+    this.occlusionMarker.visible =
+      coveredCount >= OCCLUSION_MIN_COVERED_SAMPLES;
   }
 
   isOcclusionSampleCovered(camera, wallMeshes, sampleY) {
