@@ -64,7 +64,7 @@ Build a browser-based top-down 3D roguelike with:
 
 ## Model and Asset Rules
 
-* Gameplay model definitions live in `Data/modelDefinitions.js`.
+* Gameplay model definitions live in `CharacterData/modelDefinitions.js`.
 * Environment/tile asset definitions live in `RoomData/tileSetDefinitions.js`.
 * Tile assets that need a non-default colormap should declare `assetTexturePath` in their tile definition.
 * Do not hardcode `.glb` asset paths in `Scene.js`.
@@ -93,7 +93,7 @@ Build a browser-based top-down 3D roguelike with:
   * `enterRooms.js`
   * `combatRooms.js`
   * `treasureRooms.js`
-* `exitRooms.js`
+  * `exitRooms.js`
 * `RoomData/roomTemplates.js` is the room template registry.
 * Seeded decoration is built by `World/DecorationBuilder.js` using `World/PropPlacementRules.js`.
 * Room-composition smoke tests should use `Game/RoomTester.js`.
@@ -147,6 +147,7 @@ Rules:
 * Connector styles should live in builder-owned data.
 * Connector collision must allow click-to-move pathfinding to pass cleanly.
 * Connector set dressing such as lanterns should be generated from `LevelBuilder` connector style parameters; their point lights are owned by `UI/VFX.js`.
+* Procedural dead-end rooms are single-opening combat/treasure side rooms. They may count toward floor balance, but `ProceduralLevelFactory` must attach them only to already placed combat/treasure rooms, never directly to enter or exit rooms, while preserving a main path that reaches an exit.
 
 ---
 

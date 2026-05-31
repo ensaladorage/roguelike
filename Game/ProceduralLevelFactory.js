@@ -297,7 +297,7 @@ function getMiddleRoomCandidates({
       ...getCompatibleRoomCandidates({
         rng,
         rooms,
-        sourceRooms: rooms,
+        sourceRooms: getDeadEndSourceRooms(rooms),
         usedOpenings,
         type,
         templates: deadEndTemplates,
@@ -358,6 +358,10 @@ function getCompatibleRoomCandidates({
 
 function isDeadEndTemplate(template) {
   return (template.doorOpenings?.length ?? 0) === 1;
+}
+
+function getDeadEndSourceRooms(rooms) {
+  return rooms.filter((room) => room.type !== "enter" && room.type !== "exit");
 }
 
 function createPlacedRoomFromConnection({
