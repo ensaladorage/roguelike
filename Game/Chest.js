@@ -221,15 +221,17 @@ export class ChestManager {
 
     this.chests = level.chests.map((data) => {
       const model = this.createChestModel(data.modelId);
+      const animation = this.createChestAnimation(model);
 
       model.position.set(data.x, 0, data.z);
       model.rotation.y = data.rotationY;
-      model.scale.set(1, 1, 1);
+      this.applySpawnScale(model, data);
 
       this.scene.levelGroup.add(model);
 
       return {
         model,
+        animation,
         rewardOverrides: data.rewardOverrides,
         collected: false,
       };
@@ -239,7 +241,11 @@ export class ChestManager {
   // =========================
   // UPDATE LOOP ENTRY POINT
   // =========================
-  update() {
+  update(delta = 0) {
+    for (const chest of this.chests) {
+      chest.animation?.mixer?.update(delta);
+    }
+
     this.checkChestProximity();
   }
 
@@ -268,8 +274,10 @@ export class ChestManager {
 
     chest.collected = true;
 
-    const lid = chest.model.getObjectByName("lid");
-    if (lid) lid.rotation.x = -0.85;
+    if (!this.playChestOpenAnimation(chest)) {
+      const lid = chest.model.getObjectByName("lid");
+      if (lid) lid.rotation.x = -0.85;
+    }
 
     this.spawnCoins(chest);
     this.collectChestItem(chest);
@@ -399,11 +407,68 @@ export class ChestManager {
     return new THREE.Group();
   }
 
+  applySpawnScale(model, data = {}) {
+    const scaleOverride = data.scale ?? data.scaleMultiplier;
+    if (scaleOverride === undefined) return;
+
+    if (typeof scaleOverride === "number") {
+      model.scale.multiplyScalar(scaleOverride);
+      return;
+    }
+
+    model.scale.set(
+      model.scale.x * (scaleOverride.x ?? 1),
+      model.scale.y * (scaleOverride.y ?? 1),
+      model.scale.z * (scaleOverride.z ?? 1)
+    );
+  }
+
+  createChestAnimation(model) {
+    const clips = model.userData.animations ?? [];
+    if (clips.length === 0) return null;
+
+    const definition = model.userData.modelDefinition ?? {};
+    const openClip =
+      clips.find((clip) => clip.name === definition.openAnimationName) ??
+      clips[definition.openAnimationIndex] ??
+      clips[1] ??
+      null;
+
+    if (!openClip) return null;
+
+    const mixer = new THREE.AnimationMixer(model);
+    const action = mixer.clipAction(openClip);
+
+    action.setLoop(THREE.LoopOnce, 1);
+    action.clampWhenFinished = true;
+
+    return {
+      mixer,
+      action,
+      clipName: openClip.name,
+    };
+  }
+
+  playChestOpenAnimation(chest) {
+    const action = chest.animation?.action;
+    if (!action) return false;
+
+    action.reset();
+    action.play();
+
+    console.log("chestOpenAnimation", {
+      clipName: chest.animation.clipName,
+    });
+
+    return true;
+  }
+
   // =========================
   // CLEAN
   // =========================
   clear() {
     for (const chest of this.chests) {
+      chest.animation?.mixer?.stopAllAction();
       chest.model.removeFromParent();
     }
 

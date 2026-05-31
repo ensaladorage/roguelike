@@ -239,6 +239,8 @@ export class GameScene {
     };
 
     const createModelLoader = (modelDefinition) => {
+      if (modelDefinition.useEmbeddedTexture) return loader;
+
       const modelTextureDefinition =
         MODEL_TEXTURE_DEFINITIONS[modelDefinition.textureId] ??
         MODEL_TEXTURE_DEFINITIONS.charactersColormap;
@@ -246,6 +248,13 @@ export class GameScene {
 
       const loadingManager = new THREE.LoadingManager();
       loadingManager.setURLModifier((url) => {
+        if (
+          modelDefinition.assetVersion &&
+          url === modelDefinition.assetPath
+        ) {
+          return `${url}?v=${modelDefinition.assetVersion}`;
+        }
+
         if (url.endsWith("Textures/colormap.png")) {
           return modelTextureDefinition.primaryPath;
         }
@@ -256,14 +265,22 @@ export class GameScene {
       return new GLTFLoader(loadingManager);
     };
 
+    const getModelAssetPath = (modelDefinition) => {
+      if (!modelDefinition.assetVersion) return modelDefinition.assetPath;
+
+      return `${modelDefinition.assetPath}?v=${modelDefinition.assetVersion}`;
+    };
+
     const modelEntries = await Promise.all(
       getModelDefinitionsToPreload().map(async (modelDefinition) => {
         try {
           const modelLoader = createModelLoader(modelDefinition);
-          const gltf = await modelLoader.loadAsync(modelDefinition.assetPath);
+          const gltf = await modelLoader.loadAsync(getModelAssetPath(modelDefinition));
           const texture = textures[modelDefinition.textureId];
 
-          if (texture) applyTexture(gltf, texture);
+          if (!modelDefinition.useEmbeddedTexture && texture) {
+            applyTexture(gltf, texture);
+          }
           this.prepareModelForScene(gltf.scene);
 
           return [modelDefinition.id, { definition: modelDefinition, gltf }];
@@ -319,6 +336,8 @@ export class GameScene {
     const scale = modelEntry.definition.scale ?? 1;
 
     cloned.scale.set(scale, scale, scale);
+    cloned.userData.modelDefinition = modelEntry.definition;
+    cloned.userData.animations = modelEntry.gltf.animations ?? [];
     this.prepareModelForScene(cloned);
 
     return cloned;
@@ -1404,7 +1423,7 @@ export class GameScene {
     ];
 
     this.handleGameEvents(events);
-    this.chestManager.update();
+    this.chestManager.update(delta);
     this.checkLevelExitTrigger();
     this.updateClickEffects(delta);
     this.updateFeedbackEffects(delta);
