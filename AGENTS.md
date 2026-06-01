@@ -1,320 +1,183 @@
 # AGENTS.md
 
-## Project: 3D Roguelike (Three.js)
+## Project
 
-### Goal
+Browser-based top-down 3D roguelike built with Three.js.
 
-Build a browser-based top-down 3D roguelike with:
+Core goals:
 
-* Click-to-move player movement
-* FSM-based player logic
-* Enemy AI with patrol, combat, stun, drops, and death
-* Modular handcrafted rooms assembled into floors
-* Chests, coins, items, consumables, shop, and boss progression
-* Seeded procedural floors for normal runs
-* Separate tester mode for room/floor debugging
+* Click-to-move movement with pathfinding around collision.
+* FSM-driven player and enemy behavior.
+* Modular handcrafted rooms assembled into complete floors.
+* Seeded procedural run mode plus separate tester mode.
+* Event-driven combat, drops, inventory, HUD feedback, and progression.
 
----
+## Architecture Boundaries
 
-## Core Architecture
+`Scene.js` is orchestration only: world setup, rendering, manager wiring, camera, input, events, navigation callbacks, model cloning, HUD routing, SFX/VFX routing, and feedback.
 
-* `Scene.js` is orchestration only: world setup, rendering, manager wiring, events, camera, input, and navigation.
-* Do not put game rules, item logic, enemy decisions, or room data directly in `Scene.js`.
-* Player logic lives in `Core/Player.js`.
-* Enemy logic lives in `World/EnemyAI.js`.
-* Game state and level progression live in `Game/GameManager.js`.
-* Inventory state lives in `Core/Inventory.js`.
-* Item effect logic lives in `Core/ItemEffects.js`.
-* Chest logic lives in `Game/Chest.js`.
-* Coin logic lives in `Game/Coin.js`.
-* Ground item drop visuals and pickup wiring live in `World/ItemDrop.js`.
-* Level assembly lives in `World/LevelBuilder.js`.
-* Procedural floor creation lives in `Game/ProceduralLevelFactory.js`.
-* Manual room/floor tests live in `Game/RoomTester.js`.
-* HUD, logs, SFX, VFX, and feedback live in UI helpers or Scene event routing.
-* Prefer event-driven communication between gameplay systems.
+Do not put game rules, enemy decisions, item logic, drop logic, room data, or procedural generation directly in `Scene.js`.
 
----
+Primary ownership:
 
-## Game Modes and Run State
+* `Core/Player.js`: player FSM, combat state, movement rules.
+* `World/EnemyAI.js`: enemy patrol, combat, stun, drops, death, events.
+* `Game/GameManager.js`: game state, run state, progression, reset flow.
+* `Core/Inventory.js`: inventory and consumable counts.
+* `Core/ItemEffects.js`: passive and consumable effects.
+* `Game/Chest.js`: chest rewards and chest config.
+* `Game/Coin.js`: coin types, values, and coin conversion.
+* `World/ItemDrop.js`: ground item visuals and pickup wiring.
+* `World/LevelBuilder.js`: room assembly, walls, connectors, collision.
+* `Game/ProceduralLevelFactory.js`: seeded procedural floor creation.
+* `Game/RoomTester.js`: manual room/floor debugging.
+* UI helpers: HUD, logs, SFX, VFX, outlines, and player feedback.
 
-* The game should support two modes:
+Prefer event-driven communication between gameplay systems.
 
-  * `tester`: loads explicit room/floor compositions for debugging.
-  * `run`: uses procedural floor generation and run progression.
-* Tester mode must not be treated as the real progression flow.
-* Run mode should use a `RunState` object or class owned by `GameManager`.
-* `RunState` should track:
+## Modes and Progression
 
-  * mode
-  * run seed
-  * current floor index
-  * current floor seed
-  * floor type
-  * difficulty tier
-  * whether the run is active, won, or lost
-* Normal progression target:
+The game has two modes:
 
-  * 10 procedural combat/treasure floors
-  * then a shop floor
-  * then a boss floor
-* Shop and boss are future features; do not implement them unless explicitly requested.
+* `tester`: explicit room/floor compositions for debugging.
+* `run`: seeded procedural floors and real run progression.
 
----
+Tester mode is not the progression flow.
 
-## Model and Asset Rules
+Run mode should use a `RunState` owned by `GameManager` with mode, run seed, floor index, floor seed, floor type, difficulty tier, and active/won/lost state.
 
-* Gameplay model definitions live in `CharacterData/modelDefinitions.js`.
-* Environment/tile asset definitions live in `RoomData/tileSetDefinitions.js`.
-* Tile assets that need a non-default colormap should declare `assetTexturePath` in their tile definition.
-* Do not hardcode `.glb` asset paths in `Scene.js`.
-* Use semantic model ids such as:
+Normal progression target is 10 procedural combat/treasure floors, then shop, then boss. Shop and boss are future features; do not implement them unless explicitly requested.
 
-  * `player_human_01`
-  * `enemy_orc_01`
-  * `chest_01`
-  * `coin_01`
-* Scene may preload and clone models from model definitions.
-* Other systems should request model clones through Scene or a model helper, not load GLBs directly.
-* Room spawns may specify `modelId` when a non-default model is needed.
+## Models and Assets
 
----
-
-## Level and Room Architecture
-
-* Floors are assembled from reusable room instances placed together in world space.
-* Enter rooms, combat rooms, treasure rooms, and exit rooms are not separate levels.
-* Room-to-room movement happens through connected walkable geometry, not `nextLevel` loading.
-* Room/layout data must live in data files.
-* Three.js mesh placement must live in builder classes.
-* `LevelBuilder` decides how room instances become one combined floor.
-* Room type collections live in data files:
-
-  * `enterRooms.js`
-  * `combatRooms.js`
-  * `treasureRooms.js`
-  * `exitRooms.js`
-* `RoomData/roomTemplates.js` is the room template registry.
-* Seeded decoration is built by `World/DecorationBuilder.js` using `World/PropPlacementRules.js`.
-* Room-composition smoke tests should use `Game/RoomTester.js`.
-* Room tag filtering helpers live in `RoomData/roomTagFilters.js`.
-
----
-
-## Room Authoring Rules
-
-New rooms must be reusable room templates and must declare:
-
-* `id`
-* `type`
-* `tags`
-* `dimensions`
-* `openings`
-* `walkableAreas`
-* `floor/wall modules`
-* `enemySpawns`
-* `chestSpawns`
-* optional `obstacles`
-* optional `setDressingModules`
-* optional `decorZones`
-* optional `modelId` on enemy/chest spawns
+Gameplay models live in `CharacterData/modelDefinitions.js`; environment and tile assets live in `RoomData/tileSetDefinitions.js`.
 
 Rules:
 
-* New rooms must not be authored directly inside `Scene.js`.
-* Do not put ordinary decorative props directly in room templates.
-* Use `setDressingModules` only for fixed authored room markers, such as exit banners or stairs.
+* Use semantic model ids such as `player_human_01`, `enemy_orc_01`, `chest_01`, and `coin_01`.
+* Do not hardcode `.glb` paths in `Scene.js`.
+* Tile definitions that need non-default colormaps should declare `assetTexturePath`.
+* Scene may preload and clone model definitions; other systems should request clones through Scene or a model helper.
+* Room spawns may specify `modelId` for non-default enemy or chest visuals.
+
+## Rooms and Floors
+
+Floors are assembled from reusable room instances in one connected world space. Enter, combat, treasure, and exit rooms are room types, not separate levels.
+
+Room/layout data must live in data files; Three.js placement belongs in builders. `LevelBuilder` decides how room instances become a combined floor.
+
+Room collections and helpers:
+
+* `RoomData/enterRooms.js`
+* `RoomData/combatRooms.js`
+* `RoomData/treasureRooms.js`
+* `RoomData/exitRooms.js`
+* `RoomData/roomTemplates.js`
+* `RoomData/roomTagFilters.js`
+
+New room templates must declare `id`, `type`, `tags`, `dimensions`, `openings`, `walkableAreas`, floor/wall modules, `enemySpawns`, and `chestSpawns`. Optional fields include `obstacles`, `setDressingModules`, `decorZones`, and spawn-level `modelId`.
+
+Room authoring rules:
+
+* Do not author rooms in `Scene.js`.
+* Use readable handcrafted layouts over dense geometry.
+* Use `tags` for procedural selection intent.
+* Use `setDressingModules` only for fixed authored markers such as stairs or exit banners.
 * Use `decorZones` as semantic decoration hints, not concrete prop placement.
-* Use room `tags` for procedural selection intent, such as size, openness, obstacles, enemy difficulty, reward/chest behavior, and connection orientation.
-* Each new room should be testable in a simple floor with a matching enter and exit room orientation.
-* Prefer readable handcrafted layouts over dense geometry.
-* Openings must align cleanly with shared connectors.
-* Avoid duplicated room borders on connected sides.
+* Openings must align cleanly, and connected sides must avoid duplicated borders.
+* Each new room should be testable with matching enter/exit orientation through `RoomTester`.
 
----
+## Connectors and Decoration
 
-## Room Connection Rules
+`LevelBuilder` detects shared borders by matching opposite openings in world space. It decides whether each opening becomes a standalone doorway, shared connector, or closed wall.
 
-* Shared room borders are detected in `LevelBuilder` by matching opposite openings in world space.
-* Connected borders must be handled once.
-* Do not render duplicated wall or doorway modules from both connected rooms.
-* Room templates declare openings; `LevelBuilder` decides whether an opening becomes:
+Connector rules:
 
-  * a standalone doorway
-  * a shared connector
-  * a closed wall
-* Connectors are not standalone levels.
-* Connector styles should live in builder-owned data.
-* Connector collision must allow click-to-move pathfinding to pass cleanly.
-* Connector set dressing such as lanterns should be generated from `LevelBuilder` connector style parameters; their point lights are owned by `UI/VFX.js`.
-* Procedural dead-end rooms are single-opening combat/treasure side rooms. They may count toward floor balance, but `ProceduralLevelFactory` must attach them only to already placed combat/treasure rooms, never directly to enter or exit rooms, while preserving a main path that reaches an exit.
+* Connected borders are handled once.
+* Connector collision must allow click-to-move pathfinding.
+* Connector styles live in builder-owned data.
+* Connector set dressing may come from connector style params; point lights belong to `UI/VFX.js`.
+* Procedural dead-end rooms must attach only to already placed combat/treasure rooms, never directly to enter or exit rooms, while preserving a main path to the exit.
 
----
+Decoration rules:
 
-## Decoration Rules
+* Decoration stays out of `Scene.js`.
+* Decoration is seeded and deterministic.
+* `World/DecorationBuilder.js` uses `World/PropPlacementRules.js`.
+* Scatter props may appear broadly; barrels should prefer semantic spots such as corners, doors, or chest-adjacent areas.
+* Generated decoration must avoid openings, connectors, player/enemy/chest spawns, stairs, and critical navigation paths.
+* Visual footprint and collision footprint may differ, but gameplay validation uses collision footprint.
 
-* Decoration placement must stay out of `Scene.js`.
-* Decorative props are generated from seeded config, not hand-placed in room scripts.
-* Decoration must remain deterministic for a given seed.
-* Scatter-style props such as floor detail and stones may appear broadly.
-* Barrels should use semantic spots such as corners, door-adjacent areas, and chest-adjacent areas.
-* Generated decoration must avoid:
+## Gameplay and Enemies
 
-  * openings
-  * connectors
-  * player spawn
-  * enemy spawns
-  * chest spawns
-  * stairs
-  * critical navigation paths
-* Visual size, placement footprint, and collision footprint may differ when needed, but gameplay validation should use the collision footprint.
+Movement and combat:
 
----
-
-## Gameplay Rules
-
-* Player movement is click-to-move.
-* Click-to-move must use navigation/pathfinding around collision walls.
-* Player cannot move during combat unless a specific item/effect allows disengage.
-* Enemy proximity can initiate combat.
+* Player movement is click-to-move using navigation/pathfinding.
+* Player cannot move during combat unless an item/effect allows disengage.
+* Enemy proximity may initiate combat.
 * Combat uses cooldown timers, not input spam.
-* Only FSM/state systems should control state transitions.
-* Damage and drops must be event-driven.
+* FSM/state systems own state transitions.
+* Damage and drops are event-driven.
 * Never trigger attacks directly from input.
 
----
+Enemy rules:
 
-## Enemy Rules
-
-* Enemy movement must use the same walkable/collision navigation rules as the player.
-* `EnemyAI.js` owns patrol, states, combat flow, drops, damage, stun, and event emission.
-* Enemy stats such as HP, damage, speed, attack range, cooldowns, collision radius, model id, and difficulty must come from enemy definition data.
+* Enemy movement uses the same walkable/collision rules as the player.
+* Enemy stats come from enemy definition data.
 * Room `enemySpawns` define position and patrol intent.
-* `LevelBuilder` may resolve enemy type from level difficulty using seeded deterministic selection.
-* Enemy difficulty groups are easy, medium, and hard.
-* Scene may inject navigation callbacks such as:
-
-  * `canMoveBetween`
-  * `findPath`
-  * random walkable point helpers
+* `LevelBuilder` may resolve enemy type from difficulty through seeded deterministic selection.
+* Difficulty groups are `easy`, `medium`, and `hard`.
+* Scene may inject navigation callbacks such as `canMoveBetween`, `findPath`, and random walkable point helpers.
 * Scene must not contain enemy decision logic.
-* Current patrol enemies must keep patrol targets and patrol paths inside their spawn room.
-* Future chase enemies may leave their spawn room only if explicitly designed.
-* During player combat, non-active enemies may be paused by `GameManager`.
-* The active combat enemy must not be paused by the combat movement lock.
+* Patrol enemies stay inside their spawn room; future chase enemies may leave only if explicitly designed.
+* `GameManager` may pause non-active enemies during combat; the active combat enemy must not be paused by the combat movement lock.
 
----
+## Items, Chests, Coins, and Drops
 
-## Item Rules
+Items are data-driven through `CharacterData/itemDefinitions.js`, including `ITEM_RARITIES`, HUD order, and use slots. Do not create one script per item.
 
-* Items are data-driven through `CharacterData/itemDefinitions.js`.
-* Item rarity definitions live in `CharacterData/itemDefinitions.js` -> `ITEM_RARITIES`.
-* Do not create one script per item.
+Item rules:
+
 * Passive items modify player stats through `Core/ItemEffects.js`.
 * Consumables are stored and limited by `Core/Inventory.js`.
-* Item pickup/use must emit events such as:
+* Item pickup/use emits events such as `itemPickedUp`, `passiveItemApplied`, `itemUsed`, `itemUseFailed`, and `itemPickupBlocked`.
+* Scene only routes item events, updates HUD, and plays feedback.
+* Consumable HUD icons appear after discovery and remain visible at count 0.
 
-  * `itemPickedUp`
-  * `passiveItemApplied`
-  * `itemUsed`
-  * `itemUseFailed`
-  * `itemPickupBlocked`
-* Scene only routes item events, updates HUD, plays feedback, and wires managers.
-* Consumable HUD icons should appear after discovery and remain visible even at count 0.
-* Item HUD order and use slots should be data-driven from item definitions.
-* Chest item reward rarity percentages live in `Game/Chest.js` -> `CHEST_REWARD.rarityChancePercentByFloor`.
-* Enemy potion drops use a fixed percent in `World/EnemyAI.js` -> `ENEMY_POTION_DROP.chancePercent`; do not scale enemy potion chance with chest rarity progression.
-* Food-themed item examples:
+Reward rules:
 
-  * steak: damage up
-  * chili: attack speed up
-  * ramen: max HP up
-  * energy drink: heal consumable
-  * purple mushroom: stun/disengage consumable
-
----
-
-## Chest, Coin, and Drop Rules
-
+* Chest rarity percentages live in `Game/Chest.js` under `CHEST_REWARD.rarityChancePercentByFloor`.
+* Enemy potion drop chance is fixed in `World/EnemyAI.js` under `ENEMY_POTION_DROP.chancePercent`; do not scale it with chest rarity progression.
 * Chests may drop physical coins, items, or consumables.
-* Chests must not grant instant gold directly; chest gold comes from physical coin drops collected by the player.
-* Chest rewards should be controlled by `Game/Chest.js` or reward config, not hardcoded in room templates.
-* Room templates place chests; they should not define default reward values unless using explicit overrides.
-* Enemy loot decisions live in `EnemyAI.js` and must be emitted as events.
+* Chests must not grant instant gold directly; gold comes from physical coin pickup.
+* Room templates place chests but should not define default reward values unless explicitly overriding.
+* Enemy loot decisions live in `EnemyAI.js` and are emitted as events.
 * Scene renders dropped loot and handles pickup wiring only.
-* Coin type definitions and denomination values live in `Game/Coin.js`.
-* Enemy/chest coin drops should roll a configurable total gold value, then convert it into useful coin denominations.
-* Coin and item drops should:
-
-  * launch from source
-  * avoid walls
-  * land on walkable ground
-  * become collectible after landing
-  * remain on the ground if pickup is blocked
+* Coin definitions and denomination values live in `Game/Coin.js`.
+* Enemy/chest coin drops roll configurable total gold, then convert to useful denominations.
+* Coin and item drops should launch from source, avoid walls, land on walkable ground, become collectible after landing, and remain on the ground if pickup is blocked.
 * Coin outlines/visibility helpers must not use global postprocessing or alter scene lighting.
 
----
+Food-themed item examples: steak for damage, chili for attack speed, ramen for max HP, energy drink for healing, purple mushroom for stun/disengage.
 
-## Level Design Rules
+## Level Design
 
-* Avoid overlapping floor planes to prevent Z-fighting.
-* Use separate walkable areas and collision walls.
-* Chests should be distributed naturally in rooms.
-* Enemy spawns and chest spawns should feel intentional, not clustered randomly.
-* Wall module rotation must follow room side:
-
-  * north/south use one Y rotation
-  * east/west use the perpendicular Y rotation
+* Avoid overlapping floor planes and Z-fighting.
+* Keep walkable areas and collision walls separate.
+* Place chests and enemy spawns intentionally, not clustered randomly.
+* Wall module rotation follows side: north/south share one Y rotation, east/west use the perpendicular rotation.
 * Corner wall modules must be explicitly oriented.
-* Visual obstacle size and collision size may differ when needed for navigation.
-* Enter rooms may use stairs as entry set dressing with collision.
-* Exit rooms may use visible non-blocking stairs or exit markers for future floor transitions.
+* Visual obstacle size and collision size may differ when navigation needs it.
+* Enter rooms may use colliding entry stairs; exit rooms may use visible non-blocking stairs or markers.
 
----
+## Reset, Text, and Verification
 
-## Reset Rules
+Do not reload the browser page to reset gameplay. Death or run reset should clear enemies, chests, coins, item drops, VFX, player position/state, inventory/stats as appropriate, HUD/log state, then rebuild the floor or restart the run through `GameManager`.
 
-Do not reload the browser page to reset gameplay.
+All player-facing text must be English, including HUD labels, item names, logs, aria labels, hints, and level names. Spanish is allowed for programmer-facing comments, notes, and docs. HUD numbers must come from game/player state, not static placeholder HTML.
 
-When the player dies or a run resets:
+Debug and verification:
 
-* clear current enemies
-* clear chests
-* clear coins
-* clear item drops
-* clear visual effects
-* reset player position
-* reset player state
-* reset inventory/stats according to run rules
-* reset HUD/log
-* rebuild the current floor or restart the run through `GameManager`
-
----
-
-## Text and UI Rules
-
-* All player-facing game text must be in English:
-
-  * HUD labels
-  * item names
-  * logs
-  * aria labels
-  * hints
-  * level names shown on screen
-* Spanish is allowed for programmer-facing comments, notes, and documentation.
-* HUD stat numbers must come from player/game state, not static placeholder HTML.
-
----
-
-## Debug and Verification
-
-* Use console logs for gameplay events during development.
-* Do not remove useful debug logs during active debugging.
-* Local browser test URL:
-
-  * `http://127.0.0.1:5500/index.html`
-* A smoke check should:
-
-  * reload the page
-  * confirm the title is `Roguelike`
-  * confirm there are no browser errors or warnings
+* Keep useful development console logs during active debugging.
+* Local browser test URL: `http://127.0.0.1:5500/index.html`.
+* Smoke check: reload the page, confirm title is `Roguelike`, and confirm no browser errors or warnings.
