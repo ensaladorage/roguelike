@@ -27,6 +27,7 @@ import {
 import { RoomTemplateLibrary } from "../World/RoomTemplateLibrary.js";
 import { LevelBuilder } from "../World/LevelBuilder.js";
 import { ModularTileBuilder } from "../World/ModularTileBuilder.js";
+import { RoomVisibilityManager } from "../World/RoomVisibilityManager.js";
 
 const PLAYER_GROUND_Y = 0;
 const PLAYER_COLLISION_RADIUS = 0.32;
@@ -64,6 +65,7 @@ export class GameScene {
       roomTemplateLibrary: this.roomTemplateLibrary,
     });
     this.modularTileBuilder = new ModularTileBuilder(this);
+    this.roomVisibilityManager = new RoomVisibilityManager(this);
 
     this.camera = new THREE.PerspectiveCamera(
       45,
@@ -95,6 +97,7 @@ export class GameScene {
     this.chests = [];
     this.walkableAreas = [];
     this.collisionWalls = [];
+    this.allWallMeshes = [];
     this.wallMeshes = [];
     this.navBounds = null;
     this.levelExitTrigger = null;
@@ -435,7 +438,7 @@ export class GameScene {
 
     this.updateFloorPlane(floorSize, floorCenter);
     this.environment.updateForLevel(levelBounds);
-    this.addLevelGeometry(level);
+    const environmentBuild = this.addLevelGeometry(level);
     this.chestManager.load(level);
     this.shopManager.load(level, {
       runSeed: floorLoad.runSeed,
@@ -451,6 +454,12 @@ export class GameScene {
     this.addLevelEnemies(level);
     this.placePlayer(level.playerStart);
     this.restoreProgressSnapshot(progressSnapshot);
+    this.roomVisibilityManager.load(level, {
+      ...environmentBuild,
+      enemies: this.enemies,
+      chests: this.chestManager.chests,
+      shopStands: this.shopManager.stands,
+    });
     this.syncDebugCheatEffects();
 
     this.updateHud();
@@ -538,6 +547,7 @@ export class GameScene {
     if (this.coinManager) this.coinManager.clear();
     if (this.itemDropManager) this.itemDropManager.clear();
     if (this.shopManager) this.shopManager.clearFloor();
+    if (this.roomVisibilityManager) this.roomVisibilityManager.clear();
     this.playerControlLocks.clear();
 
     this.levelGroup.clear();
@@ -546,6 +556,7 @@ export class GameScene {
     this.chests = [];
     this.walkableAreas = [];
     this.collisionWalls = [];
+    this.allWallMeshes = [];
     this.wallMeshes = [];
     this.navBounds = null;
     this.levelExitTrigger = null;
@@ -786,7 +797,8 @@ export class GameScene {
     this.navBounds = this.calculateNavBounds(this.walkableAreas);
 
     const environmentBuild = this.modularTileBuilder.buildLevel(level.environment);
-    this.wallMeshes = environmentBuild.wallMeshes;
+    this.allWallMeshes = environmentBuild.wallMeshes;
+    this.wallMeshes = [...this.allWallMeshes];
 
     if (level.exit?.x !== undefined && level.exit?.z !== undefined) {
       this.levelExitTrigger = {
@@ -795,6 +807,8 @@ export class GameScene {
         activated: false,
       };
     }
+
+    return environmentBuild;
   }
 
   addLevelEnemies(level) {
@@ -829,7 +843,7 @@ export class GameScene {
       (point) => new THREE.Vector3(point.x, 0.6, point.z)
     );
 
-    return new EnemyAI(enemyRoot, patrolPoints, {
+    const enemy = new EnemyAI(enemyRoot, patrolPoints, {
       enemyTypeId: data.enemyTypeId,
       enemyName: data.enemyName,
       enemyDifficulty: data.enemyDifficulty,
@@ -846,6 +860,11 @@ export class GameScene {
       patrolAreas: data.patrolAreas,
       navigation: this.createEnemyNavigation(),
     });
+
+    enemy.roomId = data.roomId;
+    enemy.roomTemplateId = data.roomTemplateId;
+
+    return enemy;
   }
 
   createEnemyNavigation() {
@@ -1463,6 +1482,7 @@ export class GameScene {
     this.gameManager.update(delta);
 
     for (const enemy of this.enemies) {
+      if (enemy.model?.visible === false) continue;
       enemy.update(delta, this.camera);
     }
 
@@ -1474,6 +1494,7 @@ export class GameScene {
     const previousPlayerPosition = this.player.model.position.clone();
     this.player.update(delta);
     this.applyPlayerWorldCollision(previousPlayerPosition);
+    this.roomVisibilityManager.update(this.player.model.position, delta);
 
     const events = [
       ...this.player.consumeEvents(),

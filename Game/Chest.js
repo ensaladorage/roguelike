@@ -232,6 +232,8 @@ export class ChestManager {
       return {
         model,
         animation,
+        roomId: data.roomId,
+        roomTemplateId: data.roomTemplateId,
         rewardOverrides: data.rewardOverrides,
         collected: false,
       };
@@ -257,6 +259,7 @@ export class ChestManager {
 
     for (const chest of this.chests) {
       if (chest.collected) continue;
+      if (chest.model?.visible === false) continue;
 
       const distance = flatDistance(playerPos, chest.model.position);
 

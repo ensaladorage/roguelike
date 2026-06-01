@@ -179,5 +179,5 @@ All player-facing text must be English, including HUD labels, item names, logs, 
 Debug and verification:
 
 * Keep useful development console logs during active debugging.
-* Local browser test URL: `http://127.0.0.1:5500/index.html`.
-* Smoke check: reload the page, confirm title is `Roguelike`, and confirm no browser errors or warnings.
+* Do not run `node --check`; it is blocked in this environment.
+* Do not make smokes in browser.

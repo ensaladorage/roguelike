@@ -104,6 +104,7 @@ export class GameManager {
 
     for (const enemy of enemies) {
       if (!enemy.alive) continue;
+      if (enemy.model?.visible === false) continue;
       if (enemy.isStunned?.()) continue;
 
       const distance = flatDistance(

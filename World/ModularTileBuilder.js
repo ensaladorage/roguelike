@@ -69,51 +69,53 @@ export class ModularTileBuilder {
 
   buildLevel(environment) {
     const tileSet = getTileSetDefinition(environment.tileSetId);
-    const wallMeshes = [];
+    const build = {
+      wallMeshes: [],
+      roomObjectsById: new Map(),
+      connectionObjectsById: new Map(),
+    };
 
     for (const floorModule of environment.floorModules ?? []) {
-      this.buildPiece(floorModule, tileSet, wallMeshes);
+      this.buildPiece(floorModule, tileSet, build);
     }
 
     for (const wallModule of environment.wallModules ?? []) {
-      this.buildPiece(wallModule, tileSet, wallMeshes);
+      this.buildPiece(wallModule, tileSet, build);
     }
 
     for (const doorwayModule of environment.doorwayModules ?? []) {
-      this.buildPiece(doorwayModule, tileSet, wallMeshes);
+      this.buildPiece(doorwayModule, tileSet, build);
     }
 
     for (const decorativeModule of environment.decorativeModules ?? []) {
-      this.buildPiece(decorativeModule, tileSet, wallMeshes);
+      this.buildPiece(decorativeModule, tileSet, build);
     }
 
-    return {
-      wallMeshes,
-    };
+    return build;
   }
 
-  buildPiece(piece, tileSet, wallMeshes) {
+  buildPiece(piece, tileSet, build) {
     const definition = tileSet.modules[piece.moduleId];
     if (!definition) return;
 
     for (const stackPiece of this.createVerticalStackPieces(piece, definition)) {
       switch (definition.placementMode) {
         case "grid":
-          this.buildGridModules(stackPiece, definition);
+          this.buildGridModules(stackPiece, definition, build);
           break;
 
         case "linear":
-          this.buildLinearModules(stackPiece, definition, wallMeshes);
+          this.buildLinearModules(stackPiece, definition, build);
           break;
 
         case "single":
         default:
-          this.buildSingleModule(stackPiece, definition, wallMeshes);
+          this.buildSingleModule(stackPiece, definition, build);
       }
     }
   }
 
-  buildGridModules(piece, definition) {
+  buildGridModules(piece, definition, build) {
     const footprint = definition.footprint ?? { w: piece.w, d: piece.d };
     const countX = Math.max(1, Math.round(piece.w / footprint.w));
     const countZ = Math.max(1, Math.round(piece.d / footprint.d));
@@ -135,7 +137,7 @@ export class ModularTileBuilder {
         if (this.isGridModuleHidden(modulePiece, piece.hiddenAreas)) continue;
 
         const object = this.createModuleObject(modulePiece, definition);
-        if (object) this.scene.levelGroup.add(object);
+        if (object) this.addBuiltObject(object, modulePiece, build);
       }
     }
   }
@@ -149,7 +151,7 @@ export class ModularTileBuilder {
     );
   }
 
-  buildLinearModules(piece, definition, wallMeshes) {
+  buildLinearModules(piece, definition, build) {
     const axis = this.getModuleAxis(piece);
     const isHorizontal = axis === "x";
     const length = isHorizontal ? piece.w : piece.d;
@@ -172,22 +174,61 @@ export class ModularTileBuilder {
       const object = this.createModuleObject(modulePiece, definition);
       if (!object) continue;
 
-      this.scene.levelGroup.add(object);
-      wallMeshes.push(object);
+      this.addBuiltObject(object, modulePiece, build, { blocksSight: true });
     }
   }
 
-  buildSingleModule(piece, definition, wallMeshes) {
+  buildSingleModule(piece, definition, build) {
     for (const modulePiece of this.createRepeatedSingleModulePieces(piece, definition)) {
       const object = this.createModuleObject(modulePiece, definition);
       if (!object) continue;
 
-      this.scene.levelGroup.add(object);
-      this.createPointLightForModule(modulePiece, definition);
+      this.addBuiltObject(object, modulePiece, build, {
+        blocksSight: this.blocksSight(definition),
+      });
+      const light = this.createPointLightForModule(modulePiece, definition);
+      if (light) this.registerBuiltObject(light, modulePiece, build);
+    }
+  }
 
-      if (this.blocksSight(definition)) {
-        wallMeshes.push(object);
-      }
+  addBuiltObject(object, piece, build, options = {}) {
+    this.applyPieceMetadata(object, piece);
+    this.scene.levelGroup.add(object);
+    this.registerBuiltObject(object, piece, build);
+
+    if (options.blocksSight) {
+      build.wallMeshes.push(object);
+    }
+  }
+
+  registerBuiltObject(object, piece, build) {
+    this.applyPieceMetadata(object, piece);
+
+    if (piece.roomId) {
+      this.addObjectToMap(build.roomObjectsById, piece.roomId, object);
+    }
+
+    if (piece.connectionId) {
+      this.addObjectToMap(build.connectionObjectsById, piece.connectionId, object);
+    }
+  }
+
+  addObjectToMap(map, key, object) {
+    const objects = map.get(key) ?? [];
+    objects.push(object);
+    map.set(key, objects);
+  }
+
+  applyPieceMetadata(object, piece) {
+    if (piece.moduleId) object.userData.moduleId = piece.moduleId;
+    if (piece.role) object.userData.role = piece.role;
+    if (piece.roomId) object.userData.roomId = piece.roomId;
+    if (piece.connectionId) object.userData.connectionId = piece.connectionId;
+    if (piece.connectorVisibility) {
+      object.userData.connectorVisibility = piece.connectorVisibility;
+    }
+    if (piece.connectorVisibleRoomId) {
+      object.userData.connectorVisibleRoomId = piece.connectorVisibleRoomId;
     }
   }
 
@@ -205,7 +246,7 @@ export class ModularTileBuilder {
     if (!definition.pointLightType) return;
     if (typeof this.scene.vfx?.addPointLight !== "function") return;
 
-    this.scene.vfx.addPointLight(definition.pointLightType, piece, {
+    return this.scene.vfx.addPointLight(definition.pointLightType, piece, {
       ...(definition.pointLight ?? {}),
       ...(piece.pointLight ?? {}),
     });

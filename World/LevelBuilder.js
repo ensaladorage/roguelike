@@ -257,30 +257,52 @@ export class LevelBuilder {
         ? this.hideFloorTileUnderModule(room.floorModules, stairsModule)
         : room.floorModules;
 
-      environment.floorModules.push(...floorModules);
-      environment.wallModules.push(...wallModules);
-      environment.doorwayModules.push(...doorwayModules);
-      environment.decorativeModules.push(...generatedDecorativeModules);
-      environment.decorativeModules.push(...(room.setDressingModules ?? []));
-      environment.decorativeModules.push(...(room.decorativeModules ?? []));
-      environment.decorativeModules.push(...room.obstacleModules);
-      environment.decorativeModules.push(...stairsDecorationModules);
+      environment.floorModules.push(...this.tagModules(floorModules, { roomId: room.id }));
+      environment.wallModules.push(...this.tagModules(wallModules, { roomId: room.id }));
+      environment.doorwayModules.push(...this.tagModules(doorwayModules, { roomId: room.id }));
+      environment.decorativeModules.push(
+        ...this.tagModules(generatedDecorativeModules, { roomId: room.id })
+      );
+      environment.decorativeModules.push(
+        ...this.tagModules(room.setDressingModules ?? [], { roomId: room.id })
+      );
+      environment.decorativeModules.push(
+        ...this.tagModules(room.decorativeModules ?? [], { roomId: room.id })
+      );
+      environment.decorativeModules.push(
+        ...this.tagModules(room.obstacleModules, { roomId: room.id })
+      );
+      environment.decorativeModules.push(
+        ...this.tagModules(stairsDecorationModules, { roomId: room.id })
+      );
 
-      walkableAreas.push(...room.walkableAreas.map(cloneArea));
+      walkableAreas.push(...room.walkableAreas.map((area) => ({ ...area, roomId: room.id })));
       collisionWalls.push(...wallModules.map(cloneArea));
       collisionWalls.push(...doorwayModules.map(cloneArea));
       if (stairsModule?.collision) {
-        collisionWalls.push(this.createObstacleCollision(stairsModule));
+        collisionWalls.push({
+          ...this.createObstacleCollision(stairsModule),
+          roomId: room.id,
+        });
       }
       collisionWalls.push(
         ...this.createDecorationCollisionModules({
           decorativeModules: generatedDecorativeModules,
-        })
+        }).map((module) => ({ ...module, roomId: room.id }))
       );
       collisionWalls.push(
-        ...this.createDecorationCollisionModules(room)
+        ...this.createDecorationCollisionModules(room).map((module) => ({
+          ...module,
+          roomId: room.id,
+        }))
       );
-      chests.push(...room.chestSpawns.map((spawn) => ({ ...spawn })));
+      chests.push(
+        ...room.chestSpawns.map((spawn) => ({
+          ...spawn,
+          roomId: room.id,
+          roomTemplateId: room.templateId,
+        }))
+      );
       shopOfferSpawns.push(
         ...(room.shopOfferSpawns ?? []).map((spawn, offerIndex) => ({
           ...spawn,
@@ -348,6 +370,11 @@ export class LevelBuilder {
       enemies,
       exit,
       connections,
+      roomVisibility: this.createRoomVisibilityData({
+        rooms,
+        connections,
+        endpointsByRoom,
+      }),
       roomTags: rooms.map((room) => ({
         id: room.id,
         templateId: room.templateId,
@@ -359,6 +386,32 @@ export class LevelBuilder {
 
   getConnectorStyle(connectorStyleId = "openCorridor") {
     return CONNECTOR_STYLES[connectorStyleId] ?? CONNECTOR_STYLES.openCorridor;
+  }
+
+  tagModules(modules = [], metadata = {}) {
+    return modules.map((module) => ({
+      ...module,
+      ...metadata,
+      hiddenAreas: module.hiddenAreas?.map(cloneArea),
+    }));
+  }
+
+  createRoomVisibilityData({ rooms, connections, endpointsByRoom }) {
+    return {
+      rooms: rooms.map((room) => ({
+        id: room.id,
+        templateId: room.templateId,
+        type: room.type,
+        walkableAreas: room.walkableAreas.map(cloneArea),
+        connectionIds: (endpointsByRoom.get(room.id) ?? []).map(
+          (endpoint) => endpoint.connectionId
+        ),
+      })),
+      connections: connections.map((connection) => ({
+        id: connection.id,
+        roomIds: [connection.a.roomId, connection.b.roomId],
+      })),
+    };
   }
 
   validateRoomTagFilters(rooms, options = {}) {
@@ -629,6 +682,7 @@ export class LevelBuilder {
         ];
 
     const archModules = this.createConnectionArchModules({
+      connection,
       x,
       z,
       isHorizontal,
@@ -636,6 +690,7 @@ export class LevelBuilder {
       connectionId: connection.id,
     });
     const lanternModules = this.createConnectionLanternModules({
+      connection,
       x,
       z,
       isHorizontal,
@@ -662,7 +717,7 @@ export class LevelBuilder {
     };
   }
 
-  createConnectionArchModules({ x, z, isHorizontal, style, connectionId }) {
+  createConnectionArchModules({ connection, x, z, isHorizontal, style, connectionId }) {
     if (!style.archModuleId) return [];
 
     const forwardOffset = style.archForwardOffset ?? 0;
@@ -680,15 +735,23 @@ export class LevelBuilder {
       connectionId,
     };
 
-    return forwardOffsets.map((offset, offsetIndex) => ({
-      ...base,
-      x: x + (isHorizontal ? 0 : offset),
-      z: z + (isHorizontal ? offset : 0),
-      role: offsetIndex === 0 ? "connectionArchA" : "connectionArchB",
-    }));
+    return forwardOffsets.map((offset, offsetIndex) => {
+      const module = {
+        ...base,
+        x: x + (isHorizontal ? 0 : offset),
+        z: z + (isHorizontal ? offset : 0),
+        role: offsetIndex === 0 ? "connectionArchA" : "connectionArchB",
+      };
+
+      return {
+        ...module,
+        connectorVisibleRoomId: this.getNearestConnectionRoomId(connection, module),
+      };
+    });
   }
 
   createConnectionLanternModules({
+    connection,
     x,
     z,
     isHorizontal,
@@ -719,44 +782,98 @@ export class LevelBuilder {
 
       if (isHorizontal) {
         return [
-          {
+          this.tagConnectionEndpointModule(connection, {
             ...base,
             x: x - sideWallOffset + wallInset,
             z: z + offset,
             side: "west",
             rotationY: LANTERN_ROTATION_BY_SIDE.west,
             role: `connectionLanternWest${roleSuffix}`,
-          },
-          {
+          }),
+          this.tagConnectionEndpointModule(connection, {
             ...base,
             x: x + sideWallOffset - wallInset,
             z: z + offset,
             side: "east",
             rotationY: LANTERN_ROTATION_BY_SIDE.east,
             role: `connectionLanternEast${roleSuffix}`,
-          },
+          }),
         ];
       }
 
       return [
-        {
+        this.tagConnectionEndpointModule(connection, {
           ...base,
           x: x + offset,
           z: z - sideWallOffset + wallInset,
           side: "north",
           rotationY: LANTERN_ROTATION_BY_SIDE.north,
           role: `connectionLanternNorth${roleSuffix}`,
-        },
-        {
+        }),
+        this.tagConnectionEndpointModule(connection, {
           ...base,
           x: x + offset,
           z: z + sideWallOffset - wallInset,
           side: "south",
           rotationY: LANTERN_ROTATION_BY_SIDE.south,
           role: `connectionLanternSouth${roleSuffix}`,
-        },
+        }),
       ];
     });
+  }
+
+  tagConnectionEndpointModule(connection, module) {
+    return {
+      ...module,
+      connectorVisibleRoomId: this.getNearestConnectionRoomId(connection, module),
+    };
+  }
+
+  getNearestConnectionRoomId(connection, point) {
+    const scoreA = this.getConnectionEndpointInteriorScore(point, connection.a);
+    const scoreB = this.getConnectionEndpointInteriorScore(point, connection.b);
+
+    if (scoreA !== scoreB) {
+      return scoreA > scoreB ? connection.a.roomId : connection.b.roomId;
+    }
+
+    const distanceToA = this.distanceSquared2D(point, connection.a.opening);
+    const distanceToB = this.distanceSquared2D(point, connection.b.opening);
+    return distanceToA <= distanceToB
+      ? connection.a.roomId
+      : connection.b.roomId;
+  }
+
+  getConnectionEndpointInteriorScore(point, endpoint) {
+    const interior = this.getRoomInteriorDirection(endpoint.opening.side);
+    if (!interior) return 0;
+
+    return (
+      (point.x - endpoint.opening.x) * interior.x +
+      (point.z - endpoint.opening.z) * interior.z
+    );
+  }
+
+  getRoomInteriorDirection(side) {
+    switch (side) {
+      case "north":
+        return { x: 0, z: 1 };
+      case "south":
+        return { x: 0, z: -1 };
+      case "west":
+        return { x: 1, z: 0 };
+      case "east":
+        return { x: -1, z: 0 };
+      default:
+        return null;
+    }
+  }
+
+  distanceSquared2D(a, b) {
+    const dx = a.x - b.x;
+    const dz = a.z - b.z;
+
+    return dx * dx + dz * dz;
   }
 
   createConnectorWallCollision(module, collisionWallThickness, isHorizontal) {
@@ -817,6 +934,8 @@ export class LevelBuilder {
 
     return {
       ...spawn,
+      roomId: room.id,
+      roomTemplateId: room.templateId,
       enemyTypeId: enemyDefinition?.id ?? spawn.enemyTypeId,
       enemyName: enemyDefinition?.name ?? spawn.enemyName,
       enemyDifficulty: enemyDefinition?.difficulty ?? spawn.enemyDifficulty,

@@ -52,6 +52,8 @@ export class ShopManager {
         offerIndex: index,
         spawn,
         model,
+        roomId: spawn.roomId,
+        roomTemplateId: spawn.roomTemplateId,
         cooldown: 0,
       });
     }
@@ -120,6 +122,7 @@ export class ShopManager {
       this.updateStandAnimation(stand, delta);
 
       if (this.pendingConfirmation) continue;
+      if (stand.model?.visible === false) continue;
       if (stand.cooldown > 0) continue;
 
       const distance = this.getFlatDistance(playerPosition, stand.model.position);
