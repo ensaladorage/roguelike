@@ -4,6 +4,14 @@ export const RUN_STATUSES = Object.freeze({
   LOST: "lost",
 });
 
+export const RUN_FLOOR_TYPES = Object.freeze({
+  TESTER: "tester",
+  NORMAL: "normal",
+  SHOP: "shop",
+  BOSS_FUTURE: "boss_future",
+  COMPLETE: "complete",
+});
+
 export function createRunSeed() {
   const randomPart = Math.random().toString(36).slice(2, 10);
   return `${Date.now().toString(36)}-${randomPart}`;
@@ -15,7 +23,7 @@ export class RunState {
     runSeed = createRunSeed(),
     currentFloorIndex = 1,
     currentFloorSeed = null,
-    floorType = "tester",
+    floorType = RUN_FLOOR_TYPES.TESTER,
     difficultyTier = "easy",
     status = RUN_STATUSES.ACTIVE,
   } = {}) {
@@ -41,7 +49,7 @@ export class RunState {
   setCurrentFloor({
     floorIndex,
     floorSeed = null,
-    floorType = "procedural",
+    floorType = RUN_FLOOR_TYPES.NORMAL,
     difficultyTier = "easy",
   }) {
     this.currentFloorIndex = floorIndex;

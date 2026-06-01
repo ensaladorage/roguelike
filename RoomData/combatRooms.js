@@ -337,7 +337,7 @@ const COMBAT_L_BASE_TEMPLATE = {
     {
       x: -4,
       z: 4.2,
-      rotationY: Math.PI,
+      rotationY: -Math.PI / 2,
       modelId: "chest_01",
       optional: true,
     },

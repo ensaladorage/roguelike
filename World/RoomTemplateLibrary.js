@@ -120,6 +120,13 @@ function transformChestSpawn(chestSpawn, placement, quarterTurns) {
   };
 }
 
+function transformShopOfferSpawn(shopOfferSpawn, placement, quarterTurns) {
+  return {
+    ...transformPoint(shopOfferSpawn, placement, quarterTurns),
+    rotationY: (shopOfferSpawn.rotationY ?? 0) + quarterTurns * QUARTER_TURN,
+  };
+}
+
 export class RoomTemplateLibrary {
   constructor(templates = []) {
     this.templates = new Map(
@@ -184,6 +191,12 @@ export class RoomTemplateLibrary {
       chestSpawns: template.chestSpawns.map((spawn) =>
         transformChestSpawn(spawn, placement, quarterTurns)
       ),
+      shopOfferSpawns: (template.shopOfferSpawns ?? []).map((spawn) =>
+        transformShopOfferSpawn(spawn, placement, quarterTurns)
+      ),
+      playerStart: template.playerStart
+        ? transformPoint(template.playerStart, placement, quarterTurns)
+        : null,
       exitMarker: template.exitMarker
         ? transformPoint(template.exitMarker, placement, quarterTurns)
         : null,

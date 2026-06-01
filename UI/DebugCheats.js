@@ -21,6 +21,16 @@ const DEBUG_CHEATS = [
     description: "Toggle player damage to 999999.",
     toggle: true,
   },
+  {
+    id: "addGold",
+    label: "Add Gold",
+    description: "Add 999 gold to the player.",
+  },
+  {
+    id: "nextLevel",
+    label: "Next Level",
+    description: "Trigger the current level exit.",
+  },
 ];
 
 const STYLE_ID = "debug-cheats-style";

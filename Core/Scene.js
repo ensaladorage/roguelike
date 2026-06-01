@@ -14,6 +14,7 @@ import { VFX } from "../UI/VFX.js";
 import { DebugCheats } from "../UI/DebugCheats.js";
 import { ChestManager } from "../Game/Chest.js";
 import { CoinManager } from "../Game/Coin.js";
+import { ShopManager } from "../Game/ShopManager.js";
 import { ItemDropManager } from "../World/ItemDrop.js";
 import { Environment } from "../World/Environment.js";
 import { ROOM_TEMPLATES } from "../RoomData/roomTemplates.js";
@@ -37,6 +38,7 @@ const PLAYER_COLLISION_SKIN = 0.04;
 const ENTRY_STAIRS_FRONT_OFFSET = 1;
 const DEBUG_SUPER_SPEED_MULTIPLIER = 5;
 const DEBUG_EXTERMINATOR_DAMAGE = 999999;
+const DEBUG_GOLD_AMOUNT = 999;
 const FRONT_DIRECTION_BY_SIDE = {
   north: { x: 0, z: 1 },
   south: { x: 0, z: -1 },
@@ -54,6 +56,7 @@ export class GameScene {
     this.environment = new Environment(this);
     this.chestManager = new ChestManager(this);
     this.coinManager = new CoinManager(this);
+    this.shopManager = new ShopManager(this);
     this.itemDropManager = new ItemDropManager(this);
     this.models = {};
     this.roomTemplateLibrary = new RoomTemplateLibrary(ROOM_TEMPLATES);
@@ -97,6 +100,7 @@ export class GameScene {
     this.levelExitTrigger = null;
     this.clickEffects = [];
     this.feedbackEffects = [];
+    this.playerControlLocks = new Set();
 
     this.hud = new HUD();
     this.debugCheatState = {
@@ -150,6 +154,8 @@ export class GameScene {
     this.loadLevel();
 
     setupInput(this.renderer, this.camera, this.floor, (point) => {
+      if (this.isPlayerControlLocked()) return;
+
       const navigation = this.getClickNavigation(point);
       if (!navigation) return;
 
@@ -431,6 +437,17 @@ export class GameScene {
     this.environment.updateForLevel(levelBounds);
     this.addLevelGeometry(level);
     this.chestManager.load(level);
+    this.shopManager.load(level, {
+      runSeed: floorLoad.runSeed,
+      floorSeed: floorLoad.currentFloorSeed,
+      floorIndex: level.floorIndex ?? floorLoad.currentFloorIndex,
+      completedFloors: Math.max(
+        0,
+        (level.floorIndex ?? floorLoad.currentFloorIndex ?? 1) - 1
+      ),
+      floorType: level.floorType ?? floorLoad.floorType,
+      mode: floorLoad.mode,
+    });
     this.addLevelEnemies(level);
     this.placePlayer(level.playerStart);
     this.restoreProgressSnapshot(progressSnapshot);
@@ -520,6 +537,8 @@ export class GameScene {
     if (this.chestManager) this.chestManager.clear();
     if (this.coinManager) this.coinManager.clear();
     if (this.itemDropManager) this.itemDropManager.clear();
+    if (this.shopManager) this.shopManager.clearFloor();
+    this.playerControlLocks.clear();
 
     this.levelGroup.clear();
     this.enemy = null;
@@ -570,6 +589,12 @@ export class GameScene {
     return {
       player: this.player?.createProgressSnapshot?.() ?? null,
       inventory: this.inventory?.createProgressSnapshot?.() ?? null,
+      floor: {
+        floorIndex: this.currentFloorLoad?.currentFloorIndex ?? null,
+        floorSeed: this.currentFloorLoad?.currentFloorSeed ?? null,
+        floorType: this.currentFloorLoad?.floorType ?? null,
+      },
+      shop: this.shopManager?.createProgressSnapshot?.() ?? null,
     };
   }
 
@@ -578,16 +603,49 @@ export class GameScene {
 
     this.player?.restoreProgressSnapshot?.(snapshot.player);
     this.inventory?.restoreProgressSnapshot?.(snapshot.inventory);
+
+    if (this.shouldRestoreShopProgress(snapshot)) {
+      this.shopManager?.restoreProgressSnapshot?.(snapshot.shop);
+    }
+  }
+
+  shouldRestoreShopProgress(snapshot) {
+    const shopSnapshot = snapshot?.shop;
+    if (!shopSnapshot?.offers?.length) return false;
+
+    const currentContext = this.shopManager?.lastContext;
+    if (!currentContext) return false;
+
+    return (
+      shopSnapshot.lastContext?.floorSeed === currentContext.floorSeed &&
+      shopSnapshot.lastContext?.floorIndex === currentContext.floorIndex
+    );
   }
 
   resetGameplayProgress() {
     this.restoreDebugCheatBaseStats();
     this.player?.resetForNewRun?.();
     this.inventory?.reset?.();
+    this.shopManager?.clear?.();
+    this.playerControlLocks.clear();
     this.refreshDebugCheatBaseStats();
     this.hud?.clearLog?.();
     this.syncDebugCheatEffects();
     this.updateHud();
+  }
+
+  setPlayerControlLocked(locked, reason = "interaction") {
+    if (locked) {
+      this.playerControlLocks.add(reason);
+      this.player?.clearTarget?.();
+      return;
+    }
+
+    this.playerControlLocks.delete(reason);
+  }
+
+  isPlayerControlLocked() {
+    return this.playerControlLocks.size > 0;
   }
 
   placePlayer(position) {
@@ -1410,6 +1468,7 @@ export class GameScene {
 
     if (this.coinManager) this.coinManager.update(delta);
     if (this.itemDropManager) this.itemDropManager.update(delta);
+    if (this.shopManager) this.shopManager.update(delta);
     if (this.vfx) this.vfx.update(delta, this.camera);
 
     const previousPlayerPosition = this.player.model.position.clone();
@@ -1420,6 +1479,7 @@ export class GameScene {
       ...this.player.consumeEvents(),
       ...this.enemies.flatMap((enemy) => enemy.consumeEvents()),
       ...(this.inventory ? this.inventory.consumeEvents() : []),
+      ...(this.shopManager ? this.shopManager.consumeEvents() : []),
     ];
 
     this.handleGameEvents(events);
@@ -1435,6 +1495,7 @@ export class GameScene {
   }
 
   useInventorySlot(slotIndex) {
+    if (this.isPlayerControlLocked()) return;
     if (!this.inventory) return;
 
     this.inventory.useConsumableSlot(slotIndex, {
@@ -1489,6 +1550,14 @@ export class GameScene {
         this.toggleExterminatorCheat();
         break;
 
+      case "addGold":
+        this.addDebugGold();
+        break;
+
+      case "nextLevel":
+        this.triggerDebugNextLevel();
+        break;
+
       default:
         console.warn("Unknown debug cheat", cheat);
         break;
@@ -1496,6 +1565,30 @@ export class GameScene {
 
     this.handleGameEvents(this.player.consumeEvents());
     this.updateHud();
+  }
+
+  addDebugGold() {
+    this.player.addGold(DEBUG_GOLD_AMOUNT);
+    this.addLog(`Debug cheat: +${DEBUG_GOLD_AMOUNT} gold.`);
+  }
+
+  triggerDebugNextLevel() {
+    if (this.levelExitTrigger) {
+      this.levelExitTrigger.activated = true;
+    }
+
+    this.addLog("Debug cheat: Next Level.");
+    console.log("debugNextLevelTriggered", {
+      from: this.currentFloorLoad?.currentFloorIndex ?? this.levelIndex,
+      mode: this.currentFloorLoad?.mode,
+    });
+
+    this.gameManager.handleEvent({
+      type: "levelExitReached",
+      levelIndex: this.levelIndex,
+      floorIndex: this.currentFloorLoad?.currentFloorIndex,
+      mode: this.currentFloorLoad?.mode,
+    });
   }
 
   getDebugCheatStates() {
@@ -1745,6 +1838,25 @@ export class GameScene {
           this.addLog(this.getItemPickupBlockedMessage(event));
           break;
 
+        case "shopOfferCreated":
+          this.addLog(
+            `Shop offer: ${event.item.name} (${event.rarity}) - ${event.price} gold.`
+          );
+          break;
+
+        case "shopPurchaseSucceeded":
+          this.addLog(`Bought ${event.item.name} for ${event.price} gold.`);
+          this.updateHud();
+          break;
+
+        case "shopPurchaseFailed":
+          this.addLog(this.getShopPurchaseFailedMessage(event));
+          break;
+
+        case "shopOfferAlreadyPurchased":
+          this.addLog("Already purchased.");
+          break;
+
         case "playerDefeated":
           this.flashModel(this.player.model, 0x7a1020, 0.6);
           this.updateHud();
@@ -1864,6 +1976,25 @@ export class GameScene {
 
       default:
         return "Could not pick up that item.";
+    }
+  }
+
+  getShopPurchaseFailedMessage(event) {
+    switch (event.reason) {
+      case "insufficientGold":
+        return "Not enough gold.";
+
+      case "inventoryFull":
+        return "Inventory full.";
+
+      case "offerMissing":
+        return "That shop offer is no longer available.";
+
+      case "shopUnavailable":
+        return "The shop is not available right now.";
+
+      default:
+        return "Could not buy that shop offer.";
     }
   }
 

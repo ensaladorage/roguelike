@@ -2,6 +2,7 @@ import { ENTER_ROOM_TEMPLATES } from "./enterRooms.js";
 import { COMBAT_ROOM_TEMPLATES } from "./combatRooms.js";
 import { TREASURE_ROOM_TEMPLATES } from "./treasureRooms.js";
 import { EXIT_ROOM_TEMPLATES } from "./exitRooms.js";
+import { SHOP_ROOM_TEMPLATES } from "./shopRooms.js";
 
 const WALL_TILE_SIZE = 1;
 
@@ -304,6 +305,7 @@ export const ROOM_TEMPLATES = [
   ...COMBAT_ROOM_TEMPLATES,
   ...TREASURE_ROOM_TEMPLATES,
   ...EXIT_ROOM_TEMPLATES,
+  ...SHOP_ROOM_TEMPLATES,
   createRectRoomTemplate({
     id: "corridor_straight",
     type: "connector",

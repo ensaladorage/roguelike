@@ -252,6 +252,70 @@
       text-shadow: 0 4px 24px rgba(0, 0, 0, 0.5);
     }
 
+    .shop-confirm-overlay {
+      position: fixed;
+      inset: 0;
+      z-index: 26;
+      display: grid;
+      place-items: center;
+      padding: 18px;
+      background: rgba(17, 19, 23, 0.64);
+      pointer-events: auto;
+    }
+
+    .shop-confirm-dialog {
+      width: min(360px, calc(100vw - 36px));
+      padding: 18px;
+      border: 1px solid rgba(244, 241, 232, 0.22);
+      border-radius: 8px;
+      background: rgba(25, 28, 33, 0.96);
+      box-shadow: 0 24px 48px rgba(0, 0, 0, 0.42);
+      text-align: center;
+    }
+
+    .shop-confirm-dialog h2 {
+      margin: 0 0 8px;
+      color: #f4f1e8;
+      font-size: 20px;
+      letter-spacing: 0;
+    }
+
+    .shop-confirm-dialog p {
+      margin: 0 0 16px;
+      color: rgba(244, 241, 232, 0.84);
+      font-size: 15px;
+      line-height: 1.35;
+    }
+
+    .shop-confirm-actions {
+      display: flex;
+      gap: 10px;
+      justify-content: center;
+    }
+
+    .shop-confirm-actions button {
+      min-width: 104px;
+      min-height: 38px;
+      border: 1px solid rgba(244, 241, 232, 0.22);
+      border-radius: 8px;
+      background: rgba(244, 241, 232, 0.12);
+      color: #f4f1e8;
+      font: inherit;
+      font-weight: 700;
+      cursor: pointer;
+    }
+
+    .shop-confirm-actions button:focus-visible {
+      outline: 2px solid #f0b35a;
+      outline-offset: 2px;
+    }
+
+    .shop-confirm-actions [data-shop-confirm="yes"] {
+      background: #56c271;
+      border-color: #56c271;
+      color: #111317;
+    }
+
     .footer-hint {
       position: fixed;
       right: 16px;

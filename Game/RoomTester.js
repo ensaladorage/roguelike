@@ -1,5 +1,7 @@
 // Edit ROOM_TESTER_LEVELS while GAME_MODE is "tester" to debug manual room chains.
 // Place rooms so opposite openings touch in world space; LevelBuilder will resolve the connector.
+import { createShopFloor } from "./ShopFloorFactory.js";
+
 export const ROOM_TESTER_LEVELS = [
   {
     kind: "assembled",
@@ -68,6 +70,14 @@ export const ROOM_TESTER_LEVELS = [
         rotationY: 0,
       },
     ],
+  },
+  {
+    ...createShopFloor({
+      runSeed: "tester",
+      floorSeed: "tester:shop_floor",
+      floorIndex: 11,
+    }),
+    name: "Room Tester: shop_room_01",
   },
 ];
 

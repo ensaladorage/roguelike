@@ -40,6 +40,7 @@ const EXIT_STAIRS_DIRT_FRONT_OFFSET = 1;
 const EXIT_STAIRS_DIRT_Y = -0.95;
 const EXIT_STAIRS_WOOD_STRUCTURE_Y = -0.85;
 const EXIT_STAIRS_WOOD_STRUCTURE_SIZE = { w: 1.2, d: 1.2, height: 1 };
+const SHOP_OFFER_COLLISION_SIZE = { w: 0.78, d: 0.78 };
 const ENTRY_STAIRS_ROTATION_TOWARD_WALL_BY_SIDE = {
   north: 0,
   south: Math.PI,
@@ -139,6 +140,9 @@ export class LevelBuilder {
       walkableAreas: (levelDefinition.walkableAreas ?? []).map(cloneArea),
       collisionWalls,
       chests: (levelDefinition.chests ?? []).map((chest) => ({ ...chest })),
+      shopOfferSpawns: (levelDefinition.shopOfferSpawns ?? []).map((spawn) => ({
+        ...spawn,
+      })),
       enemies: (levelDefinition.enemies ?? []).map((enemy) => ({
         ...enemy,
         patrol: (enemy.patrol ?? []).map((point) => ({ ...point })),
@@ -187,6 +191,9 @@ export class LevelBuilder {
       ).map(cloneArea),
       collisionWalls: wallModules.map(cloneArea),
       chests: (levelDefinition.chests ?? []).map((chest) => ({ ...chest })),
+      shopOfferSpawns: (levelDefinition.shopOfferSpawns ?? []).map((spawn) => ({
+        ...spawn,
+      })),
       enemies: (levelDefinition.enemies ?? []).map((enemy) => ({
         ...enemy,
         patrol: (enemy.patrol ?? []).map((point) => ({ ...point })),
@@ -208,6 +215,7 @@ export class LevelBuilder {
     const walkableAreas = [];
     const collisionWalls = [];
     const chests = [];
+    const shopOfferSpawns = [];
     const enemies = [];
     let exit = levelDefinition.exit ? { ...levelDefinition.exit } : null;
     const rooms = (levelDefinition.rooms ?? []).map((roomPlacement) =>
@@ -273,6 +281,14 @@ export class LevelBuilder {
         ...this.createDecorationCollisionModules(room)
       );
       chests.push(...room.chestSpawns.map((spawn) => ({ ...spawn })));
+      shopOfferSpawns.push(
+        ...(room.shopOfferSpawns ?? []).map((spawn, offerIndex) => ({
+          ...spawn,
+          offerIndex,
+          roomId: room.id,
+          roomTemplateId: room.templateId,
+        }))
+      );
       enemies.push(
         ...room.enemySpawns.map((spawn, spawnIndex) =>
           this.resolveEnemySpawn({
@@ -310,6 +326,10 @@ export class LevelBuilder {
       collisionWalls.push(...connector.collisionWalls);
     }
 
+    collisionWalls.push(
+      ...this.createShopOfferCollisionModules(shopOfferSpawns)
+    );
+
     if (levelDefinition.outerBoundary) {
       const boundary = this.createOuterBoundaryModules(levelDefinition.outerBoundary);
 
@@ -324,6 +344,7 @@ export class LevelBuilder {
       walkableAreas,
       collisionWalls,
       chests,
+      shopOfferSpawns,
       enemies,
       exit,
       connections,
@@ -845,6 +866,17 @@ export class LevelBuilder {
     ]
       .filter((module) => module.collision)
       .map((module) => this.createObstacleCollision(module));
+  }
+
+  createShopOfferCollisionModules(shopOfferSpawns = []) {
+    return shopOfferSpawns.map((spawn) => ({
+      x: spawn.x,
+      z: spawn.z,
+      w: SHOP_OFFER_COLLISION_SIZE.w,
+      d: SHOP_OFFER_COLLISION_SIZE.d,
+      role: "shopOfferPedestalCollision",
+      generated: true,
+    }));
   }
 
   createRoomStairsModule(room, endpoints) {

@@ -277,6 +277,15 @@ export class Player {
     this.gold += amount;
   }
 
+  spendGold(amount) {
+    if (this.state === PLAYER_STATES.DEAD) return false;
+    if (amount <= 0) return true;
+    if (this.gold < amount) return false;
+
+    this.gold -= amount;
+    return true;
+  }
+
   takeDamage(amount, source) {
     if (this.state === PLAYER_STATES.DEAD) return 0;
 

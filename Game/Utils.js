@@ -10,3 +10,24 @@ export function flatDistance(a, b) {
   const dz = a.z - b.z;
   return Math.sqrt(dx * dx + dz * dz);
 }
+
+export function createSeededRandom(seed) {
+  let state = hashString(seed);
+
+  return () => {
+    state = Math.imul(1664525, state) + 1013904223;
+    return (state >>> 0) / 4294967296;
+  };
+}
+
+export function hashString(value) {
+  let hash = 2166136261;
+  const text = String(value);
+
+  for (let index = 0; index < text.length; index += 1) {
+    hash ^= text.charCodeAt(index);
+    hash = Math.imul(hash, 16777619);
+  }
+
+  return hash >>> 0;
+}

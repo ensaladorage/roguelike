@@ -181,7 +181,7 @@ function tryCreateProceduralLevelOne(rng, options, attempt) {
     procedural: {
       floor: floorIndex,
       floorSeed,
-      floorType: options.floorType ?? "procedural",
+      floorType: options.floorType ?? "normal",
       difficultyTier,
       attempt,
       roomCount: rooms.length,

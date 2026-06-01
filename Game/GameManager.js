@@ -2,7 +2,8 @@ import { flatDistance } from "./Utils.js";
 import { GAME_CONFIG, GAME_MODES } from "./GameConfig.js";
 import { ROOM_TESTER_LEVELS, getRoomTesterLevel } from "./RoomTester.js";
 import { createProceduralFloor } from "./ProceduralLevelFactory.js";
-import { RunState, createRunSeed } from "./RunState.js";
+import { createShopFloor } from "./ShopFloorFactory.js";
+import { RUN_FLOOR_TYPES, RunState, createRunSeed } from "./RunState.js";
 import { ENEMY_DIFFICULTY } from "../CharacterData/enemyDefinitions.js";
 
 export { GAME_MODES } from "./GameConfig.js";
@@ -40,13 +41,37 @@ export class GameManager {
   resolveConfig(config, options = {}) {
     const params = new URLSearchParams(globalThis.window?.location?.search ?? "");
     const requestedMode = params.get("mode");
-    const mode = options.mode ?? (
-      requestedMode === GAME_MODES.RUN ? GAME_MODES.RUN : config.mode
+    const requestedFloorIndex = Number.parseInt(
+      params.get("floor") ?? params.get("startFloorIndex") ?? "",
+      10
     );
+    const requestedTesterLevelIndex = Number.parseInt(
+      params.get("testerLevel") ?? params.get("level") ?? "",
+      10
+    );
+    const mode = options.mode ?? (
+      Object.values(GAME_MODES).includes(requestedMode)
+        ? requestedMode
+        : config.mode
+    );
+    const startFloorIndex = Number.isInteger(requestedFloorIndex) && requestedFloorIndex > 0
+      ? requestedFloorIndex
+      : config.run?.startFloorIndex;
+    const testerLevelIndex = Number.isInteger(requestedTesterLevelIndex) && requestedTesterLevelIndex >= 0
+      ? requestedTesterLevelIndex
+      : config.tester?.levelIndex;
 
     return {
       ...config,
       mode,
+      tester: {
+        ...(config.tester ?? {}),
+        levelIndex: testerLevelIndex,
+      },
+      run: {
+        ...(config.run ?? {}),
+        startFloorIndex,
+      },
     };
   }
 
@@ -217,7 +242,7 @@ export class GameManager {
     this.runState.setCurrentFloor({
       floorIndex: levelIndex + 1,
       floorSeed: `tester:${levelIndex}:${this.runState.runSeed}`,
-      floorType: GAME_MODES.TESTER,
+      floorType: RUN_FLOOR_TYPES.TESTER,
       difficultyTier: ENEMY_DIFFICULTY.EASY,
     });
   }
@@ -270,16 +295,24 @@ export class GameManager {
       };
     }
 
-    return {
-      ...snapshot,
-      levelIndex: snapshot.currentFloorIndex,
-      definition: createProceduralFloor({
+    const definition = floorPlan.floorType === RUN_FLOOR_TYPES.SHOP
+      ? createShopFloor({
+        runSeed: snapshot.runSeed,
+        floorSeed: snapshot.currentFloorSeed,
+        floorIndex: snapshot.currentFloorIndex,
+      })
+      : createProceduralFloor({
         runSeed: snapshot.runSeed,
         floorSeed: snapshot.currentFloorSeed,
         floorIndex: snapshot.currentFloorIndex,
         floorType: snapshot.floorType,
         difficultyTier: snapshot.difficultyTier,
-      }),
+      });
+
+    return {
+      ...snapshot,
+      levelIndex: snapshot.currentFloorIndex,
+      definition,
     };
   }
 
@@ -290,7 +323,7 @@ export class GameManager {
 
     if (floorIndex <= normalFloorCount) {
       return {
-        floorType: "procedural",
+        floorType: RUN_FLOOR_TYPES.NORMAL,
         difficultyTier: this.getDifficultyTierForFloor(floorIndex),
         implemented: true,
       };
@@ -298,22 +331,22 @@ export class GameManager {
 
     if (floorIndex === shopFloorIndex) {
       return {
-        floorType: "shop",
+        floorType: RUN_FLOOR_TYPES.SHOP,
         difficultyTier: ENEMY_DIFFICULTY.EASY,
-        implemented: false,
+        implemented: true,
       };
     }
 
     if (floorIndex === bossFloorIndex) {
       return {
-        floorType: "boss",
+        floorType: RUN_FLOOR_TYPES.BOSS_FUTURE,
         difficultyTier: ENEMY_DIFFICULTY.HARD,
         implemented: false,
       };
     }
 
     return {
-      floorType: "complete",
+      floorType: RUN_FLOOR_TYPES.COMPLETE,
       difficultyTier: ENEMY_DIFFICULTY.HARD,
       implemented: false,
     };
