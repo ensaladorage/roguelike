@@ -154,6 +154,20 @@ function rotateChestSpawn(chestSpawn, quarterTurns = 0) {
   };
 }
 
+function rotateCombatLChestSpawn(chestSpawn, quarterTurns = 0) {
+  const rotated = rotateChestSpawn(chestSpawn, quarterTurns);
+  const turns = normalizeQuarterTurns(quarterTurns);
+
+  if (turns % 2 !== 0) {
+    return rotated;
+  }
+
+  return {
+    ...rotated,
+    rotationY: rotated.rotationY + Math.PI,
+  };
+}
+
 const COMBAT_L_BASE_TEMPLATE = {
   type: "combat",
   tags: ["combat", "large", "narrow", "easy", "guarded"],
@@ -379,7 +393,9 @@ function createCombatLRoom({ id, name, quarterTurns = 0, tags = [] }) {
       rotateDoorOpening(opening, COMBAT_L_BASE_TEMPLATE.dimensions, quarterTurns)
     ),
     enemySpawns: COMBAT_L_BASE_TEMPLATE.enemySpawns.map((enemySpawn) => rotateEnemySpawn(enemySpawn, quarterTurns)),
-    chestSpawns: COMBAT_L_BASE_TEMPLATE.chestSpawns.map((chestSpawn) => rotateChestSpawn(chestSpawn, quarterTurns)),
+    chestSpawns: COMBAT_L_BASE_TEMPLATE.chestSpawns.map((chestSpawn) =>
+      rotateCombatLChestSpawn(chestSpawn, quarterTurns)
+    ),
     decorZones: COMBAT_L_BASE_TEMPLATE.decorZones.map((zone) => ({
       ...rotateArea(zone, quarterTurns),
       id: zone.id.replace("combat_L", id),
