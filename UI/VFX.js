@@ -1,6 +1,33 @@
 import * as THREE from "three";
 
+export function rgb(red, green, blue) {
+  const clampChannel = (value) =>
+    Math.max(0, Math.min(255, Math.round(Number(value) || 0)));
+
+  return new THREE.Color(
+    `rgb(${clampChannel(red)}, ${clampChannel(green)}, ${clampChannel(blue)})`
+  );
+}
+
 export const VFX_DEFAULTS = {
+  entryStairsBlocker: {
+    color: rgb(255, 0, 0),
+    proximityRadius: 1.5,
+    fadeSpeed: 30,
+    tileSize: 1,
+    tileOffset: 0.55,
+    y: 0.46,
+    horizontalTileY: 1,
+    tileRotation: {
+      x: 0,
+      y: 0,
+      z: 0,
+    },
+    baseOpacity: 0.18,
+    pulseOpacity: 0.6,
+    pulseScale: 0.1,
+    pulseSpeed: 2,
+  },
   purpleGasCloud: {
     color: 0x9c61ff,
     duration: 1.25,
@@ -28,6 +55,7 @@ export class VFX {
   constructor({ root = null } = {}) {
     this.root = root;
     this.effects = [];
+    this.persistentEffects = [];
     this.pointLights = [];
   }
 
@@ -163,7 +191,104 @@ export class VFX {
     return light;
   }
 
+  addEntryStairsBlocker(stairs, player, options = {}) {
+    if (!this.root || !stairs || !player) return null;
+
+    const config = {
+      ...VFX_DEFAULTS.entryStairsBlocker,
+      ...options,
+      tileRotation: {
+        ...VFX_DEFAULTS.entryStairsBlocker.tileRotation,
+        ...(options.tileRotation ?? {}),
+      },
+    };
+    const frontVector = this.getFrontVectorForSide(stairs.side);
+    const sideVector = this.getSideVectorForSide(stairs.side);
+    if (!frontVector || !sideVector) return null;
+
+    const group = new THREE.Group();
+    group.visible = false;
+
+    const material = new THREE.MeshBasicMaterial({
+      color: config.color,
+      transparent: true,
+      opacity: 0,
+      depthWrite: false,
+      side: THREE.DoubleSide,
+      blending: THREE.AdditiveBlending,
+    });
+    const geometry = new THREE.PlaneGeometry(config.tileSize, config.tileSize);
+    const tileDefinitions = [
+      {
+        direction: frontVector,
+        x: frontVector.x * config.tileOffset,
+        z: frontVector.z * config.tileOffset,
+      },
+      {
+        direction: sideVector,
+        x: sideVector.x * config.tileOffset,
+        z: sideVector.z * config.tileOffset,
+      },
+      {
+        direction: { x: -sideVector.x, z: -sideVector.z },
+        x: -sideVector.x * config.tileOffset,
+        z: -sideVector.z * config.tileOffset,
+      },
+      {
+        direction: frontVector,
+        x: 0,
+        y: config.horizontalTileY,
+        z: 0,
+        rotation: {
+          x: -Math.PI / 2,
+          y: 0,
+          z: 0,
+        },
+      },
+    ];
+
+    const tiles = tileDefinitions.map((tile) => {
+      const mesh = new THREE.Mesh(geometry, material);
+      const rotation = tile.rotation ?? {
+        x: config.tileRotation.x,
+        y: this.getYawForDirection(tile.direction) + config.tileRotation.y,
+        z: config.tileRotation.z,
+      };
+
+      mesh.rotation.set(rotation.x, rotation.y, rotation.z);
+      mesh.position.set(
+        stairs.x + tile.x,
+        tile.y ?? config.y,
+        stairs.z + tile.z
+      );
+      mesh.renderOrder = 34;
+      group.add(mesh);
+      return mesh;
+    });
+
+    this.root.add(group);
+
+    const effect = {
+      type: "entryStairsBlocker",
+      group,
+      tiles,
+      geometry,
+      material,
+      player,
+      stairs: { ...stairs },
+      config,
+      elapsed: 0,
+      visibility: 0,
+      isPlayerInRadius: false,
+    };
+
+    this.persistentEffects.push(effect);
+    return effect;
+  }
+
   update(delta, camera) {
+    this.updatePersistentEffects(delta);
+
     this.effects = this.effects.filter((effect) => {
       effect.elapsed += delta;
       const t = Math.min(1, effect.elapsed / effect.duration);
@@ -212,12 +337,73 @@ export class VFX {
     });
   }
 
+  updatePersistentEffects(delta) {
+    for (const effect of this.persistentEffects) {
+      switch (effect.type) {
+        case "entryStairsBlocker":
+          this.updateEntryStairsBlocker(effect, delta);
+          break;
+      }
+    }
+  }
+
+  updateEntryStairsBlocker(effect, delta) {
+    const playerPosition = this.getTargetPosition(effect.player);
+    if (!playerPosition) {
+      effect.group.visible = false;
+      effect.isPlayerInRadius = false;
+      return;
+    }
+
+    const isPlayerInRadius = this.isTargetWithinRadius(
+      effect.player,
+      effect.stairs,
+      effect.config.proximityRadius
+    );
+    const targetVisibility = isPlayerInRadius ? 1 : 0;
+    const visibilityStep = Math.min(1, delta * effect.config.fadeSpeed);
+
+    effect.elapsed += delta;
+    effect.visibility += (targetVisibility - effect.visibility) * visibilityStep;
+
+    if (isPlayerInRadius && !effect.isPlayerInRadius) {
+      effect.config.onEnterRadius?.(effect);
+    }
+
+    effect.isPlayerInRadius = isPlayerInRadius;
+
+    if (effect.visibility <= 0.01) {
+      effect.visibility = 0;
+      effect.group.visible = false;
+      effect.material.opacity = 0;
+      return;
+    }
+
+    const pulse = (Math.sin(effect.elapsed * effect.config.pulseSpeed) + 1) / 2;
+    const opacity =
+      effect.config.baseOpacity + effect.config.pulseOpacity * pulse;
+    const scale = 1 + effect.config.pulseScale * pulse;
+
+    effect.group.visible = true;
+    effect.material.opacity = opacity * effect.visibility;
+
+    for (const tile of effect.tiles) {
+      tile.scale.setScalar(scale);
+    }
+  }
+
   clear() {
     for (const effect of this.effects) {
       this.disposeEffect(effect);
     }
 
     this.effects = [];
+
+    for (const effect of this.persistentEffects) {
+      this.disposePersistentEffect(effect);
+    }
+
+    this.persistentEffects = [];
 
     for (const light of this.pointLights) {
       light.removeFromParent();
@@ -242,6 +428,16 @@ export class VFX {
     return position;
   }
 
+  isTargetWithinRadius(target, center, radius) {
+    const position = this.getTargetPosition(target);
+    if (!position || !center) return false;
+
+    const dx = position.x - center.x;
+    const dz = position.z - center.z;
+
+    return Math.hypot(dx, dz) <= radius;
+  }
+
   disposeEffect(effect) {
     effect.group.removeFromParent();
 
@@ -249,5 +445,49 @@ export class VFX {
       particle.mesh.geometry.dispose();
       particle.material.dispose();
     }
+  }
+
+  disposePersistentEffect(effect) {
+    effect.group.removeFromParent();
+    effect.geometry?.dispose();
+    effect.material?.dispose();
+  }
+
+  getSideVectorForSide(side) {
+    switch (side) {
+      case "north":
+      case "south":
+        return { x: 1, z: 0 };
+
+      case "west":
+      case "east":
+        return { x: 0, z: 1 };
+
+      default:
+        return null;
+    }
+  }
+
+  getFrontVectorForSide(side) {
+    switch (side) {
+      case "north":
+        return { x: 0, z: 1 };
+
+      case "south":
+        return { x: 0, z: -1 };
+
+      case "west":
+        return { x: 1, z: 0 };
+
+      case "east":
+        return { x: -1, z: 0 };
+
+      default:
+        return null;
+    }
+  }
+
+  getYawForDirection(direction) {
+    return Math.atan2(direction.x, direction.z);
   }
 }

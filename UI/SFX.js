@@ -1,6 +1,8 @@
 export class SFX {
   constructor() {
     this.audioContext = null;
+    this.audioUnlocked = false;
+    this.pendingType = null;
 
     this.tones = {
       playerAttack: {
@@ -30,7 +32,17 @@ export class SFX {
         type: "sawtooth",
         gain: 0.06,
       },
+
+      entryStairsBlocked: {
+        frequency: 170,
+        endFrequency: 70,
+        duration: 0.34,
+        type: "square",
+        gain: 0.09,
+      },
     };
+
+    this.setupAudioUnlock();
   }
 
   play(type) {
@@ -47,6 +59,24 @@ export class SFX {
     const tone = this.tones[type];
     if (!tone) return;
 
+    if (this.audioContext.state === "suspended") {
+      this.pendingType = type;
+      const resume = this.audioContext.resume?.();
+      if (!resume?.then) return;
+
+      resume.then(() => {
+        const pendingType = this.pendingType;
+        this.pendingType = null;
+        if (pendingType) this.play(pendingType);
+      });
+      return;
+    }
+
+    this.pendingType = null;
+    this.playTone(tone);
+  }
+
+  playTone(tone) {
     const now = this.audioContext.currentTime;
     const osc = this.audioContext.createOscillator();
     const gain = this.audioContext.createGain();
@@ -72,5 +102,45 @@ export class SFX {
 
     osc.start(now);
     osc.stop(now + tone.duration);
+  }
+
+  setupAudioUnlock() {
+    const unlock = () => {
+      if (this.audioUnlocked) return;
+
+      const AudioContextClass =
+        window.AudioContext ||
+        window.webkitAudioContext;
+      if (!AudioContextClass) return;
+
+      if (!this.audioContext) {
+        this.audioContext = new AudioContextClass();
+      }
+
+      const resume = this.audioContext.resume?.();
+      this.audioUnlocked = true;
+
+      const playPending = () => {
+        const pendingType = this.pendingType;
+        this.pendingType = null;
+        this.play(pendingType);
+      };
+
+      if (resume?.then) {
+        resume.then(() => {
+          if (this.pendingType) playPending();
+        });
+      } else if (this.pendingType) {
+        playPending();
+      }
+
+      window.removeEventListener("pointerdown", unlock);
+      window.removeEventListener("keydown", unlock);
+      window.removeEventListener("touchstart", unlock);
+    };
+
+    window.addEventListener("pointerdown", unlock);
+    window.addEventListener("keydown", unlock);
+    window.addEventListener("touchstart", unlock);
   }
 }

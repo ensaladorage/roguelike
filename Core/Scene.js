@@ -808,7 +808,23 @@ export class GameScene {
       };
     }
 
+    this.addEntryStairsBlockerVfx();
+
     return environmentBuild;
+  }
+
+  addEntryStairsBlockerVfx() {
+    if (!this.vfx || !this.player) return;
+
+    const entryStairs = this.collisionWalls.filter(
+      (wall) => wall.role === "entryStairs"
+    );
+
+    for (const stairs of entryStairs) {
+      this.vfx.addEntryStairsBlocker(stairs, this.player, {
+        onEnterRadius: () => this.sfx.play("entryStairsBlocked"),
+      });
+    }
   }
 
   addLevelEnemies(level) {
