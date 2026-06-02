@@ -17,6 +17,10 @@ function clamp01(value) {
 }
 
 export class DecorationBuilder {
+  constructor() {
+    this.walkableTileCache = new WeakMap();
+  }
+
   buildRoomDecorations({
     room,
     levelDefinition,
@@ -657,15 +661,20 @@ export class DecorationBuilder {
   }
 
   findNearestWalkableTile(point, room, blockers) {
-    const tiles = this.getUniqueWalkableTiles(room)
-      .filter((tile) => !this.isPointInsideAnyModule(tile, blockers))
-      .map((tile) => ({
-        tile,
-        distance: this.distance2D(tile, point),
-      }))
-      .sort((a, b) => a.distance - b.distance);
+    let nearestTile = null;
+    let nearestDistance = Infinity;
 
-    return tiles[0]?.tile ?? null;
+    for (const tile of this.getUniqueWalkableTiles(room)) {
+      if (this.isPointInsideAnyModule(tile, blockers)) continue;
+
+      const distance = this.distance2D(tile, point);
+      if (distance >= nearestDistance) continue;
+
+      nearestTile = tile;
+      nearestDistance = distance;
+    }
+
+    return nearestTile;
   }
 
   findReachableTileKeys(startTile, room, blockers) {
@@ -677,9 +686,11 @@ export class DecorationBuilder {
     const startKey = this.getTileKey(startTile);
     const reachable = new Set();
     const queue = [startKey];
+    let cursor = 0;
 
-    while (queue.length > 0) {
-      const key = queue.shift();
+    while (cursor < queue.length) {
+      const key = queue[cursor];
+      cursor += 1;
       if (reachable.has(key)) continue;
 
       const tile = walkableByKey.get(key);
@@ -757,6 +768,10 @@ export class DecorationBuilder {
   }
 
   getUniqueWalkableTiles(room) {
+    if (room && this.walkableTileCache.has(room)) {
+      return this.walkableTileCache.get(room);
+    }
+
     const tilesByKey = new Map();
 
     for (const area of room.walkableAreas ?? []) {
@@ -765,7 +780,13 @@ export class DecorationBuilder {
       }
     }
 
-    return [...tilesByKey.values()];
+    const tiles = [...tilesByKey.values()];
+
+    if (room) {
+      this.walkableTileCache.set(room, tiles);
+    }
+
+    return tiles;
   }
 
   createTileCentersForArea(area) {

@@ -40,6 +40,7 @@ const ENTRY_STAIRS_FRONT_OFFSET = 2;
 const DEBUG_SUPER_SPEED_MULTIPLIER = 5;
 const DEBUG_EXTERMINATOR_DAMAGE = 999999;
 const DEBUG_GOLD_AMOUNT = 999;
+const MAX_RENDER_PIXEL_RATIO = 1.75;
 const FRONT_DIRECTION_BY_SIDE = {
   north: { x: 0, z: 1 },
   south: { x: 0, z: -1 },
@@ -77,7 +78,7 @@ export class GameScene {
 
     this.renderer = new THREE.WebGLRenderer({ antialias: true });
     this.renderer.setSize(window.innerWidth, window.innerHeight);
-    this.renderer.setPixelRatio(window.devicePixelRatio || 1);
+    this.renderer.setPixelRatio(this.getRenderPixelRatio());
     this.renderer.shadowMap.enabled = true;
     this.renderer.shadowMap.type = THREE.PCFSoftShadowMap;
     this.renderer.outputColorSpace = THREE.SRGBColorSpace;
@@ -407,13 +408,16 @@ export class GameScene {
   }
 
   loadLevel(options = {}) {
+    const loadStartedAt = this.nowMs();
     const floorLoad = this.gameManager.resolveFloor();
+    const floorResolvedAt = this.nowMs();
     const definition = floorLoad?.definition;
     if (!definition) return;
 
     const progressSnapshot = options.preserveProgress && !options.resetProgress
       ? this.createProgressSnapshot()
       : null;
+    const buildStartedAt = this.nowMs();
     const level = this.levelBuilder.build(definition, {
       runSeed: floorLoad.currentFloorSeed,
       floorSeed: floorLoad.currentFloorSeed,
@@ -421,6 +425,7 @@ export class GameScene {
       floorType: floorLoad.floorType,
       mode: floorLoad.mode,
     });
+    const levelBuiltAt = this.nowMs();
     if (!level) return;
 
     this.currentFloorLoad = floorLoad;
@@ -441,7 +446,9 @@ export class GameScene {
 
     this.updateFloorPlane(floorSize, floorCenter);
     this.environment.updateForLevel(levelBounds);
+    const geometryStartedAt = this.nowMs();
     const environmentBuild = this.addLevelGeometry(level);
+    const geometryBuiltAt = this.nowMs();
     this.chestManager.load(level);
     this.shopManager.load(level, {
       runSeed: floorLoad.runSeed,
@@ -469,6 +476,21 @@ export class GameScene {
     this.addLog(`${level.name} loaded.`);
     this.addLog(`Mode: ${floorLoad.mode}. Floor ${floorLoad.currentFloorIndex}.`);
     this.addLog(`Seed: ${floorLoad.currentFloorSeed}`);
+    const loadFinishedAt = this.nowMs();
+    console.log("levelLoadTiming", {
+      totalMs: Number((loadFinishedAt - loadStartedAt).toFixed(2)),
+      resolveFloorMs: Number((floorResolvedAt - loadStartedAt).toFixed(2)),
+      buildLevelMs: Number((levelBuiltAt - buildStartedAt).toFixed(2)),
+      geometryMs: Number((geometryBuiltAt - geometryStartedAt).toFixed(2)),
+      entityAndVisibilityMs: Number((loadFinishedAt - geometryBuiltAt).toFixed(2)),
+      renderPixelRatio: this.renderer.getPixelRatio(),
+      geometryStats: environmentBuild.stats
+        ? {
+            ...environmentBuild.stats,
+            modulesById: Object.fromEntries(environmentBuild.stats.modulesById),
+          }
+        : null,
+    });
     console.log("levelLoaded", {
       mode: floorLoad.mode,
       floorIndex: floorLoad.currentFloorIndex,
@@ -2097,6 +2119,14 @@ export class GameScene {
     this.hud.addLog(message);
   }
 
+  nowMs() {
+    return globalThis.performance?.now?.() ?? Date.now();
+  }
+
+  getRenderPixelRatio() {
+    return Math.min(window.devicePixelRatio || 1, MAX_RENDER_PIXEL_RATIO);
+  }
+
   updateCamera(delta) {
     const pos = this.player.model.position;
 
@@ -2117,6 +2147,7 @@ export class GameScene {
   onResize() {
     this.camera.aspect = window.innerWidth / window.innerHeight;
     this.camera.updateProjectionMatrix();
+    this.renderer.setPixelRatio(this.getRenderPixelRatio());
     this.renderer.setSize(window.innerWidth, window.innerHeight);
   }
 }

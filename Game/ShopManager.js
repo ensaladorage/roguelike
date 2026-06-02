@@ -6,12 +6,14 @@ import {
   getShopRarityWeights,
 } from "./ShopOfferFactory.js";
 import { SHOP_DEFINITION, SHOP_EVENTS } from "./shopDefinitions.js";
+import { DEFAULT_SHOP_ALTAR_MODEL_ID } from "../CharacterData/modelDefinitions.js";
 
 const SHOP_INTERACTION_RANGE = 1.2;
 const SHOP_INTERACTION_COOLDOWN = 1.15;
-const SHOP_LABEL_Y = 1.36;
-const SHOP_ITEM_Y = 0.82;
 const SHOP_CONFIRM_LOCK_REASON = "shopPurchaseConfirmation";
+const SHOP_FALLBACK_ALTAR_SCALE = 0.86;
+const SHOP_FALLBACK_ITEM_Y = 0.92;
+const SHOP_FALLBACK_LABEL_Y = 1.46;
 
 const SHOP_RARITY_COLORS = {
   common: 0x7ecf8d,
@@ -433,29 +435,10 @@ export class ShopManager {
     group.rotation.y = spawn.rotationY ?? 0;
 
     const rarityColor = SHOP_RARITY_COLORS[offer.rarity] ?? SHOP_RARITY_COLORS.common;
-    const base = new THREE.Mesh(
-      new THREE.CylinderGeometry(0.46, 0.58, 0.42, 24),
-      new THREE.MeshStandardMaterial({
-        color: 0x4b4f55,
-        roughness: 0.72,
-        metalness: 0.05,
-      })
-    );
-    base.position.y = 0.21;
-    base.castShadow = true;
-    base.receiveShadow = true;
-
-    const top = new THREE.Mesh(
-      new THREE.CylinderGeometry(0.52, 0.46, 0.12, 24),
-      new THREE.MeshStandardMaterial({
-        color: rarityColor,
-        emissive: rarityColor,
-        emissiveIntensity: 0.18,
-        roughness: 0.45,
-      })
-    );
-    top.position.y = 0.48;
-    top.castShadow = true;
+    const visualConfig = this.config.standVisual ?? {};
+    const itemY = spawn.itemY ?? visualConfig.itemY ?? SHOP_FALLBACK_ITEM_Y;
+    const labelY = spawn.labelY ?? visualConfig.labelY ?? SHOP_FALLBACK_LABEL_Y;
+    const altar = this.createAltarModel(spawn);
 
     const itemMarker = new THREE.Mesh(
       new THREE.BoxGeometry(0.34, 0.34, 0.34),
@@ -466,22 +449,109 @@ export class ShopManager {
         roughness: 0.35,
       })
     );
-    itemMarker.position.y = SHOP_ITEM_Y;
+    itemMarker.position.y = itemY;
     itemMarker.rotation.y = Math.PI / 4;
     itemMarker.castShadow = true;
 
     const label = this.createOfferLabel(offer);
-    label.position.y = SHOP_LABEL_Y;
+    label.position.y = labelY;
 
-    group.add(base, top, itemMarker, label);
+    group.add(altar, itemMarker, label);
     group.userData.shopVisuals = {
-      base,
-      top,
+      altar,
       itemMarker,
       label,
+      itemY,
     };
 
     return group;
+  }
+
+  createAltarModel(spawn) {
+    const visualConfig = this.config.standVisual ?? {};
+    const modelId =
+      spawn.altarModelId ??
+      visualConfig.altarModelId ??
+      DEFAULT_SHOP_ALTAR_MODEL_ID;
+    const scale =
+      spawn.altarScale ??
+      visualConfig.altarScale ??
+      SHOP_FALLBACK_ALTAR_SCALE;
+    let altar = null;
+    let usesSharedAsset = false;
+
+    try {
+      altar = this.scene?.cloneGameModel?.(modelId) ?? null;
+      usesSharedAsset = Boolean(altar);
+    } catch (error) {
+      console.warn(`Shop altar model ${modelId} clone failed:`, error);
+    }
+
+    if (!altar) {
+      console.warn(`Shop altar model ${modelId} is not loaded. Using fallback.`);
+      altar = this.createFallbackAltarModel();
+    }
+
+    altar.name = `shopAltar_${spawn.id ?? modelId}`;
+    altar.scale.multiplyScalar(scale);
+    altar.position.y = spawn.altarY ?? visualConfig.altarY ?? 0;
+
+    if (usesSharedAsset) {
+      this.makeSharedAssetMaterialsLocal(altar);
+    }
+
+    return altar;
+  }
+
+  createFallbackAltarModel() {
+    const group = new THREE.Group();
+    const altar = new THREE.Mesh(
+      new THREE.BoxGeometry(0.74, 0.52, 0.74),
+      new THREE.MeshStandardMaterial({
+        color: 0x7a5a3d,
+        roughness: 0.85,
+        metalness: 0,
+      })
+    );
+
+    altar.position.y = 0.26;
+    altar.castShadow = true;
+    altar.receiveShadow = true;
+
+    group.add(altar);
+
+    return group;
+  }
+
+  makeSharedAssetMaterialsLocal(root) {
+    root.traverse((child) => {
+      if (!child.isMesh || !child.material) return;
+
+      if (child.geometry) {
+        child.userData.preserveSharedGeometry = true;
+      }
+
+      if (Array.isArray(child.material)) {
+        child.material = child.material.map((material) =>
+          this.cloneMaterialForStand(material)
+        );
+      } else {
+        child.material = this.cloneMaterialForStand(child.material);
+      }
+    });
+  }
+
+  cloneMaterialForStand(material) {
+    const cloned = material.clone();
+
+    if (cloned.map) {
+      cloned.userData = {
+        ...(cloned.userData ?? {}),
+        preserveSharedMap: true,
+      };
+    }
+
+    return cloned;
   }
 
   createOfferLabel(offer) {
@@ -539,10 +609,11 @@ export class ShopManager {
   updateStandAnimation(stand, delta) {
     const offer = this.findOffer(stand.offerId);
     const marker = stand.model.userData.shopVisuals?.itemMarker;
+    const itemY = stand.model.userData.shopVisuals?.itemY ?? SHOP_FALLBACK_ITEM_Y;
     if (!marker || offer?.purchased) return;
 
     marker.rotation.y += delta * 1.7;
-    marker.position.y = SHOP_ITEM_Y + Math.sin(performance.now() * 0.004) * 0.04;
+    marker.position.y = itemY + Math.sin(performance.now() * 0.004) * 0.04;
   }
 
   refreshStands() {
@@ -649,18 +720,27 @@ export class ShopManager {
         child.userData.texture.dispose();
       }
 
-      if (child.material?.map) {
-        child.material.map.dispose();
-      }
-
       if (child.material) {
-        child.material.dispose();
+        this.disposeMaterial(child.material);
       }
 
-      if (child.geometry) {
+      if (child.geometry && !child.userData.preserveSharedGeometry) {
         child.geometry.dispose();
       }
     });
+  }
+
+  disposeMaterial(material) {
+    if (Array.isArray(material)) {
+      material.forEach((entry) => this.disposeMaterial(entry));
+      return;
+    }
+
+    if (material.map && !material.userData?.preserveSharedMap) {
+      material.map.dispose();
+    }
+
+    material.dispose();
   }
 
   emit(event) {

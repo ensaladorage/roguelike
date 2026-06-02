@@ -58,7 +58,11 @@ export class ModularTileBuilder {
           const gltf = await loader.loadAsync(definition.assetPath);
           this.prepareAsset(gltf.scene);
           this.assetCache.set(definition.assetPath, gltf);
-          this.assetMeta.set(definition.assetPath, this.measureAsset(gltf.scene));
+          this.assetMeta.set(definition.assetPath, {
+            ...this.measureAsset(gltf.scene),
+            hasSkinnedMesh: this.hasSkinnedMesh(gltf.scene),
+            animationCount: gltf.animations?.length ?? 0,
+          });
         } catch (error) {
           this.assetCache.set(definition.assetPath, null);
           this.logMissingAsset(definition, error);
@@ -73,7 +77,18 @@ export class ModularTileBuilder {
       wallMeshes: [],
       roomObjectsById: new Map(),
       connectionObjectsById: new Map(),
+      stats: {
+        pieces: 0,
+        objects: 0,
+        wallMeshes: 0,
+        lights: 0,
+        clonedStaticAssets: 0,
+        clonedSkinnedAssets: 0,
+        fallbackObjects: 0,
+        modulesById: new Map(),
+      },
     };
+    this.currentBuildStats = build.stats;
 
     for (const floorModule of environment.floorModules ?? []) {
       this.buildPiece(floorModule, tileSet, build);
@@ -97,6 +112,8 @@ export class ModularTileBuilder {
   buildPiece(piece, tileSet, build) {
     const definition = tileSet.modules[piece.moduleId];
     if (!definition) return;
+
+    this.recordModulePiece(build, piece.moduleId);
 
     for (const stackPiece of this.createVerticalStackPieces(piece, definition)) {
       switch (definition.placementMode) {
@@ -187,7 +204,10 @@ export class ModularTileBuilder {
         blocksSight: this.blocksSight(definition),
       });
       const light = this.createPointLightForModule(modulePiece, definition);
-      if (light) this.registerBuiltObject(light, modulePiece, build);
+      if (light) {
+        build.stats.lights += 1;
+        this.registerBuiltObject(light, modulePiece, build);
+      }
     }
   }
 
@@ -195,9 +215,11 @@ export class ModularTileBuilder {
     this.applyPieceMetadata(object, piece);
     this.scene.levelGroup.add(object);
     this.registerBuiltObject(object, piece, build);
+    build.stats.objects += 1;
 
     if (options.blocksSight) {
       build.wallMeshes.push(object);
+      build.stats.wallMeshes += 1;
     }
   }
 
@@ -236,7 +258,11 @@ export class ModularTileBuilder {
     const asset = definition.assetPath ? this.assetCache.get(definition.assetPath) : null;
 
     if (asset?.scene) {
-      return this.createAssetInstance(piece, definition, asset.scene);
+      return this.createAssetInstance(piece, definition, asset);
+    }
+
+    if (definition.assetPath) {
+      this.incrementBuildStat("fallbackObjects");
     }
 
     return this.createFallbackInstance(piece, definition);
@@ -252,14 +278,14 @@ export class ModularTileBuilder {
     });
   }
 
-  createAssetInstance(piece, definition, assetScene) {
+  createAssetInstance(piece, definition, asset) {
     const meta = this.assetMeta.get(definition.assetPath);
     if (!meta) {
       return this.createFallbackInstance(piece, definition);
     }
 
     const root = new THREE.Group();
-    const clone = SkeletonUtils.clone(assetScene);
+    const clone = this.cloneAssetScene(asset.scene, meta);
     const rotationY = this.getModuleRotationY(piece, definition);
     const scale = this.getScaleForDefinition(piece, definition, meta.size);
     const scaleMultiplier = piece.scaleMultiplier ?? 1;
@@ -281,6 +307,16 @@ export class ModularTileBuilder {
     root.rotation.y = rotationY;
 
     return root;
+  }
+
+  cloneAssetScene(assetScene, meta = {}) {
+    if (meta.hasSkinnedMesh || meta.animationCount > 0) {
+      this.incrementBuildStat("clonedSkinnedAssets");
+      return SkeletonUtils.clone(assetScene);
+    }
+
+    this.incrementBuildStat("clonedStaticAssets");
+    return assetScene.clone(true);
   }
 
   createFallbackInstance(piece, definition) {
@@ -581,6 +617,18 @@ export class ModularTileBuilder {
     });
   }
 
+  hasSkinnedMesh(root) {
+    let found = false;
+
+    root.traverse((node) => {
+      if (node.isSkinnedMesh) {
+        found = true;
+      }
+    });
+
+    return found;
+  }
+
   measureAsset(root) {
     const box = new THREE.Box3().setFromObject(root);
     const size = new THREE.Vector3();
@@ -608,5 +656,23 @@ export class ModularTileBuilder {
     if (typeof this.scene.addLog === "function") {
       this.scene.addLog(`Fallback visual para ${definition.id}.`);
     }
+  }
+
+  recordModulePiece(build, moduleId) {
+    if (!build?.stats) return;
+
+    build.stats.pieces += 1;
+    build.stats.modulesById.set(
+      moduleId,
+      (build.stats.modulesById.get(moduleId) ?? 0) + 1
+    );
+    this.currentBuildStats = build.stats;
+  }
+
+  incrementBuildStat(statName, amount = 1) {
+    if (!this.currentBuildStats) return;
+
+    this.currentBuildStats[statName] =
+      (this.currentBuildStats[statName] ?? 0) + amount;
   }
 }

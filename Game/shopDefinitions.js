@@ -1,4 +1,5 @@
 import { ITEM_RARITIES } from "../CharacterData/itemDefinitions.js";
+import { DEFAULT_SHOP_ALTAR_MODEL_ID } from "../CharacterData/modelDefinitions.js";
 
 export const SHOP_EVENTS = Object.freeze({
   OFFER_CREATED: "shopOfferCreated",
@@ -9,6 +10,13 @@ export const SHOP_EVENTS = Object.freeze({
 
 export const SHOP_DEFINITION = Object.freeze({
   offerCount: 3,
+
+  standVisual: Object.freeze({
+    altarModelId: DEFAULT_SHOP_ALTAR_MODEL_ID,
+    altarScale: 0.86,
+    itemY: 0.92,
+    labelY: 1.46,
+  }),
 
   possibleItemIds: Object.freeze([
     "steak",

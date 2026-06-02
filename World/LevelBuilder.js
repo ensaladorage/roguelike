@@ -1184,9 +1184,9 @@ export class LevelBuilder {
     return shopOfferSpawns.map((spawn) => ({
       x: spawn.x,
       z: spawn.z,
-      w: SHOP_OFFER_COLLISION_SIZE.w,
-      d: SHOP_OFFER_COLLISION_SIZE.d,
-      role: "shopOfferPedestalCollision",
+      w: spawn.collisionSize?.w ?? SHOP_OFFER_COLLISION_SIZE.w,
+      d: spawn.collisionSize?.d ?? SHOP_OFFER_COLLISION_SIZE.d,
+      role: "shopOfferCollision",
       generated: true,
     }));
   }

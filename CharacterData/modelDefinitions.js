@@ -11,6 +11,7 @@ export const DEFAULT_ENEMY_MODEL_ID = "enemy_hog_01";
 export const DEFAULT_CHEST_MODEL_ID = "chest_01";
 export const EPIC_CHEST_MODEL_ID = "chest_epic_01";
 export const COFFIN_CHEST_MODEL_ID = "coffin_01";
+export const DEFAULT_SHOP_ALTAR_MODEL_ID = "altar_wood_01";
 export const DEFAULT_COIN_MODEL_ID = "coin_01";
 
 export const MODEL_TEXTURE_DEFINITIONS = {
@@ -128,6 +129,14 @@ export const MODEL_DEFINITIONS = {
       openAnimationIndex: 0,
       scale: 1,
       chestTier: "mimic",
+    },
+    [DEFAULT_SHOP_ALTAR_MODEL_ID]: {
+      id: DEFAULT_SHOP_ALTAR_MODEL_ID,
+      category: MODEL_CATEGORIES.INTERACTABLE,
+      assetPath: "Assets/Models/Scenario/altar-wood.glb",
+      assetVersion: "graveyard-altar-01",
+      textureId: "graveyard",
+      scale: 1.3,
     },
   },
   [MODEL_CATEGORIES.COLLECTIBLE]: {
