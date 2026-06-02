@@ -25,7 +25,7 @@ const SIDE_VECTOR = {
 const COMBAT_ROOM_COUNT = { min: 2, max: 3 };
 const TREASURE_ROOM_COUNT = { min: 3, max: 4 };
 const ENTRY_STAIRS_OFFSET_FROM_WALL = 1.5;
-const PLAYER_START_OFFSET_FROM_ENTRY_STAIRS = 1;
+const PLAYER_START_OFFSET_FROM_ENTRY_STAIRS = 2;
 
 const PROCEDURAL_DECORATION_FILL = {
   seed: "random",
@@ -543,6 +543,7 @@ function getPlayerStartFromEnterRoom(enterRoom, nextRoom) {
   return {
     x: startOpening.x + direction.x * offset,
     z: startOpening.z + direction.z * offset,
+    rotationY: Math.atan2(direction.x, direction.z),
   };
 }
 

@@ -11,8 +11,9 @@ export function createShopFloor({
     floorType: "shop",
     connectorStyleId: "openCorridor",
     playerStart: {
-      x: -10,
+      x: -7.5,
       z: 0,
+      rotationY: Math.PI / 2,
     },
     floorSize: 38,
     floorCenter: {

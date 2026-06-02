@@ -47,7 +47,7 @@ export const ROOM_TESTER_LEVELS = [
         },
       ],
     },
-    playerStart: { x: -10, z: 0 },
+    playerStart: { x: -8.5, z: 0, rotationY: Math.PI / 2 },
     floorSize: 30,
     floorCenter: { x: 0, z: 0 },
     rooms: [

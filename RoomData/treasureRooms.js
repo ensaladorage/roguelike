@@ -179,6 +179,13 @@ export const TREASURE_ROOM_TEMPLATES = [
         modelId: "chest_01",
       },
     ],
+    coffinSpawns: [
+      {
+        x: 2.2,
+        z: 2.2,
+        rotationY: -Math.PI / 2,
+      },
+    ],
     exitMarker: null,
     decorZones: [
       {
@@ -391,6 +398,13 @@ export const TREASURE_ROOM_TEMPLATES = [
         modelId: "chest_01",
       },
     ],
+    coffinSpawns: [
+      {
+        x: 0,
+        z: -2.2,
+        rotationY: 0,
+      },
+    ],
     exitMarker: null,
     decorZones: [
       {
@@ -588,6 +602,13 @@ export const TREASURE_ROOM_TEMPLATES = [
         z: 0,
         rotationY: 0,
         modelId: "chest_01",
+      },
+    ],
+    coffinSpawns: [
+      {
+        x: 1.8,
+        z: 0,
+        rotationY: -Math.PI / 2,
       },
     ],
     exitMarker: null,
@@ -795,6 +816,13 @@ export const TREASURE_ROOM_TEMPLATES = [
         modelId: "chest_01",
       },
     ],
+    coffinSpawns: [
+      {
+        x: 0,
+        z: 0,
+        rotationY: 0,
+      },
+    ],
     exitMarker: null,
     decorZones: [
       {
@@ -932,6 +960,13 @@ export const TREASURE_ROOM_TEMPLATES = [
         z: 2.1,
         rotationY: -Math.PI / 2,
         modelId: "chest_01",
+      },
+    ],
+    coffinSpawns: [
+      {
+        x: -0.6,
+        z: 0,
+        rotationY: -Math.PI / 2,
       },
     ],
     exitMarker: null,

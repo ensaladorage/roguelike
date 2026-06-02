@@ -56,6 +56,14 @@ export class EnemyAI {
     this.attackCooldown = options.attackCooldown ?? 1.2;
     this.attackTimer = 0;
     this.stunTimer = 0;
+    this.coinDropConfig = {
+      ...ENEMY_COIN_DROP,
+      ...(options.coinDrop ?? {}),
+    };
+    this.potionDropConfig = {
+      ...ENEMY_POTION_DROP,
+      ...(options.potionDrop ?? {}),
+    };
 
     this.maxHp = options.maxHp ?? options.hp ?? 50;
     this.hp = options.hp ?? this.maxHp;
@@ -528,8 +536,8 @@ export class EnemyAI {
   createCoinDrops() {
     const coins = [];
     const totalValue = this.rollIntegerRange(
-      ENEMY_COIN_DROP.totalValueMin,
-      ENEMY_COIN_DROP.totalValueMax
+      this.coinDropConfig.totalValueMin,
+      this.coinDropConfig.totalValueMax
     );
     const coinTypes = splitCoinValueIntoTypes(totalValue);
     const count = coinTypes.length;
@@ -550,7 +558,7 @@ export class EnemyAI {
       const sideOffset = centered * 0.42 + (Math.random() * 0.18 - 0.09);
       const ringOffset = Math.abs(centered) % 2 === 0 ? 0 : 0.16;
       const distance =
-        ENEMY_COIN_DROP.radius +
+        this.coinDropConfig.radius +
         0.45 +
         ringOffset +
         (Math.random() * 0.18 - 0.09);
@@ -575,18 +583,18 @@ export class EnemyAI {
         typeId: coin.typeId,
         value: coin.value,
       })),
-      totalValueMin: ENEMY_COIN_DROP.totalValueMin,
-      totalValueMax: ENEMY_COIN_DROP.totalValueMax,
+      totalValueMin: this.coinDropConfig.totalValueMin,
+      totalValueMax: this.coinDropConfig.totalValueMax,
     });
 
     return coins;
   }
 
   createPotionDrops() {
-    const roll = this.rollPercentChance(ENEMY_POTION_DROP.chancePercent);
+    const roll = this.rollPercentChance(this.potionDropConfig.chancePercent);
     console.log("enemyPotionDropRoll", {
-      itemId: ENEMY_POTION_DROP.itemId,
-      chancePercent: ENEMY_POTION_DROP.chancePercent,
+      itemId: this.potionDropConfig.itemId,
+      chancePercent: this.potionDropConfig.chancePercent,
       roll: roll.value,
       spawned: roll.success,
     });
@@ -601,16 +609,16 @@ export class EnemyAI {
 
     const position = origin
       .clone()
-      .addScaledVector(forward, ENEMY_POTION_DROP.radius);
+      .addScaledVector(forward, this.potionDropConfig.radius);
 
     console.log("enemyPotionDropped", {
-      itemId: ENEMY_POTION_DROP.itemId,
-      chancePercent: ENEMY_POTION_DROP.chancePercent,
+      itemId: this.potionDropConfig.itemId,
+      chancePercent: this.potionDropConfig.chancePercent,
     });
 
     return [
       {
-        itemId: ENEMY_POTION_DROP.itemId,
+        itemId: this.potionDropConfig.itemId,
         position: new THREE.Vector3(position.x, 0, position.z),
         fallbackOrigin: origin.clone(),
       },

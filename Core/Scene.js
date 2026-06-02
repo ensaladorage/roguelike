@@ -36,7 +36,7 @@ const NAV_GRID_SIZE = 0.7;
 const CLICK_TARGET_SEARCH_RADIUS = 1.35;
 const CLICK_TARGET_SEARCH_STEP = 0.22;
 const PLAYER_COLLISION_SKIN = 0.04;
-const ENTRY_STAIRS_FRONT_OFFSET = 1;
+const ENTRY_STAIRS_FRONT_OFFSET = 2;
 const DEBUG_SUPER_SPEED_MULTIPLIER = 5;
 const DEBUG_EXTERMINATOR_DAMAGE = 999999;
 const DEBUG_GOLD_AMOUNT = 999;
@@ -417,6 +417,9 @@ export class GameScene {
     const level = this.levelBuilder.build(definition, {
       runSeed: floorLoad.currentFloorSeed,
       floorSeed: floorLoad.currentFloorSeed,
+      floorIndex: floorLoad.currentFloorIndex,
+      floorType: floorLoad.floorType,
+      mode: floorLoad.mode,
     });
     if (!level) return;
 
@@ -661,10 +664,53 @@ export class GameScene {
 
   placePlayer(position) {
     const safePosition = this.getSafePlayerStartPosition(position);
+    const spawnRotationY = this.getPlayerSpawnRotation(position, safePosition);
 
     this.player.model.position.copy(safePosition);
     this.player.groundY = PLAYER_GROUND_Y;
     this.player.resetRuntimeState?.();
+    this.player.setFacingRotation?.(spawnRotationY);
+  }
+
+  getPlayerSpawnRotation(startPosition, safePosition) {
+    const entryStairsRotation = this.getEntryStairsFacingRotation(safePosition);
+
+    if (entryStairsRotation !== null) {
+      return entryStairsRotation;
+    }
+
+    return typeof startPosition?.rotationY === "number"
+      ? startPosition.rotationY
+      : 0;
+  }
+
+  getEntryStairsFacingRotation(position) {
+    const stairs = this.getNearestEntryStairs(position);
+    if (!stairs) return null;
+
+    const direction = FRONT_DIRECTION_BY_SIDE[stairs.side];
+    if (!direction) return null;
+
+    return Math.atan2(direction.x, direction.z);
+  }
+
+  getNearestEntryStairs(position) {
+    const entryStairs = this.collisionWalls.filter(
+      (wall) => wall.role === "entryStairs"
+    );
+    if (entryStairs.length === 0) return null;
+
+    return entryStairs.reduce((nearest, stairs) => {
+      const distance =
+        (position.x - stairs.x) ** 2 +
+        (position.z - stairs.z) ** 2;
+
+      if (!nearest || distance < nearest.distance) {
+        return { stairs, distance };
+      }
+
+      return nearest;
+    }, null)?.stairs ?? null;
   }
 
   getSafePlayerStartPosition(position) {
@@ -832,6 +878,15 @@ export class GameScene {
     this.enemy = this.enemies[0] ?? null;
   }
 
+  spawnRuntimeEnemy(data) {
+    const enemy = this.createEnemy(data);
+
+    this.enemies.push(enemy);
+    this.enemy = this.enemy ?? enemy;
+
+    return enemy;
+  }
+
   createEnemy(data) {
     let enemyModel = null;
     const enemyModelId = data.modelId ?? DEFAULT_ENEMY_MODEL_ID;
@@ -852,6 +907,7 @@ export class GameScene {
 
     const enemyRoot = new THREE.Group();
     enemyRoot.position.set(data.x, 0, data.z);
+    enemyRoot.rotation.y = data.rotationY ?? 0;
     enemyRoot.add(enemyModel);
     this.levelGroup.add(enemyRoot);
 
@@ -873,6 +929,8 @@ export class GameScene {
       patrolStopRange: data.patrolStopRange,
       patrolMoveDuration: data.patrolMoveDuration,
       patrolPauseDurations: data.patrolPauseDurations,
+      coinDrop: data.coinDrop,
+      potionDrop: data.potionDrop,
       patrolAreas: data.patrolAreas,
       navigation: this.createEnemyNavigation(),
     });

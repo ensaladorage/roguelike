@@ -191,6 +191,9 @@ export class RoomTemplateLibrary {
       chestSpawns: template.chestSpawns.map((spawn) =>
         transformChestSpawn(spawn, placement, quarterTurns)
       ),
+      coffinSpawns: (template.coffinSpawns ?? []).map((spawn) =>
+        transformChestSpawn(spawn, placement, quarterTurns)
+      ),
       shopOfferSpawns: (template.shopOfferSpawns ?? []).map((spawn) =>
         transformShopOfferSpawn(spawn, placement, quarterTurns)
       ),

@@ -1,6 +1,10 @@
 import * as THREE from "three";
 import { flatDistance } from "./Utils.js";
-import { DEFAULT_CHEST_MODEL_ID } from "../CharacterData/modelDefinitions.js";
+import {
+  COFFIN_CHEST_MODEL_ID,
+  DEFAULT_CHEST_MODEL_ID,
+} from "../CharacterData/modelDefinitions.js";
+import { getEnemyDefinition } from "../CharacterData/enemyDefinitions.js";
 import {
   ITEM_RARITIES,
   getItemIdsByRarity,
@@ -32,6 +36,46 @@ export const CHEST_COIN_DROP = {
   totalValueMin: 20,
   totalValueMax: 30,
   radius: 0.62,
+};
+
+export const CHEST_TYPES = {
+  STANDARD: "standard",
+  MIMIC_COFFIN: "mimicCoffin",
+};
+
+export const MIMIC_COFFIN_CONFIG = {
+  modelId: COFFIN_CHEST_MODEL_ID,
+  minFloorIndex: 4,
+  optionalSpawnChancePercent: 30,
+  vampireChancePercent: 25,
+  vampireEnemyTypeId: "enemy_vampire_01",
+  triggerRange: 1.35,
+  spawnAdjacentToPlayerDistance: 0.85,
+  spawnForwardOffset: 0.9,
+  loot: {
+    coinDrop: {
+      totalValueMin: 45,
+      totalValueMax: 70,
+      radius: 0.75,
+    },
+    potionDrop: {
+      itemId: "energyDrink",
+      chancePercent: 35,
+      radius: 0.82,
+    },
+  },
+  vampireLootOverrides: {
+    coinDrop: {
+      totalValueMin: 18,
+      totalValueMax: 32,
+      radius: 0.8,
+    },
+    potionDrop: {
+      itemId: "energyDrink",
+      chancePercent: 30,
+      radius: 0.82,
+    },
+  },
 };
 
 export function getChestReward(overrides = {}, context = {}) {
@@ -234,6 +278,9 @@ export class ChestManager {
         animation,
         roomId: data.roomId,
         roomTemplateId: data.roomTemplateId,
+        chestType: data.chestType ?? CHEST_TYPES.STANDARD,
+        triggerRange: data.triggerRange,
+        mimicConfig: data.mimicConfig,
         rewardOverrides: data.rewardOverrides,
         collected: false,
       };
@@ -263,7 +310,9 @@ export class ChestManager {
 
       const distance = flatDistance(playerPos, chest.model.position);
 
-      if (distance <= 1.25) {
+      const triggerRange = chest.triggerRange ?? 1.25;
+
+      if (distance <= triggerRange) {
         this.collectChest(chest);
       }
     }
@@ -282,13 +331,229 @@ export class ChestManager {
       if (lid) lid.rotation.x = -0.85;
     }
 
-    this.spawnCoins(chest);
-    this.collectChestItem(chest);
+    if (this.isMimicCoffin(chest)) {
+      this.resolveMimicCoffin(chest);
+    } else {
+      this.spawnCoins(chest);
+      this.collectChestItem(chest);
+      this.scene.addLog("Chest opened.");
+    }
 
     this.scene.updateHud();
-    this.scene.addLog("Chest opened.");
 
     this.scene.sfx.play("chest");
+  }
+
+  isMimicCoffin(chest) {
+    return chest.chestType === CHEST_TYPES.MIMIC_COFFIN;
+  }
+
+  resolveMimicCoffin(chest) {
+    const config = this.getMimicConfig(chest);
+    const vampireRoll = rollPercentChance(config.vampireChancePercent);
+
+    console.log("mimicCoffinRoll", {
+      chancePercent: config.vampireChancePercent,
+      roll: vampireRoll.value,
+      spawnedVampire: vampireRoll.success,
+    });
+
+    if (vampireRoll.success) {
+      const enemy = this.spawnMimicVampire(chest, config);
+      if (enemy) {
+        this.scene.addLog("The sarcophagus opens. A Vampire awakens!");
+        return;
+      }
+    }
+
+    this.spawnMimicLoot(chest, config);
+    this.scene.addLog("The sarcophagus opens. Treasure spills out.");
+  }
+
+  getMimicConfig(chest) {
+    return {
+      ...MIMIC_COFFIN_CONFIG,
+      ...(chest.mimicConfig ?? {}),
+      loot: {
+        ...MIMIC_COFFIN_CONFIG.loot,
+        ...(chest.mimicConfig?.loot ?? {}),
+        coinDrop: {
+          ...MIMIC_COFFIN_CONFIG.loot.coinDrop,
+          ...(chest.mimicConfig?.loot?.coinDrop ?? {}),
+        },
+        potionDrop: {
+          ...MIMIC_COFFIN_CONFIG.loot.potionDrop,
+          ...(chest.mimicConfig?.loot?.potionDrop ?? {}),
+        },
+      },
+      vampireLootOverrides: {
+        ...MIMIC_COFFIN_CONFIG.vampireLootOverrides,
+        ...(chest.mimicConfig?.vampireLootOverrides ?? {}),
+        coinDrop: {
+          ...MIMIC_COFFIN_CONFIG.vampireLootOverrides.coinDrop,
+          ...(chest.mimicConfig?.vampireLootOverrides?.coinDrop ?? {}),
+        },
+        potionDrop: {
+          ...MIMIC_COFFIN_CONFIG.vampireLootOverrides.potionDrop,
+          ...(chest.mimicConfig?.vampireLootOverrides?.potionDrop ?? {}),
+        },
+      },
+    };
+  }
+
+  spawnMimicLoot(chest, config) {
+    this.spawnCoins(chest, config.loot.coinDrop);
+    this.spawnPotionDrop(chest, config.loot.potionDrop);
+  }
+
+  spawnMimicVampire(chest, config) {
+    const definition = getEnemyDefinition(config.vampireEnemyTypeId);
+    if (!definition || typeof this.scene.spawnRuntimeEnemy !== "function") {
+      console.warn("Mimic vampire could not spawn.", {
+        vampireEnemyTypeId: config.vampireEnemyTypeId,
+      });
+      return null;
+    }
+
+    const position = this.getEnemySpawnPosition(chest, {
+      collisionRadius: definition.collisionRadius,
+      adjacentToPlayerDistance: config.spawnAdjacentToPlayerDistance,
+      forwardOffset: config.spawnForwardOffset,
+    });
+    const enemy = this.scene.spawnRuntimeEnemy({
+      x: position.x,
+      z: position.z,
+      rotationY: chest.model.rotation.y,
+      enemyTypeId: definition.id,
+      enemyName: definition.name,
+      enemyDifficulty: definition.difficulty,
+      modelId: definition.modelId,
+      maxHp: definition.maxHp,
+      hp: definition.hp ?? definition.maxHp,
+      speed: definition.speed,
+      attackDamage: definition.attackDamage,
+      attackRange: definition.attackRange,
+      attackCooldown: definition.attackCooldown,
+      collisionRadius: definition.collisionRadius,
+      patrolStopRange: definition.patrolStopRange,
+      patrolMoveDuration: definition.patrolMoveDuration,
+      patrolPauseDurations: definition.patrolPauseDurations,
+      coinDrop: config.vampireLootOverrides.coinDrop,
+      potionDrop: config.vampireLootOverrides.potionDrop,
+      patrol: [{ x: position.x, z: position.z }],
+      patrolAreas: chest.roomId
+        ? this.scene.walkableAreas.filter((area) => area.roomId === chest.roomId)
+        : [],
+      roomId: chest.roomId,
+      roomTemplateId: chest.roomTemplateId,
+    });
+
+    console.log("mimicVampireSpawned", {
+      enemyTypeId: definition.id,
+      position: { x: position.x, z: position.z },
+      roomId: chest.roomId,
+      roomTemplateId: chest.roomTemplateId,
+    });
+
+    return enemy;
+  }
+
+  getEnemySpawnPosition(chest, options = {}) {
+    const adjacentToPlayer = this.getAdjacentPlayerSpawnPosition(options);
+    if (adjacentToPlayer) return adjacentToPlayer;
+
+    const origin = chest.model.position.clone();
+    const forward = this.getChestForward(chest);
+    const preferred = origin
+      .clone()
+      .addScaledVector(forward, options.forwardOffset ?? 0.9);
+    const radius = options.collisionRadius ?? 0.32;
+
+    preferred.y = 0;
+
+    if (this.scene.isWalkablePosition?.(preferred, radius)) {
+      return preferred;
+    }
+
+    const navCell = this.scene.getNearestWalkableNavCell?.(preferred, radius, {
+      maxRing: 3,
+    });
+
+    if (navCell && typeof this.scene.navCellToWorld === "function") {
+      return this.scene.navCellToWorld(navCell);
+    }
+
+    return origin;
+  }
+
+  getAdjacentPlayerSpawnPosition(options = {}) {
+    const playerPosition = this.scene.player?.model?.position;
+    if (!playerPosition) return null;
+
+    const radius = options.collisionRadius ?? 0.32;
+    const distance = options.adjacentToPlayerDistance ?? 0.85;
+    const directions = [
+      { x: 1, z: 0 },
+      { x: -1, z: 0 },
+      { x: 0, z: 1 },
+      { x: 0, z: -1 },
+      { x: 1, z: 1 },
+      { x: -1, z: 1 },
+      { x: 1, z: -1 },
+      { x: -1, z: -1 },
+    ];
+    const candidates = directions.map((direction) => {
+      const length = Math.hypot(direction.x, direction.z) || 1;
+
+      return new THREE.Vector3(
+        playerPosition.x + (direction.x / length) * distance,
+        0,
+        playerPosition.z + (direction.z / length) * distance
+      );
+    });
+
+    candidates.sort(
+      (a, b) =>
+        flatDistance(a, this.scene.player.model.position) -
+        flatDistance(b, this.scene.player.model.position)
+    );
+
+    for (const candidate of candidates) {
+      if (!this.scene.isWalkablePosition?.(candidate, radius)) continue;
+      if (this.scene.movementHitsWall?.(playerPosition, candidate, radius)) continue;
+
+      return candidate;
+    }
+
+    return null;
+  }
+
+  spawnPotionDrop(chest, potionDropConfig = {}) {
+    const roll = rollPercentChance(potionDropConfig.chancePercent);
+
+    console.log("mimicCoffinPotionDropRoll", {
+      itemId: potionDropConfig.itemId,
+      chancePercent: potionDropConfig.chancePercent,
+      roll: roll.value,
+      spawned: roll.success,
+    });
+
+    if (!roll.success || !potionDropConfig.itemId) return;
+
+    const origin = chest.model.position.clone();
+    const position = origin
+      .clone()
+      .addScaledVector(this.getChestForward(chest), potionDropConfig.radius ?? 0.82);
+
+    if (this.scene.itemDropManager) {
+      this.scene.itemDropManager.addItemDrops([
+        {
+          itemId: potionDropConfig.itemId,
+          position: new THREE.Vector3(position.x, 0, position.z),
+          fallbackOrigin: origin.clone(),
+        },
+      ]);
+    }
   }
 
   collectChestItem(chest) {
@@ -328,20 +593,22 @@ export class ChestManager {
   // =========================
   // COINS FROM CHEST
   // =========================
-  spawnCoins(chest) {
+  spawnCoins(chest, coinDropConfig = CHEST_COIN_DROP) {
+    const config = {
+      ...CHEST_COIN_DROP,
+      ...(coinDropConfig ?? {}),
+    };
     const coins = [];
     const totalValue = rollIntegerRange(
-      CHEST_COIN_DROP.totalValueMin,
-      CHEST_COIN_DROP.totalValueMax
+      config.totalValueMin,
+      config.totalValueMax
     );
     const coinTypes = splitCoinValueIntoTypes(totalValue);
     const count = coinTypes.length;
 
     const origin = chest.model.position;
 
-    const forward = new THREE.Vector3(0, 0, 1)
-      .applyAxisAngle(new THREE.Vector3(0, 1, 0), chest.model.rotation.y)
-      .normalize();
+    const forward = this.getChestForward(chest);
 
     const right = new THREE.Vector3(forward.z, 0, -forward.x);
 
@@ -351,7 +618,7 @@ export class ChestManager {
 
       const sideOffset = centered * 0.42 + (Math.random() * 0.18 - 0.09);
       const forwardOffset =
-        CHEST_COIN_DROP.radius +
+        config.radius +
         0.45 +
         (Math.abs(centered) % 2) * 0.14 +
         (Math.random() * 0.2 - 0.1);
@@ -376,8 +643,8 @@ export class ChestManager {
         typeId: coin.typeId,
         value: coin.value,
       })),
-      totalValueMin: CHEST_COIN_DROP.totalValueMin,
-      totalValueMax: CHEST_COIN_DROP.totalValueMax,
+      totalValueMin: config.totalValueMin,
+      totalValueMax: config.totalValueMax,
     });
 
     if (this.scene.coinManager) {
@@ -386,6 +653,12 @@ export class ChestManager {
       // fallback: try old API if coinManager not yet initialized
       if (typeof this.scene.addCoinDrops === 'function') this.scene.addCoinDrops(coins);
     }
+  }
+
+  getChestForward(chest) {
+    return new THREE.Vector3(0, 0, 1)
+      .applyAxisAngle(new THREE.Vector3(0, 1, 0), chest.model.rotation.y)
+      .normalize();
   }
 
   // =========================

@@ -352,7 +352,10 @@ export class DecorationBuilder {
       { x: 0, z: -entry.chestSpotOffset },
     ];
 
-    return (room.chestSpawns ?? []).flatMap((chest, chestIndex) =>
+    return [
+      ...(room.chestSpawns ?? []),
+      ...(room.coffinSpawns ?? []),
+    ].flatMap((chest, chestIndex) =>
       offsets.map((offset, offsetIndex) => ({
         x: chest.x + offset.x,
         z: chest.z + offset.z,
@@ -712,6 +715,7 @@ export class DecorationBuilder {
       ...(room.decorativeModules ?? []),
       ...(room.obstacleModules ?? []),
       ...(room.chestSpawns ?? []).map((spawn) => ({ ...spawn, w: 1, d: 1 })),
+      ...(room.coffinSpawns ?? []).map((spawn) => ({ ...spawn, w: 1, d: 1 })),
       ...(room.enemySpawns ?? []).map((spawn) => ({ ...spawn, w: 1, d: 1 })),
       ...(room.decorationProtectedAreas ?? []).map((area) => ({
         ...area,

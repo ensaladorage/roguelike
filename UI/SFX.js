@@ -3,6 +3,7 @@ export class SFX {
     this.audioContext = null;
     this.audioUnlocked = false;
     this.pendingType = null;
+    this.audioFiles = {};
 
     this.tones = {
       playerAttack: {
@@ -32,13 +33,12 @@ export class SFX {
         type: "sawtooth",
         gain: 0.06,
       },
+    };
 
+    this.files = {
       entryStairsBlocked: {
-        frequency: 170,
-        endFrequency: 70,
-        duration: 0.34,
-        type: "square",
-        gain: 0.09,
+        src: "Assets/SFXs/Wrong.mp3",
+        volume: 0.85,
       },
     };
 
@@ -46,6 +46,12 @@ export class SFX {
   }
 
   play(type) {
+    const file = this.files[type];
+    if (file) {
+      this.playFile(type, file);
+      return;
+    }
+
     const AudioContextClass =
       window.AudioContext ||
       window.webkitAudioContext;
@@ -74,6 +80,35 @@ export class SFX {
 
     this.pendingType = null;
     this.playTone(tone);
+  }
+
+  playFile(type, file) {
+    if (!this.audioUnlocked) {
+      this.pendingType = type;
+      return;
+    }
+
+    const audio = this.getAudioFile(type, file);
+
+    audio.currentTime = 0;
+    audio.volume = file.volume ?? 1;
+    audio.play().catch(() => {
+      this.pendingType = type;
+      this.audioUnlocked = false;
+      this.setupAudioUnlock();
+    });
+  }
+
+  getAudioFile(type, file) {
+    if (!this.audioFiles[type]) {
+      const audio = new Audio(file.src);
+
+      audio.preload = "auto";
+      audio.volume = file.volume ?? 1;
+      this.audioFiles[type] = audio;
+    }
+
+    return this.audioFiles[type];
   }
 
   playTone(tone) {
@@ -111,13 +146,12 @@ export class SFX {
       const AudioContextClass =
         window.AudioContext ||
         window.webkitAudioContext;
-      if (!AudioContextClass) return;
 
-      if (!this.audioContext) {
+      if (AudioContextClass && !this.audioContext) {
         this.audioContext = new AudioContextClass();
       }
 
-      const resume = this.audioContext.resume?.();
+      const resume = this.audioContext?.resume?.();
       this.audioUnlocked = true;
 
       const playPending = () => {

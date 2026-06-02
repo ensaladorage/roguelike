@@ -124,6 +124,11 @@ export class Player {
     }
   }
 
+  setFacingRotation(rotationY = 0) {
+    this.visualRotation = rotationY;
+    this.model.rotation.y = rotationY;
+  }
+
   createOcclusionMarker() {
     const marker = new THREE.Group();
     marker.name = "playerOcclusionMarker";

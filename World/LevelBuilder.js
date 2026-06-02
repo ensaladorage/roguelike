@@ -1,5 +1,9 @@
 import { DecorationBuilder } from "./DecorationBuilder.js";
 import {
+  CHEST_TYPES,
+  MIMIC_COFFIN_CONFIG,
+} from "../Game/Chest.js";
+import {
   ENEMY_DIFFICULTY,
   pickEnemyDefinitionForDifficulty,
 } from "../CharacterData/enemyDefinitions.js";
@@ -40,6 +44,7 @@ const EXIT_STAIRS_DIRT_FRONT_OFFSET = 1;
 const EXIT_STAIRS_DIRT_Y = -0.95;
 const EXIT_STAIRS_WOOD_STRUCTURE_Y = -0.85;
 const EXIT_STAIRS_WOOD_STRUCTURE_SIZE = { w: 1.2, d: 1.2, height: 1 };
+const MIMIC_COFFIN_ENTRY_ADJACENT_RADIUS = 1.25;
 const SHOP_OFFER_COLLISION_SIZE = { w: 0.78, d: 0.78 };
 const ENTRY_STAIRS_ROTATION_TOWARD_WALL_BY_SIDE = {
   north: 0,
@@ -297,11 +302,12 @@ export class LevelBuilder {
         }))
       );
       chests.push(
-        ...room.chestSpawns.map((spawn) => ({
-          ...spawn,
-          roomId: room.id,
-          roomTemplateId: room.templateId,
-        }))
+        ...this.resolveRoomChestSpawns({
+          room,
+          levelDefinition,
+          buildOptions,
+          connectionEndpoints: roomConnectionEndpoints,
+        })
       );
       shopOfferSpawns.push(
         ...(room.shopOfferSpawns ?? []).map((spawn, offerIndex) => ({
@@ -958,6 +964,193 @@ export class LevelBuilder {
         : room.walkableAreas
       ).map(cloneArea),
     };
+  }
+
+  resolveRoomChestSpawns({
+    room,
+    levelDefinition,
+    buildOptions,
+    connectionEndpoints = [],
+  }) {
+    const chestSpawns = (room.chestSpawns ?? []).map((spawn, chestIndex) =>
+      this.createChestSpawn({
+        spawn,
+        spawnIndex: chestIndex,
+        room,
+      })
+    );
+    const coffinSpawns = this.resolveRoomMimicCoffinSpawns({
+      room,
+      levelDefinition,
+      buildOptions,
+      connectionEndpoints,
+      availableChestCount: chestSpawns.length,
+    });
+
+    if (coffinSpawns.length === 0) return chestSpawns;
+
+    const remainingChestSpawns = this.removeChestsForMimicCoffins(
+      chestSpawns,
+      coffinSpawns
+    );
+
+    console.log("mimicCoffinRoomResolved", {
+      roomId: room.id,
+      roomTemplateId: room.templateId,
+      originalChestCount: chestSpawns.length,
+      coffinCount: coffinSpawns.length,
+      remainingChestCount: remainingChestSpawns.length,
+    });
+
+    return [...remainingChestSpawns, ...coffinSpawns];
+  }
+
+  createChestSpawn({ spawn, spawnIndex, room }) {
+    return {
+      ...spawn,
+      spawnIndex,
+      roomId: room.id,
+      roomTemplateId: room.templateId,
+    };
+  }
+
+  resolveRoomMimicCoffinSpawns({
+    room,
+    levelDefinition,
+    buildOptions,
+    connectionEndpoints = [],
+    availableChestCount,
+  }) {
+    if (room.type !== "treasure") return [];
+    if (availableChestCount <= 0) return [];
+
+    const floorIndex =
+      buildOptions.floorIndex ??
+      levelDefinition.procedural?.floor ??
+      levelDefinition.floorIndex ??
+      1;
+
+    if (floorIndex < MIMIC_COFFIN_CONFIG.minFloorIndex) return [];
+
+    const coffinSpawns = [];
+    const maxCoffinCount = availableChestCount;
+
+    for (const [coffinIndex, spawn] of (room.coffinSpawns ?? []).entries()) {
+      if (coffinSpawns.length >= maxCoffinCount) break;
+
+      if (this.isCoffinSpawnTooCloseToConnectedOpening(spawn, connectionEndpoints)) {
+        console.log("mimicCoffinFixedSpawnSkipped", {
+          roomId: room.id,
+          roomTemplateId: room.templateId,
+          coffinIndex,
+          reason: "entryAdjacentTile",
+        });
+        continue;
+      }
+
+      const chance = this.normalizePercentChance(
+        spawn.spawnChancePercent ?? MIMIC_COFFIN_CONFIG.optionalSpawnChancePercent
+      );
+      const roll = this.createSeededRandomValue([
+        buildOptions.floorSeed ?? buildOptions.runSeed ?? levelDefinition.name ?? "level",
+        room.id,
+        coffinIndex,
+        spawn.x,
+        spawn.z,
+        "mimicCoffinFixedSpawn",
+      ].join(":")) * 100;
+      const spawned = roll < chance;
+
+      console.log("mimicCoffinFixedSpawnRoll", {
+        roomId: room.id,
+        roomTemplateId: room.templateId,
+        floorIndex,
+        coffinIndex,
+        chancePercent: chance,
+        roll: Number(roll.toFixed(2)),
+        spawned,
+      });
+
+      if (!spawned) continue;
+
+      coffinSpawns.push(this.createMimicCoffinSpawn({
+        spawn,
+        spawnIndex: coffinIndex,
+        room,
+      }));
+    }
+
+    return coffinSpawns;
+  }
+
+  isCoffinSpawnTooCloseToConnectedOpening(spawn, connectionEndpoints = []) {
+    return connectionEndpoints.some((endpoint) => {
+      const adjacentTile = this.getOpeningAdjacentInteriorPoint(endpoint.opening);
+      if (!adjacentTile) return false;
+
+      return (
+        this.distanceSquared2D(spawn, adjacentTile) <=
+        MIMIC_COFFIN_ENTRY_ADJACENT_RADIUS * MIMIC_COFFIN_ENTRY_ADJACENT_RADIUS
+      );
+    });
+  }
+
+  getOpeningAdjacentInteriorPoint(opening) {
+    const interior = this.getRoomInteriorDirection(opening?.side);
+    if (!interior) return null;
+
+    return {
+      x: opening.x + interior.x,
+      z: opening.z + interior.z,
+    };
+  }
+
+  createMimicCoffinSpawn({ spawn, spawnIndex, room }) {
+    return {
+      ...spawn,
+      spawnIndex,
+      modelId: MIMIC_COFFIN_CONFIG.modelId,
+      chestType: CHEST_TYPES.MIMIC_COFFIN,
+      triggerRange: spawn.triggerRange ?? MIMIC_COFFIN_CONFIG.triggerRange,
+      mimicConfig: {
+        ...MIMIC_COFFIN_CONFIG,
+        ...(spawn.mimicConfig ?? {}),
+      },
+      roomId: room.id,
+      roomTemplateId: room.templateId,
+    };
+  }
+
+  removeChestsForMimicCoffins(chestSpawns, coffinSpawns) {
+    const remaining = [...chestSpawns];
+
+    for (const coffin of coffinSpawns) {
+      if (remaining.length === 0) break;
+
+      let closestIndex = 0;
+      let closestDistance = this.distanceSquared2D(coffin, remaining[0]);
+
+      for (let index = 1; index < remaining.length; index += 1) {
+        const distance = this.distanceSquared2D(coffin, remaining[index]);
+
+        if (distance < closestDistance) {
+          closestDistance = distance;
+          closestIndex = index;
+        }
+      }
+
+      remaining.splice(closestIndex, 1);
+    }
+
+    return remaining;
+  }
+
+  normalizePercentChance(chancePercent) {
+    const numericChance = Number.parseFloat(chancePercent);
+
+    if (!Number.isFinite(numericChance)) return 0;
+
+    return Math.max(0, Math.min(100, numericChance));
   }
 
   createSeededRandomValue(seed) {

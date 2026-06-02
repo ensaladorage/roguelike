@@ -10,6 +10,7 @@ export const DEFAULT_PLAYER_MODEL_ID = "player_human_01";
 export const DEFAULT_ENEMY_MODEL_ID = "enemy_hog_01";
 export const DEFAULT_CHEST_MODEL_ID = "chest_01";
 export const EPIC_CHEST_MODEL_ID = "chest_epic_01";
+export const COFFIN_CHEST_MODEL_ID = "coffin_01";
 export const DEFAULT_COIN_MODEL_ID = "coin_01";
 
 export const MODEL_TEXTURE_DEFINITIONS = {
@@ -32,6 +33,11 @@ export const MODEL_TEXTURE_DEFINITIONS = {
     id: "variationA",
     primaryPath: "Assets/Models/Textures/variation-a.png",
     fallbackPath: "Assets/Textures/variation-a.png",
+  },
+  graveyard: {
+    id: "graveyard",
+    primaryPath: "Assets/Models/Textures/graveyard.png",
+    fallbackPath: "Assets/Textures/graveyard.png",
   },
 };
 
@@ -107,10 +113,21 @@ export const MODEL_DEFINITIONS = {
       assetPath: "Assets/Models/Scenario/chest-epic.glb",
       assetVersion: "epic-01",
       textureId: "charactersColormap",
-      openAnimationName: "open",
+      openAnimationName: "Open",
       openAnimationIndex: 1,
       scale: 1.1,
       chestTier: "epic",
+    },
+    [COFFIN_CHEST_MODEL_ID]: {
+      id: COFFIN_CHEST_MODEL_ID,
+      category: MODEL_CATEGORIES.INTERACTABLE,
+      assetPath: "Assets/Models/coffin.glb",
+      assetVersion: "graveyard-01",
+      textureId: "graveyard",
+      openAnimationName: "open",
+      openAnimationIndex: 0,
+      scale: 1,
+      chestTier: "mimic",
     },
   },
   [MODEL_CATEGORIES.COLLECTIBLE]: {
