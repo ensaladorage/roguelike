@@ -36,6 +36,9 @@ const NAV_GRID_SIZE = 0.7;
 const CLICK_TARGET_SEARCH_RADIUS = 1.35;
 const CLICK_TARGET_SEARCH_STEP = 0.22;
 const PLAYER_COLLISION_SKIN = 0.04;
+const PLAYER_ENEMY_COLLISION_SKIN = -0.03;
+const PLAYER_ENEMY_COLLISION_RADIUS_SCALE = 0.72;
+const PLAYER_ATTACK_PATH_REFRESH_TIME = 0.2;
 const ENTRY_STAIRS_FRONT_OFFSET = 2;
 const DEBUG_SUPER_SPEED_MULTIPLIER = 5;
 const DEBUG_EXTERMINATOR_DAMAGE = 999999;
@@ -102,9 +105,12 @@ export class GameScene {
     this.wallMeshes = [];
     this.navBounds = null;
     this.levelExitTrigger = null;
+    this.exitInteractableTargets = [];
     this.clickEffects = [];
     this.feedbackEffects = [];
     this.playerControlLocks = new Set();
+    this.playerAttackPathRefreshTimer = 0;
+    this.inputController = null;
 
     this.hud = new HUD();
     this.debugCheatState = {
@@ -157,15 +163,14 @@ export class GameScene {
 
     this.loadLevel();
 
-    setupInput(this.renderer, this.camera, this.floor, (point) => {
-      if (this.isPlayerControlLocked()) return;
-
-      const navigation = this.getClickNavigation(point);
-      if (!navigation) return;
-
-      this.createClickFeedback(navigation.target);
-      this.player.setPath(navigation.path);
-    });
+    this.inputController = setupInput(
+      this.renderer,
+      this.camera,
+      this.floor,
+      () => this.getEnemyClickTargets(),
+      () => this.getInteractableClickTargets(),
+      (payload) => this.handleWorldClick(payload)
+    );
 
     setupInventoryInput((slotIndex) => {
       this.useInventorySlot(slotIndex);
@@ -585,6 +590,8 @@ export class GameScene {
     this.wallMeshes = [];
     this.navBounds = null;
     this.levelExitTrigger = null;
+    this.exitInteractableTargets = [];
+    this.playerAttackPathRefreshTimer = 0;
   }
 
   clearClickEffects() {
@@ -867,6 +874,7 @@ export class GameScene {
     const environmentBuild = this.modularTileBuilder.buildLevel(level.environment);
     this.allWallMeshes = environmentBuild.wallMeshes;
     this.wallMeshes = [...this.allWallMeshes];
+    this.registerExitStairsInteractables();
 
     if (level.exit?.x !== undefined && level.exit?.z !== undefined) {
       this.levelExitTrigger = {
@@ -879,6 +887,21 @@ export class GameScene {
     this.addEntryStairsBlockerVfx();
 
     return environmentBuild;
+  }
+
+  registerExitStairsInteractables() {
+    const targets = [];
+
+    this.levelGroup.traverse((object) => {
+      if (object.userData?.role !== "exitStairs") return;
+
+      object.userData.interactable = {
+        type: "levelExit",
+      };
+      targets.push(object);
+    });
+
+    this.exitInteractableTargets = targets;
   }
 
   addEntryStairsBlockerVfx() {
@@ -959,8 +982,50 @@ export class GameScene {
 
     enemy.roomId = data.roomId;
     enemy.roomTemplateId = data.roomTemplateId;
+    enemyRoot.userData.enemy = enemy;
 
     return enemy;
+  }
+
+  getEnemyClickTargets() {
+    return this.enemies
+      .filter((enemy) => enemy?.alive && enemy.model?.visible !== false)
+      .map((enemy) => enemy.model);
+  }
+
+  getInteractableClickTargets() {
+    const chests = (this.chestManager?.chests ?? [])
+      .filter((chest) => !chest.collected && chest.model?.visible !== false)
+      .map((chest) => chest.model);
+    const shopStands = (this.shopManager?.stands ?? [])
+      .filter((stand) => stand.model?.visible !== false)
+      .map((stand) => stand.model);
+    const exitStairs = (this.exitInteractableTargets ?? []).filter(
+      (target) => target.visible !== false
+    );
+
+    return [...chests, ...shopStands, ...exitStairs];
+  }
+
+  handleWorldClick(payload) {
+    if (this.isPlayerControlLocked()) return;
+
+    if (payload?.enemy?.alive) {
+      const navigation = this.getEnemyAttackNavigation(payload.enemy);
+      if (!navigation) return;
+
+      this.createClickFeedback(navigation.target);
+      this.player.setAttackTarget(payload.enemy, navigation.path);
+      return;
+    }
+
+    if (!payload?.point) return;
+
+    const navigation = this.getClickNavigation(payload.point);
+    if (!navigation) return;
+
+    this.createClickFeedback(navigation.target);
+    this.player.setPath(navigation.path);
   }
 
   createEnemyNavigation() {
@@ -1292,6 +1357,127 @@ export class GameScene {
     return null;
   }
 
+  getEnemyAttackNavigation(enemy) {
+    if (!enemy?.alive || !this.player) return null;
+
+    const playerPosition = this.player.model.position;
+    const enemyPosition = enemy.model.position;
+    const attackRange = this.player.attackRange ?? 1.65;
+
+    if (flatDistance(playerPosition, enemyPosition) <= attackRange) {
+      return {
+        target: enemyPosition.clone(),
+        path: [],
+      };
+    }
+
+    const candidates = this.getEnemyAttackTargetCandidates(enemy, attackRange);
+
+    for (const target of candidates) {
+      const path = this.findNavigationPath(
+        playerPosition,
+        target,
+        PLAYER_COLLISION_RADIUS
+      );
+
+      if (path.length > 0) {
+        return { target, path };
+      }
+    }
+
+    return null;
+  }
+
+  updatePlayerAttackPursuit(delta) {
+    const enemy = this.player?.attackTarget;
+
+    if (!enemy?.alive || this.player.hp <= 0) {
+      this.playerAttackPathRefreshTimer = 0;
+      return;
+    }
+
+    const distance = flatDistance(
+      this.player.model.position,
+      enemy.model.position
+    );
+
+    if (distance <= this.player.attackRange) {
+      if (this.player.target || this.player.path.length > 0) {
+        this.player.stopMovement();
+      }
+      this.playerAttackPathRefreshTimer = 0;
+      return;
+    }
+
+    this.playerAttackPathRefreshTimer -= delta;
+
+    if (
+      this.playerAttackPathRefreshTimer > 0 &&
+      (this.player.target || this.player.path.length > 0)
+    ) {
+      return;
+    }
+
+    const navigation = this.getEnemyAttackNavigation(enemy);
+
+    if (navigation?.path?.length > 0) {
+      this.player.applyPath(navigation.path);
+      this.playerAttackPathRefreshTimer = PLAYER_ATTACK_PATH_REFRESH_TIME;
+      return;
+    }
+
+    this.playerAttackPathRefreshTimer = PLAYER_ATTACK_PATH_REFRESH_TIME;
+  }
+
+  getEnemyAttackTargetCandidates(enemy, attackRange) {
+    const enemyPosition = enemy.model.position;
+    const playerPosition = this.player.model.position;
+    const approachDistance = Math.max(
+      PLAYER_COLLISION_RADIUS * 2,
+      Math.min(attackRange - 0.08, attackRange * 0.85)
+    );
+    const candidates = [];
+    const seen = new Set();
+
+    const addCandidate = (x, z) => {
+      const target = new THREE.Vector3(x, PLAYER_GROUND_Y, z);
+      const key = `${target.x.toFixed(3)},${target.z.toFixed(3)}`;
+
+      if (seen.has(key)) return;
+      if (!this.isWalkablePosition(target, PLAYER_COLLISION_RADIUS)) return;
+
+      seen.add(key);
+      candidates.push(target);
+    };
+
+    const towardPlayer = playerPosition.clone().sub(enemyPosition);
+    towardPlayer.y = 0;
+
+    if (towardPlayer.lengthSq() > 0.0001) {
+      towardPlayer.normalize();
+      addCandidate(
+        enemyPosition.x + towardPlayer.x * approachDistance,
+        enemyPosition.z + towardPlayer.z * approachDistance
+      );
+    }
+
+    for (let i = 0; i < 16; i += 1) {
+      const angle = (i / 16) * Math.PI * 2;
+      addCandidate(
+        enemyPosition.x + Math.cos(angle) * approachDistance,
+        enemyPosition.z + Math.sin(angle) * approachDistance
+      );
+    }
+
+    candidates.sort(
+      (a, b) =>
+        a.distanceToSquared(playerPosition) -
+        b.distanceToSquared(playerPosition)
+    );
+
+    return candidates;
+  }
+
   getWalkableTargetCandidates(point, radius) {
     const candidates = [];
     const seen = new Set();
@@ -1381,12 +1567,148 @@ export class GameScene {
       );
 
       if (recoveryPath.length > 0) {
-        this.player.setPath(recoveryPath);
+        if (this.player.attackTarget) {
+          this.player.applyPath(recoveryPath);
+        } else {
+          this.player.setPath(recoveryPath);
+        }
         return;
       }
     }
 
     this.player.clearTarget();
+  }
+
+  applyPlayerEnemyCollision(previousPosition) {
+    if (!this.player || this.player.hp <= 0) return;
+
+    const currentPosition = this.player.model.position;
+    const playerRadius = this.getPlayerMovementCollisionRadius();
+    let collision = null;
+
+    for (const enemy of this.enemies) {
+      if (!enemy?.alive) continue;
+      if (enemy.model?.visible === false) continue;
+      if (!enemy.model?.position) continue;
+
+      const enemyRadius =
+        (enemy.collisionRadius ?? ENEMY_COLLISION_RADIUS) *
+        PLAYER_ENEMY_COLLISION_RADIUS_SCALE;
+      const combinedRadius =
+        playerRadius + enemyRadius + PLAYER_ENEMY_COLLISION_SKIN;
+      const hit = this.getSegmentCircleCollision(
+        previousPosition,
+        currentPosition,
+        enemy.model.position,
+        combinedRadius
+      );
+
+      if (!hit) continue;
+
+      if (typeof enemy.startChase === "function") {
+        enemy.startChase(this.player, "collision");
+      }
+
+      if (!collision || hit.t < collision.hit.t) {
+        collision = { enemy, hit, combinedRadius };
+      }
+    }
+
+    if (!collision) return;
+
+    const nextPosition = this.getPlayerEnemyCollisionStopPosition(
+      previousPosition,
+      currentPosition,
+      collision.enemy.model.position,
+      collision.hit,
+      collision.combinedRadius,
+      playerRadius
+    );
+
+    currentPosition.copy(nextPosition);
+    this.player.stopMovement();
+  }
+
+  getPlayerEnemyCollisionStopPosition(
+    previousPosition,
+    currentPosition,
+    enemyPosition,
+    hit,
+    combinedRadius,
+    playerRadius
+  ) {
+    if (hit.startedInside) {
+      const pushDirection = currentPosition.clone().sub(enemyPosition);
+      pushDirection.y = 0;
+
+      if (pushDirection.lengthSq() <= 0.0001) {
+        pushDirection.copy(previousPosition).sub(enemyPosition);
+        pushDirection.y = 0;
+      }
+
+      if (pushDirection.lengthSq() <= 0.0001) {
+        pushDirection.set(1, 0, 0);
+      }
+
+      if (pushDirection.lengthSq() > 0.0001) {
+        pushDirection.normalize();
+        const pushedPosition = new THREE.Vector3(
+          enemyPosition.x + pushDirection.x * combinedRadius,
+          PLAYER_GROUND_Y,
+          enemyPosition.z + pushDirection.z * combinedRadius
+        );
+
+        if (this.canMoveBetween(previousPosition, pushedPosition, playerRadius)) {
+          return pushedPosition;
+        }
+      }
+
+      return previousPosition.clone();
+    }
+
+    const movement = currentPosition.clone().sub(previousPosition);
+    const safeT = Math.max(0, hit.t - 0.02);
+    const stopPosition = previousPosition
+      .clone()
+      .addScaledVector(movement, safeT);
+
+    stopPosition.y = PLAYER_GROUND_Y;
+    return stopPosition;
+  }
+
+  getSegmentCircleCollision(from, to, center, radius) {
+    const start = new THREE.Vector2(from.x, from.z);
+    const end = new THREE.Vector2(to.x, to.z);
+    const circle = new THREE.Vector2(center.x, center.z);
+    const movement = end.clone().sub(start);
+    const startOffset = start.clone().sub(circle);
+    const radiusSq = radius * radius;
+
+    if (startOffset.lengthSq() <= radiusSq) {
+      return {
+        t: 0,
+        startedInside: true,
+      };
+    }
+
+    const a = movement.lengthSq();
+    if (a <= 0.000001) return null;
+
+    const b = 2 * startOffset.dot(movement);
+    const c = startOffset.lengthSq() - radiusSq;
+    const discriminant = b * b - 4 * a * c;
+
+    if (discriminant < 0) return null;
+
+    const sqrtDiscriminant = Math.sqrt(discriminant);
+    const t = (-b - sqrtDiscriminant) / (2 * a);
+
+    if (t < 0 || t > 1) return null;
+
+    return {
+      t,
+      startedInside: false,
+    };
   }
 
   getSlidePosition(
@@ -1579,7 +1901,7 @@ export class GameScene {
 
     for (const enemy of this.enemies) {
       if (enemy.model?.visible === false) continue;
-      enemy.update(delta, this.camera);
+      enemy.update(delta, this.camera, this.player);
     }
 
     if (this.coinManager) this.coinManager.update(delta);
@@ -1588,8 +1910,10 @@ export class GameScene {
     if (this.vfx) this.vfx.update(delta, this.camera);
 
     const previousPlayerPosition = this.player.model.position.clone();
+    this.updatePlayerAttackPursuit(delta);
     this.player.update(delta);
     this.applyPlayerWorldCollision(previousPlayerPosition);
+    this.applyPlayerEnemyCollision(previousPlayerPosition);
     this.roomVisibilityManager.update(this.player.model.position, delta);
 
     const events = [
@@ -1606,6 +1930,8 @@ export class GameScene {
     this.updateFeedbackEffects(delta);
     this.updateCamera(delta);
     this.player.updateOcclusionMarker(this.camera, this.wallMeshes);
+    this.updateAttackCursorFeedback();
+    this.inputController?.updateCursor?.();
     this.renderer.render(this.scene, this.camera);
 
     requestAnimationFrame(() => this.animate());
@@ -1880,6 +2206,18 @@ export class GameScene {
           this.addLog("Combat interrupted.");
           break;
 
+        case "attackWindupStarted":
+          break;
+
+        case "attackWindupCanceled":
+          break;
+
+        case "attackReady":
+          this.vfx.playModelFlash(this.player.model, 0xffffff, 0.12, {
+            emissiveIntensity: 1.2,
+          });
+          break;
+
         case "playerAttack":
           this.addLog(`Enemy takes ${event.damage} damage.`);
           this.sfx.play("playerAttack");
@@ -1898,7 +2236,9 @@ export class GameScene {
 
         case "playerDamaged":
           if (event.damage > 0) {
-            this.flashModel(this.player.model, 0xff4058, 0.16);
+            this.vfx.playModelFlash(this.player.model, 0xff4058, 0.16);
+            this.vfx.playPlayerHitSlash(this.player);
+            this.sfx.play("playerDamaged");
           }
           this.updateHud();
           break;
@@ -2117,6 +2457,14 @@ export class GameScene {
 
   addLog(message) {
     this.hud.addLog(message);
+  }
+
+  updateAttackCursorFeedback() {
+    if (!this.player || !this.inputController?.setAttackFeedback) return;
+
+    this.inputController.setAttackFeedback(
+      this.player.getAttackFeedbackState?.() ?? {}
+    );
   }
 
   nowMs() {

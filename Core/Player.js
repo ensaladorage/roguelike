@@ -7,12 +7,21 @@ export const PLAYER_STATES = {
   DEAD: "dead",
 };
 
+export const PLAYER_ATTACK_STATES = {
+  READY: "ready",
+  WINDUP: "windup",
+  COOLDOWN: "cooldown",
+};
+
 const OCCLUSION_RING_INNER_RADIUS = 0.42;
 const OCCLUSION_RING_OUTER_RADIUS = 0.5;
 const OCCLUSION_RING_Y = 0.06;
 const OCCLUSION_SAMPLE_HEIGHTS = [0.12, 0.42, 0.75];
 const OCCLUSION_MIN_COVERED_SAMPLES = 1;
 const MIN_ATTACK_SPEED = 0.1;
+export const PLAYER_COMBAT_CONFIG = {
+  attackWindupDuration: 0.18,
+};
 const BASE_PLAYER_STATS = {
   maxHp: 100,
   hp: 100,
@@ -42,8 +51,12 @@ export class Player {
     this.attackRange = BASE_PLAYER_STATS.attackRange;
     this.attackSpeed = BASE_PLAYER_STATS.attackSpeed;
     this.attackCooldown = this.getAttackCooldownFromSpeed(this.attackSpeed);
-    this.attackTimer = 0;
+    this.attackTimer = this.attackCooldown;
+    this.attackState = PLAYER_ATTACK_STATES.READY;
+    this.attackWindupDuration = PLAYER_COMBAT_CONFIG.attackWindupDuration;
+    this.attackWindupTimer = 0;
 
+    this.attackTarget = null;
     this.currentEnemy = null;
 
     this.events = [];
@@ -70,6 +83,18 @@ export class Player {
     this.attackTimer = Math.min(this.attackTimer, this.attackCooldown);
   }
 
+  setAttackWindupDuration(duration = PLAYER_COMBAT_CONFIG.attackWindupDuration) {
+    const numericDuration = Number.parseFloat(duration);
+
+    this.attackWindupDuration = Number.isFinite(numericDuration)
+      ? Math.max(0, numericDuration)
+      : PLAYER_COMBAT_CONFIG.attackWindupDuration;
+    this.attackWindupTimer = Math.min(
+      this.attackWindupTimer,
+      this.attackWindupDuration
+    );
+  }
+
   createProgressSnapshot() {
     return {
       maxHp: this.maxHp,
@@ -79,6 +104,7 @@ export class Player {
       attackRange: this.attackRange,
       attackSpeed: this.attackSpeed,
       attackCooldown: this.attackCooldown,
+      attackWindupDuration: this.attackWindupDuration,
     };
   }
 
@@ -96,6 +122,10 @@ export class Player {
     } else if (snapshot.attackCooldown !== undefined) {
       this.attackCooldown = snapshot.attackCooldown;
     }
+
+    if (snapshot.attackWindupDuration !== undefined) {
+      this.setAttackWindupDuration(snapshot.attackWindupDuration);
+    }
   }
 
   resetForNewRun() {
@@ -105,15 +135,19 @@ export class Player {
     this.attackDamage = BASE_PLAYER_STATS.attackDamage;
     this.attackRange = BASE_PLAYER_STATS.attackRange;
     this.setAttackSpeed(BASE_PLAYER_STATS.attackSpeed);
+    this.setAttackWindupDuration(PLAYER_COMBAT_CONFIG.attackWindupDuration);
     this.resetRuntimeState();
   }
 
   resetRuntimeState() {
     this.target = null;
     this.path = [];
+    this.attackTarget = null;
     this.currentEnemy = null;
     this.state = PLAYER_STATES.IDLE;
-    this.attackTimer = 0;
+    this.attackTimer = this.attackCooldown;
+    this.attackState = PLAYER_ATTACK_STATES.READY;
+    this.attackWindupTimer = 0;
     this.events = [];
     this.visualRotation = 0;
     this.model.rotation.y = 0;
@@ -203,9 +237,9 @@ export class Player {
   }
 
   setTarget(position) {
-    if (this.state === PLAYER_STATES.COMBAT) return;
     if (this.state === PLAYER_STATES.DEAD) return;
 
+    this.clearAttackTarget();
     this.path = [];
 
     this.target = position.clone();
@@ -215,10 +249,14 @@ export class Player {
   }
 
   setPath(points) {
-    if (this.state === PLAYER_STATES.COMBAT) return;
     if (this.state === PLAYER_STATES.DEAD) return;
     if (!points || points.length === 0) return;
 
+    this.clearAttackTarget();
+    this.applyPath(points);
+  }
+
+  applyPath(points) {
     this.path = points.map((point) => {
       const waypoint = point.clone();
       waypoint.y = this.groundY;
@@ -233,27 +271,32 @@ export class Player {
     this.enterCombat(enemy);
   }
 
-  enterCombat(enemy) {
+  setAttackTarget(enemy, path = []) {
     if (this.hp <= 0) return;
+    if (this.state === PLAYER_STATES.DEAD) return;
     if (!enemy || !enemy.alive) return;
 
-    const wasInCombat =
-      this.state === PLAYER_STATES.COMBAT;
+    const previousTarget = this.attackTarget;
 
-    const isSameEnemy =
-      this.currentEnemy === enemy;
-
-    this.target = null;
-    this.path = [];
-
+    this.attackTarget = enemy;
     this.currentEnemy = enemy;
-    this.state = PLAYER_STATES.COMBAT;
 
-    if (!wasInCombat || !isSameEnemy) {
-      this.attackTimer = this.attackCooldown;
+    if (path.length > 0) {
+      this.applyPath(path);
+    } else {
+      this.target = null;
+      this.path = [];
+      this.state = PLAYER_STATES.COMBAT;
     }
 
-    if (wasInCombat && isSameEnemy) return;
+    if (previousTarget === enemy) return;
+
+    if (previousTarget) {
+      this.emit({
+        type: "combatEnd",
+        enemy: previousTarget,
+      });
+    }
 
     this.emit({
       type: "combatStart",
@@ -261,19 +304,33 @@ export class Player {
     });
   }
 
-  leaveCombat(enemy = this.currentEnemy) {
-    if (this.state === PLAYER_STATES.DEAD) return;
-    if (this.state !== PLAYER_STATES.COMBAT && !this.currentEnemy) return;
+  clearAttackTarget() {
+    const enemy = this.attackTarget ?? this.currentEnemy;
+    const wasAttacking = Boolean(enemy);
 
+    this.attackTarget = null;
     this.currentEnemy = null;
-    this.target = null;
-    this.path = [];
-    this.state = PLAYER_STATES.IDLE;
+    this.cancelAttackWindup(enemy);
+
+    if (!wasAttacking) return;
 
     this.emit({
       type: "combatEnd",
       enemy,
     });
+  }
+
+  enterCombat(enemy) {
+    this.setAttackTarget(enemy);
+  }
+
+  leaveCombat(enemy = this.currentEnemy) {
+    if (this.state === PLAYER_STATES.DEAD) return;
+
+    this.clearAttackTarget();
+    this.target = null;
+    this.path = [];
+    this.state = PLAYER_STATES.IDLE;
   }
 
   addGold(amount) {
@@ -293,8 +350,6 @@ export class Player {
 
   takeDamage(amount, source) {
     if (this.state === PLAYER_STATES.DEAD) return 0;
-
-    this.enterCombat(source);
 
     const previousHp = this.hp;
 
@@ -328,7 +383,10 @@ export class Player {
 
     this.target = null;
     this.path = [];
+    this.attackTarget = null;
     this.currentEnemy = null;
+    this.attackState = PLAYER_ATTACK_STATES.READY;
+    this.attackWindupTimer = 0;
 
     this.state = PLAYER_STATES.DEAD;
 
@@ -349,10 +407,19 @@ export class Player {
   clearTarget() {
     if (this.state === PLAYER_STATES.DEAD) return;
 
+    this.clearAttackTarget();
+    this.stopMovement();
+  }
+
+  stopMovement() {
+    if (this.state === PLAYER_STATES.DEAD) return;
+
     this.target = null;
     this.path = [];
 
-    this.state = PLAYER_STATES.IDLE;
+    this.state = this.attackTarget
+      ? PLAYER_STATES.COMBAT
+      : PLAYER_STATES.IDLE;
   }
 
   emit(event) {
@@ -367,8 +434,21 @@ export class Player {
   }
 
   update(delta) {
+    if (
+      this.state !== PLAYER_STATES.DEAD &&
+      this.attackState === PLAYER_ATTACK_STATES.COOLDOWN
+    ) {
+      this.updateAttackCooldown(delta);
+    }
+
     switch (this.state) {
       case PLAYER_STATES.IDLE:
+        if (this.attackTarget) {
+          this.state = PLAYER_STATES.COMBAT;
+          this.updateCombat(delta);
+        }
+        break;
+
       case PLAYER_STATES.DEAD:
         break;
 
@@ -402,7 +482,9 @@ export class Player {
         this.target = this.path.shift();
       } else {
         this.target = null;
-        this.state = PLAYER_STATES.IDLE;
+        this.state = this.attackTarget
+          ? PLAYER_STATES.COMBAT
+          : PLAYER_STATES.IDLE;
       }
 
       return;
@@ -432,10 +514,10 @@ export class Player {
 
   updateCombat(delta) {
     if (
-      !this.currentEnemy ||
-      !this.currentEnemy.alive
+      !this.attackTarget ||
+      !this.attackTarget.alive
     ) {
-      this.currentEnemy = null;
+      this.clearAttackTarget();
 
       this.state = PLAYER_STATES.IDLE;
 
@@ -443,7 +525,7 @@ export class Player {
     }
 
     const enemyPos =
-      this.currentEnemy.model.position;
+      this.attackTarget.model.position;
 
     const dx =
       enemyPos.x - this.model.position.x;
@@ -460,22 +542,67 @@ export class Player {
 
     this.model.rotation.y = angle;
 
-    if (distance > this.attackRange) return;
-
-    this.attackTimer += delta;
-
-    if (
-      this.attackTimer <
-      this.attackCooldown
-    ) {
+    if (distance > this.attackRange) {
+      this.cancelAttackWindup(this.attackTarget);
       return;
     }
 
-    this.attackTimer = 0;
+    this.updateAttackState(delta);
+  }
 
-    if (!this.currentEnemy.takeDamage) return;
+  updateAttackState(delta) {
+    switch (this.attackState) {
+      case PLAYER_ATTACK_STATES.READY:
+        this.startAttackWindup();
+        break;
 
-    const enemy = this.currentEnemy;
+      case PLAYER_ATTACK_STATES.WINDUP:
+        this.updateAttackWindup(delta);
+        break;
+
+      case PLAYER_ATTACK_STATES.COOLDOWN:
+        break;
+    }
+  }
+
+  startAttackWindup() {
+    if (!this.isAttackTargetValid()) return;
+
+    this.attackState = PLAYER_ATTACK_STATES.WINDUP;
+    this.attackWindupTimer = 0;
+
+    this.emit({
+      type: "attackWindupStarted",
+      enemy: this.attackTarget,
+      duration: this.attackWindupDuration,
+    });
+  }
+
+  updateAttackWindup(delta) {
+    if (!this.isAttackTargetValid()) {
+      this.cancelAttackWindup();
+      return;
+    }
+
+    this.attackWindupTimer += delta;
+
+    if (this.attackWindupTimer < this.attackWindupDuration) return;
+
+    this.strikeAttackTarget();
+  }
+
+  strikeAttackTarget() {
+    if (!this.isAttackTargetValid()) {
+      this.cancelAttackWindup();
+      return;
+    }
+
+    if (!this.attackTarget.takeDamage) {
+      this.cancelAttackWindup();
+      return;
+    }
+
+    const enemy = this.attackTarget;
 
     const damageDone =
       enemy.takeDamage(
@@ -490,10 +617,75 @@ export class Player {
       enemyHp: enemy.hp,
     });
 
-    if (!enemy.alive) {
-      this.currentEnemy = null;
+    this.attackState = PLAYER_ATTACK_STATES.COOLDOWN;
+    this.attackTimer = 0;
+    this.attackWindupTimer = 0;
 
+    if (!enemy.alive) {
+      this.clearAttackTarget();
       this.state = PLAYER_STATES.IDLE;
     }
+  }
+
+  updateAttackCooldown(delta) {
+    this.attackTimer = Math.min(
+      this.attackCooldown,
+      this.attackTimer + delta
+    );
+
+    if (this.attackTimer < this.attackCooldown) return;
+
+    this.attackState = PLAYER_ATTACK_STATES.READY;
+    this.emit({
+      type: "attackReady",
+      enemy: this.attackTarget,
+      cooldown: this.attackCooldown,
+    });
+  }
+
+  cancelAttackWindup(enemy = this.attackTarget) {
+    if (this.attackState !== PLAYER_ATTACK_STATES.WINDUP) return;
+
+    this.attackState = PLAYER_ATTACK_STATES.READY;
+    this.attackWindupTimer = 0;
+
+    this.emit({
+      type: "attackWindupCanceled",
+      enemy,
+    });
+  }
+
+  isAttackTargetValid() {
+    return Boolean(
+      this.attackTarget &&
+      this.attackTarget.alive &&
+      this.attackTarget.model?.position
+    );
+  }
+
+  getAttackCooldownProgress() {
+    if (this.attackState === PLAYER_ATTACK_STATES.READY) return 1;
+    if (this.attackState === PLAYER_ATTACK_STATES.WINDUP) return 1;
+    if (this.attackCooldown <= 0) return 1;
+
+    return Math.max(0, Math.min(1, this.attackTimer / this.attackCooldown));
+  }
+
+  getAttackFeedbackState() {
+    return {
+      attackState: this.attackState,
+      cooldownProgress: this.getAttackCooldownProgress(),
+      windupProgress: this.attackWindupDuration > 0
+        ? Math.max(0, Math.min(1, this.attackWindupTimer / this.attackWindupDuration))
+        : 1,
+      isReady: this.attackState === PLAYER_ATTACK_STATES.READY,
+      isWindup: this.attackState === PLAYER_ATTACK_STATES.WINDUP,
+      isCoolingDown: this.attackState === PLAYER_ATTACK_STATES.COOLDOWN,
+      hasAttackTarget: Boolean(this.attackTarget?.alive),
+    };
+  }
+
+  isAttackReady() {
+    return this.attackState === PLAYER_ATTACK_STATES.READY;
   }
 }

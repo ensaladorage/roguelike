@@ -37,6 +37,19 @@ export const VFX_DEFAULTS = {
     puffOpacity: 0.34,
     rise: 0.42,
   },
+  playerHitSlash: {
+    color: 0xff2438,
+    duration: 0.3,
+    width: 0.84,
+    height: 0.064,
+    y: 0.5,
+    opacity: 1,
+    zRotation: -0.55,
+  },
+  modelFlash: {
+    duration: 0.16,
+    emissiveIntensity: 0.9,
+  },
   pointLights: {
     lantern: {
       color: 0xffb45a,
@@ -55,6 +68,7 @@ export class VFX {
   constructor({ root = null } = {}) {
     this.root = root;
     this.effects = [];
+    this.modelFlashEffects = [];
     this.persistentEffects = [];
     this.pointLights = [];
   }
@@ -155,6 +169,119 @@ export class VFX {
       particles,
       elapsed: 0,
       duration: config.duration,
+    });
+  }
+
+  playModelFlash(
+    model,
+    color = 0xffffff,
+    duration = VFX_DEFAULTS.modelFlash.duration,
+    options = {}
+  ) {
+    if (!model) return;
+
+    const config = {
+      ...VFX_DEFAULTS.modelFlash,
+      ...options,
+      duration,
+    };
+    const flashColor = new THREE.Color(color);
+    this.restoreModelFlash(model);
+    this.modelFlashEffects = this.modelFlashEffects.filter(
+      (effect) => effect.model !== model
+    );
+
+    model.traverse((child) => {
+      if (child.userData.ignoreFlash) return;
+      if (!child.isMesh || !child.material) return;
+
+      if (!child.userData.flashMaterialsCloned) {
+        child.material = Array.isArray(child.material)
+          ? child.material.map((material) => material.clone())
+          : child.material.clone();
+        child.userData.flashMaterialsCloned = true;
+      }
+
+      const materials = Array.isArray(child.material)
+        ? child.material
+        : [child.material];
+
+      for (const material of materials) {
+        if (!material?.color) continue;
+
+        if (!material.userData.baseColor) {
+          material.userData.baseColor = material.color.clone();
+        }
+
+        material.color.copy(flashColor);
+
+        if (material.emissive) {
+          if (!material.userData.baseEmissive) {
+            material.userData.baseEmissive = material.emissive.clone();
+          }
+
+          if (material.userData.baseEmissiveIntensity === undefined) {
+            material.userData.baseEmissiveIntensity =
+              material.emissiveIntensity ?? 1;
+          }
+
+          material.emissive.copy(flashColor);
+          material.emissiveIntensity = Math.max(
+            material.emissiveIntensity ?? 1,
+            config.emissiveIntensity
+          );
+        }
+      }
+    });
+
+    this.modelFlashEffects.push({
+      model,
+      duration: config.duration,
+      elapsed: 0,
+      flashColor,
+    });
+  }
+
+  playPlayerHitSlash(target, options = {}) {
+    if (!this.root) return;
+
+    const config = {
+      ...VFX_DEFAULTS.playerHitSlash,
+      ...options,
+    };
+    const origin = this.getTargetPosition(target);
+    if (!origin) return;
+
+    const group = new THREE.Group();
+    group.position.set(origin.x, config.y, origin.z);
+
+    const material = new THREE.MeshBasicMaterial({
+      color: config.color,
+      transparent: true,
+      opacity: config.opacity,
+      depthWrite: false,
+      side: THREE.DoubleSide,
+      blending: THREE.AdditiveBlending,
+    });
+    const mesh = new THREE.Mesh(
+      new THREE.PlaneGeometry(config.width, config.height),
+      material
+    );
+
+    mesh.rotation.z = config.zRotation;
+    mesh.renderOrder = 80;
+    group.add(mesh);
+    this.root.add(group);
+
+    this.effects.push({
+      type: "playerHitSlash",
+      group,
+      mesh,
+      material,
+      target,
+      elapsed: 0,
+      duration: config.duration,
+      config,
     });
   }
 
@@ -288,8 +415,13 @@ export class VFX {
 
   update(delta, camera) {
     this.updatePersistentEffects(delta);
+    this.updateModelFlashEffects(delta);
 
     this.effects = this.effects.filter((effect) => {
+      if (effect.type === "playerHitSlash") {
+        return this.updatePlayerHitSlash(effect, delta, camera);
+      }
+
       effect.elapsed += delta;
       const t = Math.min(1, effect.elapsed / effect.duration);
       const origin = this.getTargetPosition(effect.target);
@@ -335,6 +467,91 @@ export class VFX {
       this.disposeEffect(effect);
       return false;
     });
+  }
+
+  updateModelFlashEffects(delta) {
+    this.modelFlashEffects = this.modelFlashEffects.filter((effect) => {
+      effect.elapsed += delta;
+
+      const t = Math.min(1, effect.elapsed / effect.duration);
+
+      effect.model.traverse((child) => {
+        if (!child.isMesh || !child.material) return;
+
+        const materials = Array.isArray(child.material)
+          ? child.material
+          : [child.material];
+
+        for (const material of materials) {
+          if (!material?.color || !material.userData.baseColor) continue;
+
+          material.color.copy(effect.flashColor);
+          material.color.lerp(material.userData.baseColor, t);
+
+          if (material.emissive && material.userData.baseEmissive) {
+            material.emissive.copy(effect.flashColor);
+            material.emissive.lerp(material.userData.baseEmissive, t);
+            material.emissiveIntensity = THREE.MathUtils.lerp(
+              material.emissiveIntensity ?? 1,
+              material.userData.baseEmissiveIntensity ?? 1,
+              t
+            );
+          }
+        }
+      });
+
+      if (t < 1) return true;
+
+      this.restoreModelFlash(effect.model);
+      return false;
+    });
+  }
+
+  restoreModelFlash(model) {
+    model.traverse((child) => {
+      if (!child.isMesh || !child.material) return;
+
+      const materials = Array.isArray(child.material)
+        ? child.material
+        : [child.material];
+
+      for (const material of materials) {
+        if (material?.color && material.userData.baseColor) {
+          material.color.copy(material.userData.baseColor);
+        }
+
+        if (material?.emissive && material.userData.baseEmissive) {
+          material.emissive.copy(material.userData.baseEmissive);
+          material.emissiveIntensity =
+            material.userData.baseEmissiveIntensity ?? material.emissiveIntensity;
+        }
+      }
+    });
+  }
+
+  updatePlayerHitSlash(effect, delta, camera) {
+    effect.elapsed += delta;
+    const t = Math.min(1, effect.elapsed / effect.duration);
+    const origin = this.getTargetPosition(effect.target);
+
+    if (origin) {
+      effect.group.position.x = origin.x;
+      effect.group.position.z = origin.z;
+    }
+
+    if (camera) {
+      effect.group.lookAt(camera.position);
+    }
+
+    effect.mesh.rotation.z = effect.config.zRotation;
+    effect.mesh.scale.x = 0.75 + t * 0.45;
+    effect.mesh.scale.y = 1 + t * 0.25;
+    effect.material.opacity = effect.config.opacity * (1 - t);
+
+    if (t < 1) return true;
+
+    this.disposePlayerHitSlash(effect);
+    return false;
   }
 
   updatePersistentEffects(delta) {
@@ -394,10 +611,20 @@ export class VFX {
 
   clear() {
     for (const effect of this.effects) {
-      this.disposeEffect(effect);
+      if (effect.type === "playerHitSlash") {
+        this.disposePlayerHitSlash(effect);
+      } else {
+        this.disposeEffect(effect);
+      }
     }
 
     this.effects = [];
+
+    for (const effect of this.modelFlashEffects) {
+      this.restoreModelFlash(effect.model);
+    }
+
+    this.modelFlashEffects = [];
 
     for (const effect of this.persistentEffects) {
       this.disposePersistentEffect(effect);
@@ -445,6 +672,12 @@ export class VFX {
       particle.mesh.geometry.dispose();
       particle.material.dispose();
     }
+  }
+
+  disposePlayerHitSlash(effect) {
+    effect.group.removeFromParent();
+    effect.mesh.geometry.dispose();
+    effect.material.dispose();
   }
 
   disposePersistentEffect(effect) {

@@ -269,6 +269,9 @@ export class ChestManager {
 
       model.position.set(data.x, 0, data.z);
       model.rotation.y = data.rotationY;
+      model.userData.interactable = {
+        type: "chest",
+      };
       this.applySpawnScale(model, data);
 
       this.scene.levelGroup.add(model);

@@ -1,4 +1,3 @@
-import { flatDistance } from "./Utils.js";
 import { GAME_CONFIG, GAME_MODES } from "./GameConfig.js";
 import { ROOM_TESTER_LEVELS, getRoomTesterLevel } from "./RoomTester.js";
 import { createProceduralFloor } from "./ProceduralLevelFactory.js";
@@ -32,8 +31,6 @@ export class GameManager {
     this.isGameOver = false;
     this.isResetting = false;
     this.resetTimer = null;
-    this.combatStartRange = 1;
-    this.enemyMovementPauseReason = "playerCombat";
 
     this.initializeModeState();
   }
@@ -77,66 +74,6 @@ export class GameManager {
 
   update() {
     if (this.isGameOver || this.isResetting) return;
-
-    this.updateCombatEngagement();
-  }
-
-  updateCombatEngagement() {
-    const { player, enemies } = this.scene;
-
-    if (!player || player.hp <= 0) {
-      this.resumeEnemyMovement(enemies);
-      return;
-    }
-
-    const activeEnemy = player.currentEnemy?.alive
-      && !player.currentEnemy.isStunned?.()
-      ? player.currentEnemy
-      : null;
-
-    if (activeEnemy) {
-      this.pauseEnemyMovement(enemies, activeEnemy);
-      activeEnemy.startCombat(player);
-      return;
-    }
-
-    this.resumeEnemyMovement(enemies);
-
-    for (const enemy of enemies) {
-      if (!enemy.alive) continue;
-      if (enemy.model?.visible === false) continue;
-      if (enemy.isStunned?.()) continue;
-
-      const distance = flatDistance(
-        player.model.position,
-        enemy.model.position
-      );
-
-      if (distance > this.combatStartRange) continue;
-
-      player.enterCombat(enemy);
-      enemy.startCombat(player);
-      this.pauseEnemyMovement(enemies, enemy);
-      return;
-    }
-  }
-
-  pauseEnemyMovement(enemies = [], activeEnemy = null) {
-    for (const enemy of enemies) {
-      if (!enemy?.alive) continue;
-      if (enemy === activeEnemy) continue;
-      if (typeof enemy.pauseMovement !== "function") continue;
-
-      enemy.pauseMovement(this.enemyMovementPauseReason);
-    }
-  }
-
-  resumeEnemyMovement(enemies = []) {
-    for (const enemy of enemies) {
-      if (typeof enemy?.resumeMovement !== "function") continue;
-
-      enemy.resumeMovement(this.enemyMovementPauseReason);
-    }
   }
 
   handleEvent(event) {
@@ -168,7 +105,6 @@ export class GameManager {
 
     this.isResetting = true;
     this.clearResetTimer();
-    this.resumeEnemyMovement(this.scene.enemies);
 
     try {
       if (this.isTesterMode()) {
@@ -194,8 +130,6 @@ export class GameManager {
 
   onLevelExitReached() {
     if (this.isGameOver) return;
-
-    this.resumeEnemyMovement(this.scene.enemies);
 
     if (this.isTesterMode()) {
       this.scene.addLog("Stairs reached. Rebuilding tester floor...");

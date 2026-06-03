@@ -47,6 +47,10 @@ export class ShopManager {
       const offer = offers[index];
       const spawn = spawns[index];
       const model = this.createStandModel(offer, spawn);
+      model.userData.interactable = {
+        type: "shop",
+        offerId: offer.id,
+      };
 
       this.scene.levelGroup.add(model);
       this.stands.push({

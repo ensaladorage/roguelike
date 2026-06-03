@@ -16,6 +16,14 @@ export class SFX {
         duration: 0.12,
       },
 
+      playerDamaged: {
+        frequency: 120,
+        endFrequency: 70,
+        duration: 0.16,
+        type: "sawtooth",
+        gain: 0.075,
+      },
+
       enemyDefeated: {
         frequency: 820,
         duration: 0.16,

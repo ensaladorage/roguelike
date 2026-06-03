@@ -13,9 +13,27 @@ export const ENEMY_COIN_DROP = {
   radius: 0.7,
 };
 
+const ENEMY_CHASE_DEFAULTS = {
+  pathRefreshTime: 0.25,
+  aggroRange: 5.5,
+  easy: {
+    leashDistance: 5.5,
+    leashTime: 1.5,
+  },
+  medium: {
+    leashDistance: 6,
+    leashTime: 2,
+  },
+  hard: {
+    leashDistance: 8.25,
+    leashTime: 2.25,
+  },
+};
+
 export const ENEMY_STATES = {
   PATROL: "patrol",
-  COMBAT: "combat",
+  CHASE: "chase",
+  RETURNING: "returning",
   STUNNED: "stunned",
   DEAD: "dead",
 };
@@ -40,6 +58,7 @@ export class EnemyAI {
     };
     this.patrolPauseDurations = options.patrolPauseDurations ?? [0.5, 1];
     this.patrolAreas = (options.patrolAreas ?? []).map((area) => ({ ...area }));
+    this.returnPath = [];
 
     this.enemyTypeId = options.enemyTypeId ?? "enemy_unknown";
     this.enemyName = options.enemyName ?? "Enemy";
@@ -55,6 +74,9 @@ export class EnemyAI {
     this.attackDamage = options.attackDamage ?? 8;
     this.attackCooldown = options.attackCooldown ?? 1.2;
     this.attackTimer = 0;
+    this.chasePath = [];
+    this.chasePathRefreshTimer = 0;
+    this.leashTimer = 0;
     this.stunTimer = 0;
     this.coinDropConfig = {
       ...ENEMY_COIN_DROP,
@@ -77,16 +99,26 @@ export class EnemyAI {
     this.chooseNextPatrolRoute();
   }
 
-  update(delta, camera) {
+  update(delta, camera, player = null) {
     if (!this.alive) return;
 
     switch (this.state) {
       case ENEMY_STATES.PATROL:
+        if (this.shouldAggroFromProximity(player)) {
+          this.startChase(player, "proximity");
+          this.updateChase(delta);
+          break;
+        }
+
         this.updatePatrol(delta);
         break;
 
-      case ENEMY_STATES.COMBAT:
-        this.updateCombat(delta);
+      case ENEMY_STATES.CHASE:
+        this.updateChase(delta);
+        break;
+
+      case ENEMY_STATES.RETURNING:
+        this.updateReturning(delta);
         break;
 
       case ENEMY_STATES.STUNNED:
@@ -101,23 +133,34 @@ export class EnemyAI {
   }
 
   startCombat(target) {
+    this.startChase(target, "combat");
+  }
+
+  startChase(target, reason = "damage") {
     if (!this.alive) return;
     if (this.isStunned()) return;
     if (!target || target.hp <= 0) return;
 
-    const alreadyInCombat = this.state === ENEMY_STATES.COMBAT;
+    const alreadyChasing =
+      this.state === ENEMY_STATES.CHASE &&
+      this.target === target;
 
     this.target = target;
-    this.state = ENEMY_STATES.COMBAT;
+    this.state = ENEMY_STATES.CHASE;
+    this.returnPath = [];
 
-    if (!alreadyInCombat) {
+    if (!alreadyChasing) {
       this.attackTimer = 0;
       this.hasTakenCombatHit = false;
-      this.healthBar.visible = false;
+      this.chasePath = [];
+      this.chasePathRefreshTimer = 0;
+      this.leashTimer = 0;
+      this.healthBar.visible = this.hasTakenCombatHit;
       this.emit({
         type: "enemyStateChanged",
         enemy: this,
         state: this.state,
+        reason,
       });
     }
   }
@@ -126,6 +169,9 @@ export class EnemyAI {
     if (!this.alive) return;
 
     this.target = null;
+    this.chasePath = [];
+    this.returnPath = [];
+    this.leashTimer = 0;
     this.state = ENEMY_STATES.PATROL;
     this.healthBar.visible = false;
     this.startPatrolPause();
@@ -142,7 +188,10 @@ export class EnemyAI {
 
     this.target = null;
     this.patrolPath = [];
+    this.chasePath = [];
+    this.returnPath = [];
     this.attackTimer = 0;
+    this.leashTimer = 0;
     this.stunTimer = Math.max(this.stunTimer, duration);
     this.state = ENEMY_STATES.STUNNED;
     this.healthBar.visible = false;
@@ -162,6 +211,9 @@ export class EnemyAI {
 
     this.stunTimer = 0;
     this.state = ENEMY_STATES.PATROL;
+    this.target = null;
+    this.chasePath = [];
+    this.returnPath = [];
     this.startPatrolPause();
 
     this.emit({
@@ -217,7 +269,17 @@ export class EnemyAI {
     }
   }
 
-  updateCombat(delta) {
+  shouldAggroFromProximity(player) {
+    if (!player || player.hp <= 0) return false;
+    if (this.enemyDifficulty === "easy") return false;
+    if (!["medium", "hard"].includes(this.enemyDifficulty)) return false;
+
+    const distance = this.flatDistance(player.model.position, this.model.position);
+
+    return distance <= ENEMY_CHASE_DEFAULTS.aggroRange;
+  }
+
+  updateChase(delta) {
     if (!this.target || this.target.hp <= 0) {
       this.stopCombat();
       return;
@@ -227,8 +289,14 @@ export class EnemyAI {
     const distance = this.flatDistance(targetPos, this.model.position);
 
     this.face(targetPos);
+    this.updateLeash(delta, distance);
 
-    if (distance > this.attackRange) return;
+    if (this.state !== ENEMY_STATES.CHASE) return;
+
+    if (distance > this.attackRange) {
+      this.moveTowardChaseTarget(delta, targetPos);
+      return;
+    }
 
     this.attackTimer += delta;
 
@@ -243,6 +311,125 @@ export class EnemyAI {
     });
 
     this.target.takeDamage(this.attackDamage, this);
+  }
+
+  updateLeash(delta, distance) {
+    const chaseConfig = this.getChaseConfig();
+
+    if (distance <= chaseConfig.leashDistance) {
+      this.leashTimer = 0;
+      return;
+    }
+
+    this.leashTimer += delta;
+
+    if (this.leashTimer < chaseConfig.leashTime) return;
+
+    this.loseChaseTarget();
+  }
+
+  loseChaseTarget() {
+    this.target = null;
+    this.chasePath = [];
+    this.leashTimer = 0;
+    this.healthBar.visible = false;
+
+    if (this.enemyDifficulty === "easy") {
+      this.state = ENEMY_STATES.RETURNING;
+      this.returnPath = [];
+    } else {
+      this.patrolAreas = [];
+      this.patrolPoints = [this.model.position.clone()];
+      this.currentPatrolIndex = 0;
+      this.state = ENEMY_STATES.PATROL;
+      this.startPatrolPause();
+    }
+
+    this.emit({
+      type: "enemyStateChanged",
+      enemy: this,
+      state: this.state,
+      reason: "leash",
+    });
+  }
+
+  moveTowardChaseTarget(delta, targetPos) {
+    if (this.isMovementPaused()) return;
+
+    this.chasePathRefreshTimer -= delta;
+
+    if (this.chasePathRefreshTimer <= 0 || this.chasePath.length === 0) {
+      this.chasePath = this.getNavigationPath(this.model.position, targetPos);
+      this.chasePathRefreshTimer = ENEMY_CHASE_DEFAULTS.pathRefreshTime;
+    }
+
+    if (this.chasePath.length === 0) return;
+
+    const target = this.chasePath[0];
+    const isFinalWaypoint = this.chasePath.length === 1;
+    const movement = this.moveTo(
+      target,
+      delta,
+      isFinalWaypoint ? this.getAttackStopRange() : this.patrolStopRange,
+      {
+        snapOnArrive: !isFinalWaypoint,
+      }
+    );
+
+    if (movement.blocked) {
+      this.chasePath = [];
+      this.chasePathRefreshTimer = 0;
+      return;
+    }
+
+    if (movement.arrived) {
+      this.chasePath.shift();
+    }
+  }
+
+  updateReturning(delta) {
+    if (this.isMovementPaused()) return;
+
+    const distance = this.flatDistance(this.spawnPosition, this.model.position);
+
+    if (distance <= this.patrolStopRange) {
+      this.model.position.x = this.spawnPosition.x;
+      this.model.position.z = this.spawnPosition.z;
+      this.returnPath = [];
+      this.state = ENEMY_STATES.PATROL;
+      this.startPatrolPause();
+      this.emit({
+        type: "enemyStateChanged",
+        enemy: this,
+        state: this.state,
+        reason: "returned",
+      });
+      return;
+    }
+
+    if (this.returnPath.length === 0) {
+      this.returnPath = this.getNavigationPath(
+        this.model.position,
+        this.spawnPosition
+      );
+    }
+
+    if (this.returnPath.length === 0) return;
+
+    const movement = this.moveTo(
+      this.returnPath[0],
+      delta,
+      this.patrolStopRange
+    );
+
+    if (movement.blocked) {
+      this.returnPath = [];
+      return;
+    }
+
+    if (movement.arrived) {
+      this.returnPath.shift();
+    }
   }
 
   pauseMovement(reason = "external") {
@@ -273,6 +460,17 @@ export class EnemyAI {
 
   isMovementPaused() {
     return this.movementPauseReasons.size > 0;
+  }
+
+  getAttackStopRange() {
+    return this.attackRange * 0.9;
+  }
+
+  getChaseConfig() {
+    return (
+      ENEMY_CHASE_DEFAULTS[this.enemyDifficulty] ??
+      ENEMY_CHASE_DEFAULTS.easy
+    );
   }
 
   chooseNextPatrolRoute() {
@@ -396,15 +594,19 @@ export class EnemyAI {
     );
   }
 
-  moveTo(target, delta, stopRange) {
+  moveTo(target, delta, stopRange, options = {}) {
+    const snapOnArrive = options.snapOnArrive ?? true;
     const dir = new THREE.Vector3().subVectors(target, this.model.position);
     dir.y = 0;
 
     const distance = dir.length();
 
     if (distance <= stopRange) {
-      this.model.position.x = target.x;
-      this.model.position.z = target.z;
+      if (snapOnArrive) {
+        this.model.position.x = target.x;
+        this.model.position.z = target.z;
+      }
+
       return { arrived: true, blocked: false };
     }
 
@@ -489,16 +691,18 @@ export class EnemyAI {
       hp: this.hp,
     });
 
-    if (this.state === ENEMY_STATES.COMBAT) {
+    if (this.hp <= 0) {
+      this.die();
+    } else if (source?.model) {
+      this.startChase(source, "damage");
+    }
+
+    if (this.state === ENEMY_STATES.CHASE || source?.model) {
       this.hasTakenCombatHit = true;
       this.healthBar.visible = true;
     }
 
     this.updateHealthBar();
-
-    if (this.hp <= 0) {
-      this.die();
-    }
 
     return damageTaken;
   }
@@ -508,6 +712,8 @@ export class EnemyAI {
 
     this.alive = false;
     this.target = null;
+    this.chasePath = [];
+    this.returnPath = [];
     this.state = ENEMY_STATES.DEAD;
     this.model.visible = false;
     this.healthBar.visible = false;
