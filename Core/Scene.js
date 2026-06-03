@@ -40,6 +40,8 @@ const PLAYER_ENEMY_COLLISION_SKIN = -0.03;
 const PLAYER_ENEMY_COLLISION_RADIUS_SCALE = 0.72;
 const PLAYER_ATTACK_PATH_REFRESH_TIME = 0.2;
 const ENTRY_STAIRS_FRONT_OFFSET = 2;
+const EXIT_INTERACTABLE_HOLE_SIZE = 1;
+const EXIT_INTERACTABLE_HOLE_Y = 0.08;
 const DEBUG_SUPER_SPEED_MULTIPLIER = 5;
 const DEBUG_EXTERMINATOR_DAMAGE = 999999;
 const DEBUG_GOLD_AMOUNT = 999;
@@ -125,7 +127,9 @@ export class GameScene {
     };
     this.debugCheats = new DebugCheats({
       onSelect: (cheat) => this.applyDebugCheat(cheat),
+      onItemAdjust: (item, delta) => this.applyDebugItemCheat(item, delta),
       getState: () => this.getDebugCheatStates(),
+      getItemState: () => this.getDebugItemCheatStates(),
     });
     this.sfx = new SFX();
     this.vfx = new VFX({ root: this.levelGroup });
@@ -874,7 +878,6 @@ export class GameScene {
     const environmentBuild = this.modularTileBuilder.buildLevel(level.environment);
     this.allWallMeshes = environmentBuild.wallMeshes;
     this.wallMeshes = [...this.allWallMeshes];
-    this.registerExitStairsInteractables();
 
     if (level.exit?.x !== undefined && level.exit?.z !== undefined) {
       this.levelExitTrigger = {
@@ -884,24 +887,49 @@ export class GameScene {
       };
     }
 
+    this.registerExitStairsInteractables();
+
     this.addEntryStairsBlockerVfx();
 
     return environmentBuild;
   }
 
   registerExitStairsInteractables() {
-    const targets = [];
+    if (!this.levelExitTrigger) {
+      this.exitInteractableTargets = [];
+      return;
+    }
 
-    this.levelGroup.traverse((object) => {
-      if (object.userData?.role !== "exitStairs") return;
-
-      object.userData.interactable = {
-        type: "levelExit",
-      };
-      targets.push(object);
+    const material = new THREE.MeshBasicMaterial({
+      color: 0xffffff,
+      transparent: true,
+      opacity: 0,
+      depthWrite: false,
+      colorWrite: false,
+      side: THREE.DoubleSide,
     });
+    const target = new THREE.Mesh(
+      new THREE.PlaneGeometry(
+        EXIT_INTERACTABLE_HOLE_SIZE,
+        EXIT_INTERACTABLE_HOLE_SIZE
+      ),
+      material
+    );
 
-    this.exitInteractableTargets = targets;
+    target.name = "exitStairsInteractableHole";
+    target.rotation.x = -Math.PI / 2;
+    target.position.set(
+      this.levelExitTrigger.x,
+      PLAYER_GROUND_Y + EXIT_INTERACTABLE_HOLE_Y,
+      this.levelExitTrigger.z
+    );
+    target.userData.interactable = {
+      type: "levelExit",
+    };
+    target.userData.role = "exitStairsFloorHole";
+
+    this.levelGroup.add(target);
+    this.exitInteractableTargets = [target];
   }
 
   addEntryStairsBlockerVfx() {
@@ -2010,6 +2038,38 @@ export class GameScene {
     this.updateHud();
   }
 
+  applyDebugItemCheat(item, delta) {
+    if (!this.player || !this.inventory || !item) return;
+
+    console.log("debugItemCheatSelected", {
+      itemId: item.id,
+      delta,
+    });
+
+    if (delta > 0) {
+      this.inventory.pickupItem(item.id, {
+        source: "debugCheat",
+        scene: this,
+      });
+    } else if (delta < 0) {
+      this.inventory.removeItem(item.id, {
+        source: "debugCheat",
+        scene: this,
+      });
+    }
+
+    const events = [
+      ...this.inventory.consumeEvents(),
+      ...this.player.consumeEvents(),
+    ];
+
+    if (events.length > 0) {
+      this.handleGameEvents(events);
+    }
+
+    this.updateHud();
+  }
+
   addDebugGold() {
     this.player.addGold(DEBUG_GOLD_AMOUNT);
     this.addLog(`Debug cheat: +${DEBUG_GOLD_AMOUNT} gold.`);
@@ -2039,6 +2099,19 @@ export class GameScene {
       superSpeed: this.debugCheatState.superSpeed.active,
       exterminator: this.debugCheatState.exterminator.active,
     };
+  }
+
+  getDebugItemCheatStates() {
+    if (!this.inventory) return {};
+
+    const entries = [
+      ...this.inventory.getPassiveEntries(),
+      ...this.inventory.getConsumableEntries(),
+    ];
+
+    return Object.fromEntries(
+      entries.map((entry) => [entry.item.id, entry.count])
+    );
   }
 
   toggleSuperSpeedCheat() {
@@ -2272,8 +2345,21 @@ export class GameScene {
           this.updateHud();
           break;
 
+        case "itemRemoved":
+          this.addLog(`Item removed: ${event.item.name}.`);
+          this.updateHud();
+          break;
+
         case "passiveItemApplied":
           this.addLog(`Passive applied: ${event.item.name}.`);
+          this.updateDebugCheatBaselinesForStatChange(event.result);
+          this.syncDebugCheatEffects();
+          this.highlightItemStat(event.result);
+          this.updateHud();
+          break;
+
+        case "passiveItemRemoved":
+          this.addLog(`Passive removed: ${event.item.name}.`);
           this.updateDebugCheatBaselinesForStatChange(event.result);
           this.syncDebugCheatEffects();
           this.highlightItemStat(event.result);
@@ -2293,6 +2379,10 @@ export class GameScene {
 
         case "itemPickupBlocked":
           this.addLog(this.getItemPickupBlockedMessage(event));
+          break;
+
+        case "itemRemoveFailed":
+          this.addLog(this.getItemRemoveFailedMessage(event));
           break;
 
         case "shopOfferCreated":
@@ -2433,6 +2523,16 @@ export class GameScene {
 
       default:
         return "Could not pick up that item.";
+    }
+  }
+
+  getItemRemoveFailedMessage(event) {
+    switch (event.reason) {
+      case "missingItem":
+        return `You do not have ${event.item.name}.`;
+
+      default:
+        return `Could not remove ${event.item.name}.`;
     }
   }
 

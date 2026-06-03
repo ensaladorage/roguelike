@@ -16,19 +16,36 @@ export const ENEMY_COIN_DROP = {
 const ENEMY_CHASE_DEFAULTS = {
   pathRefreshTime: 0.25,
   aggroRange: 5.5,
+  movementSpeedMultiplier: 1.5,
+  attackTimerOutOfRangeGrace: 0.2,
   easy: {
     leashDistance: 5.5,
-    leashTime: 1.5,
+    leashTime: 1.2,
   },
   medium: {
-    leashDistance: 6,
-    leashTime: 2,
+    leashDistance: 5.7,
+    leashTime: 1.5,
   },
   hard: {
-    leashDistance: 8.25,
-    leashTime: 2.25,
+    leashDistance: 6,
+    leashTime: 1.8,
   },
 };
+
+const ENEMY_PATROL_REGEN = {
+  maxHpPercentPerSecond: 2,
+};
+
+const STUN_MARKER_INNER_RADIUS = 0.5;
+const STUN_MARKER_OUTER_RADIUS = 0.58;
+const STUN_MARKER_Y = 0.055;
+const STUN_MARKER_RENDER_ORDER = 86;
+const STUN_MARKER_BASE_COLOR = 0x7f3cff;
+const STUN_MARKER_PULSE_COLOR = 0xd8a8ff;
+const STUN_MARKER_BASE_OPACITY = 0.72;
+const STUN_MARKER_PULSE_OPACITY = 0.96;
+const STUN_MARKER_PULSE_SCALE = 0.14;
+const STUN_MARKER_PULSE_SPEED = 4.8;
 
 export const ENEMY_STATES = {
   PATROL: "patrol",
@@ -74,6 +91,7 @@ export class EnemyAI {
     this.attackDamage = options.attackDamage ?? 8;
     this.attackCooldown = options.attackCooldown ?? 1.2;
     this.attackTimer = 0;
+    this.attackOutOfRangeTimer = 0;
     this.chasePath = [];
     this.chasePathRefreshTimer = 0;
     this.leashTimer = 0;
@@ -89,12 +107,22 @@ export class EnemyAI {
 
     this.maxHp = options.maxHp ?? options.hp ?? 50;
     this.hp = options.hp ?? this.maxHp;
+    this.patrolRegenPercentPerSecond = this.normalizePercentChance(
+      options.patrolRegenPercentPerSecond ??
+        ENEMY_PATROL_REGEN.maxHpPercentPerSecond
+    );
+    this.isRegeneratingAfterLeash = false;
     this.alive = true;
     this.target = null;
     this.events = [];
-    this.hasTakenCombatHit = false;
+    this.hasTakenCombatHit = this.hp < this.maxHp;
     this.healthBar = this.createHealthBar();
     this.model.add(this.healthBar);
+    this.stunMarkerPulseTime = 0;
+    this.stunMarkerBaseColor = new THREE.Color(STUN_MARKER_BASE_COLOR);
+    this.stunMarkerPulseColor = new THREE.Color(STUN_MARKER_PULSE_COLOR);
+    this.stunMarker = this.createStunMarker();
+    this.model.add(this.stunMarker);
 
     this.chooseNextPatrolRoute();
   }
@@ -129,6 +157,7 @@ export class EnemyAI {
         break;
     }
 
+    this.updateStunMarker(delta);
     this.updateHealthBarBillboard(camera);
   }
 
@@ -148,14 +177,17 @@ export class EnemyAI {
     this.target = target;
     this.state = ENEMY_STATES.CHASE;
     this.returnPath = [];
+    this.isRegeneratingAfterLeash = false;
 
     if (!alreadyChasing) {
       this.attackTimer = 0;
-      this.hasTakenCombatHit = false;
+      this.attackOutOfRangeTimer = 0;
+      this.hasTakenCombatHit =
+        this.hasTakenCombatHit || this.hp < this.maxHp;
       this.chasePath = [];
       this.chasePathRefreshTimer = 0;
       this.leashTimer = 0;
-      this.healthBar.visible = this.hasTakenCombatHit;
+      this.updateHealthBarVisibility();
       this.emit({
         type: "enemyStateChanged",
         enemy: this,
@@ -172,8 +204,10 @@ export class EnemyAI {
     this.chasePath = [];
     this.returnPath = [];
     this.leashTimer = 0;
+    this.attackOutOfRangeTimer = 0;
     this.state = ENEMY_STATES.PATROL;
-    this.healthBar.visible = false;
+    this.updateHealthBarVisibility();
+    this.isRegeneratingAfterLeash = false;
     this.startPatrolPause();
 
     this.emit({
@@ -191,10 +225,13 @@ export class EnemyAI {
     this.chasePath = [];
     this.returnPath = [];
     this.attackTimer = 0;
+    this.attackOutOfRangeTimer = 0;
     this.leashTimer = 0;
     this.stunTimer = Math.max(this.stunTimer, duration);
     this.state = ENEMY_STATES.STUNNED;
-    this.healthBar.visible = false;
+    this.updateHealthBarVisibility();
+    this.isRegeneratingAfterLeash = false;
+    this.setStunMarkerVisible(true);
 
     this.emit({
       type: "enemyStunned",
@@ -214,6 +251,7 @@ export class EnemyAI {
     this.target = null;
     this.chasePath = [];
     this.returnPath = [];
+    this.setStunMarkerVisible(false);
     this.startPatrolPause();
 
     this.emit({
@@ -228,6 +266,8 @@ export class EnemyAI {
   }
 
   updatePatrol(delta) {
+    this.updatePatrolRegeneration(delta);
+
     if (this.isMovementPaused()) return;
 
     if (this.patrolMode === "waiting") {
@@ -293,12 +333,14 @@ export class EnemyAI {
 
     if (this.state !== ENEMY_STATES.CHASE) return;
 
-    if (distance > this.attackRange) {
+    const isInAttackRange = distance <= this.attackRange;
+
+    this.updateAttackTimer(delta, isInAttackRange);
+
+    if (!isInAttackRange) {
       this.moveTowardChaseTarget(delta, targetPos);
       return;
     }
-
-    this.attackTimer += delta;
 
     if (this.attackTimer < this.attackCooldown) return;
 
@@ -332,7 +374,8 @@ export class EnemyAI {
     this.target = null;
     this.chasePath = [];
     this.leashTimer = 0;
-    this.healthBar.visible = false;
+    this.attackOutOfRangeTimer = 0;
+    this.startPatrolRegeneration();
 
     if (this.enemyDifficulty === "easy") {
       this.state = ENEMY_STATES.RETURNING;
@@ -373,6 +416,7 @@ export class EnemyAI {
       isFinalWaypoint ? this.getAttackStopRange() : this.patrolStopRange,
       {
         snapOnArrive: !isFinalWaypoint,
+        speedMultiplier: ENEMY_CHASE_DEFAULTS.movementSpeedMultiplier,
       }
     );
 
@@ -388,6 +432,8 @@ export class EnemyAI {
   }
 
   updateReturning(delta) {
+    this.updatePatrolRegeneration(delta);
+
     if (this.isMovementPaused()) return;
 
     const distance = this.flatDistance(this.spawnPosition, this.model.position);
@@ -466,11 +512,85 @@ export class EnemyAI {
     return this.attackRange * 0.9;
   }
 
+  advanceAttackTimer(delta) {
+    this.attackTimer = Math.min(
+      this.attackCooldown,
+      this.attackTimer + delta
+    );
+  }
+
+  updateAttackTimer(delta, isInAttackRange) {
+    if (isInAttackRange) {
+      this.attackOutOfRangeTimer = 0;
+      this.advanceAttackTimer(delta);
+      return;
+    }
+
+    const graceRemaining = Math.max(
+      0,
+      ENEMY_CHASE_DEFAULTS.attackTimerOutOfRangeGrace -
+        this.attackOutOfRangeTimer
+    );
+
+    if (graceRemaining > 0) {
+      this.advanceAttackTimer(Math.min(delta, graceRemaining));
+    }
+
+    this.attackOutOfRangeTimer += delta;
+  }
+
   getChaseConfig() {
     return (
       ENEMY_CHASE_DEFAULTS[this.enemyDifficulty] ??
       ENEMY_CHASE_DEFAULTS.easy
     );
+  }
+
+  startPatrolRegeneration() {
+    this.updateHealthBarVisibility();
+    this.isRegeneratingAfterLeash =
+      this.alive &&
+      this.hp > 0 &&
+      this.hp < this.maxHp &&
+      this.patrolRegenPercentPerSecond > 0;
+  }
+
+  updatePatrolRegeneration(delta) {
+    if (!this.isRegeneratingAfterLeash) return;
+    if (
+      this.state !== ENEMY_STATES.PATROL &&
+      this.state !== ENEMY_STATES.RETURNING
+    ) {
+      return;
+    }
+    if (this.hp >= this.maxHp) {
+      this.isRegeneratingAfterLeash = false;
+      this.updateHealthBarVisibility();
+      return;
+    }
+
+    const regenPerSecond =
+      this.maxHp * (this.patrolRegenPercentPerSecond / 100);
+    this.hp = Math.min(this.maxHp, this.hp + regenPerSecond * delta);
+
+    if (this.hp >= this.maxHp) {
+      this.hp = this.maxHp;
+      this.isRegeneratingAfterLeash = false;
+    }
+
+    this.updateHealthBar();
+    this.updateHealthBarVisibility();
+  }
+
+  updateHealthBarVisibility() {
+    if (!this.healthBar) return;
+
+    this.healthBar.visible =
+      this.alive &&
+      this.model.visible !== false &&
+      this.hasTakenCombatHit &&
+      this.hp > 0 &&
+      this.hp < this.maxHp;
   }
 
   chooseNextPatrolRoute() {
@@ -596,6 +716,7 @@ export class EnemyAI {
 
   moveTo(target, delta, stopRange, options = {}) {
     const snapOnArrive = options.snapOnArrive ?? true;
+    const speedMultiplier = options.speedMultiplier ?? 1;
     const dir = new THREE.Vector3().subVectors(target, this.model.position);
     dir.y = 0;
 
@@ -612,7 +733,7 @@ export class EnemyAI {
 
     dir.normalize();
 
-    const step = Math.min(distance, this.speed * delta);
+    const step = Math.min(distance, this.speed * speedMultiplier * delta);
     const previousPosition = this.model.position.clone();
     const desiredPosition = previousPosition.clone().addScaledVector(dir, step);
     const nextPosition = this.resolveMovement(previousPosition, desiredPosition);
@@ -697,12 +818,9 @@ export class EnemyAI {
       this.startChase(source, "damage");
     }
 
-    if (this.state === ENEMY_STATES.CHASE || source?.model) {
-      this.hasTakenCombatHit = true;
-      this.healthBar.visible = true;
-    }
-
+    this.hasTakenCombatHit = true;
     this.updateHealthBar();
+    this.updateHealthBarVisibility();
 
     return damageTaken;
   }
@@ -717,6 +835,7 @@ export class EnemyAI {
     this.state = ENEMY_STATES.DEAD;
     this.model.visible = false;
     this.healthBar.visible = false;
+    this.setStunMarkerVisible(false);
 
     this.emit({
       type: "enemyCoinsDropped",
@@ -858,6 +977,96 @@ export class EnemyAI {
 
   face(target) {
     this.model.lookAt(target.x, this.model.position.y, target.z);
+  }
+
+  createStunMarker() {
+    const group = new THREE.Group();
+    group.name = "enemyStunMarker";
+    group.visible = false;
+    group.position.y = STUN_MARKER_Y;
+    group.renderOrder = STUN_MARKER_RENDER_ORDER;
+    group.userData.ignoreFlash = true;
+
+    const material = new THREE.MeshBasicMaterial({
+      color: STUN_MARKER_BASE_COLOR,
+      transparent: true,
+      opacity: STUN_MARKER_BASE_OPACITY,
+      depthTest: false,
+      depthWrite: false,
+      side: THREE.DoubleSide,
+    });
+
+    const ring = new THREE.Mesh(
+      new THREE.RingGeometry(
+        STUN_MARKER_INNER_RADIUS,
+        STUN_MARKER_OUTER_RADIUS,
+        64
+      ),
+      material
+    );
+    ring.name = "enemyStunRing";
+    ring.rotation.x = -Math.PI / 2;
+    ring.renderOrder = STUN_MARKER_RENDER_ORDER;
+    ring.userData.ignoreFlash = true;
+
+    group.add(ring);
+
+    return group;
+  }
+
+  setStunMarkerVisible(visible) {
+    if (!this.stunMarker) return;
+
+    this.stunMarker.visible = Boolean(visible);
+
+    if (visible) {
+      this.stunMarkerPulseTime = 0;
+      this.updateStunMarker(0);
+      return;
+    }
+
+    this.stunMarker.scale.setScalar(1);
+
+    const ring = this.stunMarker.getObjectByName("enemyStunRing");
+    const material = ring?.material;
+
+    if (material?.color) {
+      material.color.copy(this.stunMarkerBaseColor);
+      material.opacity = STUN_MARKER_BASE_OPACITY;
+    }
+  }
+
+  updateStunMarker(delta) {
+    if (!this.stunMarker) return;
+
+    const shouldShow =
+      this.alive && this.model.visible !== false && this.isStunned();
+    this.stunMarker.visible = shouldShow;
+
+    if (!shouldShow) return;
+
+    this.stunMarkerPulseTime += delta;
+
+    const wave =
+      (Math.sin(this.stunMarkerPulseTime * STUN_MARKER_PULSE_SPEED) + 1) / 2;
+    const scale = 1 + wave * STUN_MARKER_PULSE_SCALE;
+    const ring = this.stunMarker.getObjectByName("enemyStunRing");
+    const material = ring?.material;
+
+    this.stunMarker.scale.set(scale, scale, scale);
+
+    if (material?.color) {
+      material.color.copy(this.stunMarkerBaseColor);
+      material.color.lerp(this.stunMarkerPulseColor, wave);
+    }
+
+    if (material) {
+      material.opacity = THREE.MathUtils.lerp(
+        STUN_MARKER_BASE_OPACITY,
+        STUN_MARKER_PULSE_OPACITY,
+        wave
+      );
+    }
   }
 
   createHealthBar() {

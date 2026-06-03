@@ -70,6 +70,78 @@ export class Inventory {
     return false;
   }
 
+  removeItem(itemId, context = {}) {
+    const definition = getItemDefinition(itemId);
+    if (!definition) return false;
+
+    if (definition.type === ITEM_TYPES.PASSIVE) {
+      const count = this.passives.get(definition.id) ?? 0;
+      if (count <= 0) {
+        this.emit({
+          type: "itemRemoveFailed",
+          itemId: definition.id,
+          item: definition,
+          reason: "missingItem",
+        });
+        return false;
+      }
+
+      const result = this.itemEffects.revert(definition.id, {
+        ...context,
+        player: this.player,
+      });
+
+      if (!result.applied) {
+        this.emit({
+          type: "itemRemoveFailed",
+          itemId: definition.id,
+          item: definition,
+          reason: result.reason,
+        });
+        return false;
+      }
+
+      this.setItemCount(this.passives, definition.id, count - 1);
+      this.emit({
+        type: "itemRemoved",
+        itemId: definition.id,
+        item: definition,
+      });
+      this.emit({
+        type: "passiveItemRemoved",
+        itemId: definition.id,
+        item: definition,
+        result,
+      });
+      return true;
+    }
+
+    if (definition.type === ITEM_TYPES.CONSUMABLE) {
+      this.knownConsumables.add(definition.id);
+
+      const count = this.getConsumableCount(definition.id);
+      if (count <= 0) {
+        this.emit({
+          type: "itemRemoveFailed",
+          itemId: definition.id,
+          item: definition,
+          reason: "missingItem",
+        });
+        return false;
+      }
+
+      this.setItemCount(this.consumables, definition.id, count - 1);
+      this.emit({
+        type: "itemRemoved",
+        itemId: definition.id,
+        item: definition,
+      });
+      return true;
+    }
+
+    return false;
+  }
+
   useConsumable(itemId, context = {}) {
     const definition = getItemDefinition(itemId);
     if (!definition || definition.type !== ITEM_TYPES.CONSUMABLE) return false;
@@ -155,6 +227,10 @@ export class Inventory {
 
   getPassiveEntries() {
     return this.getEntries(this.passives).sort(this.sortEntriesByHudSlot);
+  }
+
+  getPassiveCount(itemId) {
+    return this.passives.get(itemId) ?? 0;
   }
 
   getConsumableCount(itemId) {

@@ -40,6 +40,35 @@ export class ItemEffects {
     }
   }
 
+  revert(itemId, context = {}) {
+    const definition = getItemDefinition(itemId);
+    if (!definition) {
+      return {
+        applied: false,
+        consumed: false,
+        reason: "unknownItem",
+      };
+    }
+
+    switch (definition.effect) {
+      case ITEM_EFFECTS.DAMAGE_UP:
+        return this.revertDamageUp(definition, context);
+
+      case ITEM_EFFECTS.ATTACK_SPEED_UP:
+        return this.revertAttackSpeedUp(definition, context);
+
+      case ITEM_EFFECTS.MAX_HP_UP:
+        return this.revertMaxHpUp(definition, context);
+
+      default:
+        return {
+          applied: false,
+          consumed: false,
+          reason: "unsupportedRevert",
+        };
+    }
+  }
+
   applyDamageUp(definition, { player } = {}) {
     if (!player) return this.missingPlayerResult();
 
@@ -95,6 +124,63 @@ export class ItemEffects {
       consumed: true,
       stat: "maxHp",
       amount: maxHpIncrease,
+      value: player.maxHp,
+      hp: player.hp,
+    };
+  }
+
+  revertDamageUp(definition, { player } = {}) {
+    if (!player) return this.missingPlayerResult();
+
+    const amount = definition.modifiers?.attackDamage ?? 0;
+    player.attackDamage = Math.max(0, player.attackDamage - amount);
+
+    return {
+      applied: true,
+      consumed: true,
+      stat: "attackDamage",
+      amount: -amount,
+      value: player.attackDamage,
+    };
+  }
+
+  revertAttackSpeedUp(definition, { player } = {}) {
+    if (!player) return this.missingPlayerResult();
+
+    const amount = definition.modifiers?.attackSpeed ?? 0;
+    const previousValue =
+      player.attackSpeed ?? (player.attackCooldown > 0 ? 1 / player.attackCooldown : 1);
+    const nextValue = previousValue - amount;
+
+    if (typeof player.setAttackSpeed === "function") {
+      player.setAttackSpeed(nextValue);
+    } else {
+      player.attackSpeed = Math.max(0.1, nextValue);
+      player.attackCooldown = 1 / player.attackSpeed;
+    }
+
+    return {
+      applied: true,
+      consumed: true,
+      stat: "attackSpeed",
+      amount: player.attackSpeed - previousValue,
+      value: player.attackSpeed,
+      attackCooldown: player.attackCooldown,
+    };
+  }
+
+  revertMaxHpUp(definition, { player } = {}) {
+    if (!player) return this.missingPlayerResult();
+
+    const maxHpDecrease = definition.modifiers?.maxHp ?? 0;
+    player.maxHp = Math.max(1, player.maxHp - maxHpDecrease);
+    player.hp = Math.min(player.hp, player.maxHp);
+
+    return {
+      applied: true,
+      consumed: true,
+      stat: "maxHp",
+      amount: -maxHpDecrease,
       value: player.maxHp,
       hp: player.hp,
     };

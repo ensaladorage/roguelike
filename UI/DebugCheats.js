@@ -1,3 +1,5 @@
+import { ITEM_DEFINITIONS } from "../CharacterData/itemDefinitions.js";
+
 const DEBUG_CHEATS = [
   {
     id: "killPlayer",
@@ -36,10 +38,15 @@ const DEBUG_CHEATS = [
 const STYLE_ID = "debug-cheats-style";
 
 export class DebugCheats {
-  constructor({ onSelect, getState } = {}) {
+  constructor({ onSelect, onItemAdjust, getState, getItemState } = {}) {
     this.onSelect = onSelect;
+    this.onItemAdjust = onItemAdjust;
     this.getState = getState ?? (() => ({}));
+    this.getItemState = getItemState ?? (() => ({}));
     this.cheats = DEBUG_CHEATS;
+    this.itemCheats = Object.values(ITEM_DEFINITIONS).sort(
+      (a, b) => (a.hudSlot ?? 999) - (b.hudSlot ?? 999)
+    );
     this.selectedIndex = 0;
     this.isOpen = false;
 
@@ -66,10 +73,32 @@ export class DebugCheats {
     list.setAttribute("role", "listbox");
     list.setAttribute("aria-label", "Available debug cheats");
 
+    const itemPanel = document.createElement("div");
+    itemPanel.className = "debug-item-cheats";
+    itemPanel.setAttribute("aria-label", "Debug item inventory cheats");
+
+    const itemTitle = document.createElement("h3");
+    itemTitle.textContent = "Items";
+
+    const itemList = document.createElement("div");
+    itemList.className = "debug-item-cheats-list";
+
+    itemPanel.appendChild(itemTitle);
+    itemPanel.appendChild(itemList);
+
     panel.appendChild(title);
     panel.appendChild(list);
+    panel.appendChild(itemPanel);
+
+    panel.addEventListener("pointerdown", (event) => {
+      event.stopPropagation();
+    });
+    panel.addEventListener("click", (event) => {
+      event.stopPropagation();
+    });
 
     this.listElement = list;
+    this.itemListElement = itemList;
     return panel;
   }
 
@@ -93,7 +122,7 @@ export class DebugCheats {
         box-shadow: 0 16px 36px rgba(0, 0, 0, 0.34);
         backdrop-filter: blur(10px);
         color: #f4f1e8;
-        pointer-events: none;
+        pointer-events: auto;
       }
 
       .debug-cheats.is-open {
@@ -161,12 +190,110 @@ export class DebugCheats {
         line-height: 1.25;
       }
 
+      .debug-item-cheats {
+        position: absolute;
+        top: 0;
+        right: calc(100% + 10px);
+        width: 208px;
+        padding: 10px;
+        border: 1px solid rgba(244, 241, 232, 0.18);
+        border-radius: 8px;
+        background: rgba(17, 19, 23, 0.9);
+        box-shadow: 0 16px 36px rgba(0, 0, 0, 0.3);
+        backdrop-filter: blur(10px);
+      }
+
+      .debug-item-cheats h3 {
+        margin: 0 0 8px;
+        font-size: 12px;
+        line-height: 1.2;
+      }
+
+      .debug-item-cheats-list {
+        display: grid;
+        gap: 5px;
+      }
+
+      .debug-item-cheat {
+        display: grid;
+        grid-template-columns: 26px 1fr auto auto;
+        align-items: center;
+        gap: 6px;
+        min-height: 30px;
+        padding: 4px 5px;
+        border: 1px solid rgba(244, 241, 232, 0.1);
+        border-radius: 6px;
+        background: rgba(244, 241, 232, 0.05);
+      }
+
+      .debug-item-cheat img {
+        width: 24px;
+        height: 24px;
+        object-fit: contain;
+        image-rendering: auto;
+      }
+
+      .debug-item-cheat-name {
+        min-width: 0;
+        overflow: hidden;
+        color: rgba(244, 241, 232, 0.88);
+        font-size: 11px;
+        font-weight: 700;
+        line-height: 1.1;
+        text-overflow: ellipsis;
+        white-space: nowrap;
+      }
+
+      .debug-item-cheat-count {
+        justify-self: end;
+        min-width: 28px;
+        color: rgba(244, 241, 232, 0.72);
+        font-size: 10px;
+        font-weight: 800;
+        line-height: 1;
+        text-align: right;
+      }
+
+      .debug-item-cheat-actions {
+        display: flex;
+        gap: 3px;
+      }
+
+      .debug-item-cheat-button {
+        display: inline-grid;
+        place-items: center;
+        width: 22px;
+        height: 22px;
+        padding: 0;
+        border: 1px solid rgba(244, 241, 232, 0.18);
+        border-radius: 5px;
+        background: rgba(244, 241, 232, 0.08);
+        color: #f4f1e8;
+        font-size: 15px;
+        font-weight: 900;
+        line-height: 1;
+        cursor: pointer;
+      }
+
+      .debug-item-cheat-button:hover,
+      .debug-item-cheat-button:focus-visible {
+        border-color: rgba(86, 194, 113, 0.76);
+        background: rgba(86, 194, 113, 0.24);
+        outline: none;
+      }
+
       @media (max-width: 640px) {
         .debug-cheats {
           top: calc(8px + env(safe-area-inset-top));
           right: calc(8px + env(safe-area-inset-right));
           width: min(240px, calc(100vw - 16px));
           padding: 9px;
+        }
+
+        .debug-item-cheats {
+          position: static;
+          width: auto;
+          margin-top: 10px;
         }
       }
     `;
@@ -272,6 +399,13 @@ export class DebugCheats {
     this.render();
   }
 
+  adjustItem(item, delta) {
+    if (!item) return;
+
+    this.onItemAdjust?.(item, delta);
+    this.render();
+  }
+
   render() {
     if (!this.listElement) return;
 
@@ -287,6 +421,10 @@ export class DebugCheats {
       option.classList.toggle("is-active", isActive);
       option.setAttribute("role", "option");
       option.setAttribute("aria-selected", String(index === this.selectedIndex));
+      option.addEventListener("click", () => {
+        this.selectedIndex = index;
+        this.selectCurrent();
+      });
 
       const titleRow = document.createElement("div");
       titleRow.className = "debug-cheats-title-row";
@@ -311,6 +449,63 @@ export class DebugCheats {
       option.appendChild(titleRow);
       option.appendChild(description);
       this.listElement.appendChild(option);
+    });
+
+    this.renderItemCheats();
+  }
+
+  renderItemCheats() {
+    if (!this.itemListElement) return;
+
+    this.itemListElement.innerHTML = "";
+    const itemState = this.getItemState() ?? {};
+
+    this.itemCheats.forEach((item) => {
+      const count = itemState[item.id] ?? 0;
+      const row = document.createElement("div");
+      row.className = "debug-item-cheat";
+
+      const image = document.createElement("img");
+      image.src = item.imagePath;
+      image.alt = "";
+      image.setAttribute("aria-hidden", "true");
+
+      const name = document.createElement("span");
+      name.className = "debug-item-cheat-name";
+      name.textContent = item.name;
+      name.title = item.name;
+
+      const countText = document.createElement("span");
+      countText.className = "debug-item-cheat-count";
+      countText.textContent = `x${count}`;
+
+      const actions = document.createElement("div");
+      actions.className = "debug-item-cheat-actions";
+
+      const removeButton = document.createElement("button");
+      removeButton.type = "button";
+      removeButton.className = "debug-item-cheat-button";
+      removeButton.textContent = "-";
+      removeButton.title = `Remove ${item.name}`;
+      removeButton.setAttribute("aria-label", `Remove ${item.name}`);
+      removeButton.addEventListener("click", () => this.adjustItem(item, -1));
+
+      const addButton = document.createElement("button");
+      addButton.type = "button";
+      addButton.className = "debug-item-cheat-button";
+      addButton.textContent = "+";
+      addButton.title = `Add ${item.name}`;
+      addButton.setAttribute("aria-label", `Add ${item.name}`);
+      addButton.addEventListener("click", () => this.adjustItem(item, 1));
+
+      actions.appendChild(removeButton);
+      actions.appendChild(addButton);
+
+      row.appendChild(image);
+      row.appendChild(name);
+      row.appendChild(countText);
+      row.appendChild(actions);
+      this.itemListElement.appendChild(row);
     });
   }
 
