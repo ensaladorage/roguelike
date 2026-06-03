@@ -33,7 +33,7 @@ const ENEMY_CHASE_DEFAULTS = {
 };
 
 const ENEMY_PATROL_REGEN = {
-  maxHpPercentPerSecond: 2,
+  maxHpPercentPerSecond: 4,
 };
 
 const STUN_MARKER_INNER_RADIUS = 0.5;
