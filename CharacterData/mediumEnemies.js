@@ -1,3 +1,9 @@
+const MEDIUM_ENEMY_CHASE = {
+  aggroRange: 2.3,
+  leashDistance: 5.7,
+  leashTime: 1.5,
+};
+
 export const MEDIUM_ENEMY_DEFINITIONS = [
   {
     id: "enemy_skeleton_01",
@@ -10,6 +16,7 @@ export const MEDIUM_ENEMY_DEFINITIONS = [
     attackRange: 1.65,
     attackCooldown: 1.15,
     collisionRadius: 0.32,
+    chase: { ...MEDIUM_ENEMY_CHASE },
   },
   {
     id: "enemy_zombie_01",
@@ -22,5 +29,6 @@ export const MEDIUM_ENEMY_DEFINITIONS = [
     attackRange: 1.55,
     attackCooldown: 1.35,
     collisionRadius: 0.34,
+    chase: { ...MEDIUM_ENEMY_CHASE },
   },
 ];

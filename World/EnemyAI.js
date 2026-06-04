@@ -15,21 +15,11 @@ export const ENEMY_COIN_DROP = {
 
 const ENEMY_CHASE_DEFAULTS = {
   pathRefreshTime: 0.25,
-  aggroRange: 5.5,
+  aggroRange: 2,
+  leashDistance: 5.5,
+  leashTime: 1.2,
   movementSpeedMultiplier: 1.5,
   attackTimerOutOfRangeGrace: 0.2,
-  easy: {
-    leashDistance: 5.5,
-    leashTime: 1.2,
-  },
-  medium: {
-    leashDistance: 5.7,
-    leashTime: 1.5,
-  },
-  hard: {
-    leashDistance: 6,
-    leashTime: 1.8,
-  },
 };
 
 const ENEMY_PATROL_REGEN = {
@@ -95,6 +85,20 @@ export class EnemyAI {
     this.chasePath = [];
     this.chasePathRefreshTimer = 0;
     this.leashTimer = 0;
+    this.chaseConfig = {
+      aggroRange:
+        options.chase?.aggroRange ??
+        options.aggroRange ??
+        ENEMY_CHASE_DEFAULTS.aggroRange,
+      leashDistance:
+        options.chase?.leashDistance ??
+        options.leashDistance ??
+        ENEMY_CHASE_DEFAULTS.leashDistance,
+      leashTime:
+        options.chase?.leashTime ??
+        options.leashTime ??
+        ENEMY_CHASE_DEFAULTS.leashTime,
+    };
     this.stunTimer = 0;
     this.coinDropConfig = {
       ...ENEMY_COIN_DROP,
@@ -316,7 +320,9 @@ export class EnemyAI {
 
     const distance = this.flatDistance(player.model.position, this.model.position);
 
-    return distance <= ENEMY_CHASE_DEFAULTS.aggroRange;
+    const chaseConfig = this.getChaseConfig();
+
+    return distance <= (chaseConfig.aggroRange ?? ENEMY_CHASE_DEFAULTS.aggroRange);
   }
 
   updateChase(delta) {
@@ -540,10 +546,7 @@ export class EnemyAI {
   }
 
   getChaseConfig() {
-    return (
-      ENEMY_CHASE_DEFAULTS[this.enemyDifficulty] ??
-      ENEMY_CHASE_DEFAULTS.easy
-    );
+    return this.chaseConfig;
   }
 
   startPatrolRegeneration() {

@@ -1,3 +1,9 @@
+const HARD_ENEMY_CHASE = {
+  aggroRange: 2.5,
+  leashDistance: 6,
+  leashTime: 1.8,
+};
+
 export const HARD_ENEMY_DEFINITIONS = [
   {
     id: "enemy_orc_01",
@@ -10,6 +16,7 @@ export const HARD_ENEMY_DEFINITIONS = [
     attackRange: 1.7,
     attackCooldown: 1.45,
     collisionRadius: 0.38,
+    chase: { ...HARD_ENEMY_CHASE },
   },
   {
     id: "enemy_vampire_01",
@@ -22,5 +29,6 @@ export const HARD_ENEMY_DEFINITIONS = [
     attackRange: 1.8,
     attackCooldown: 0.95,
     collisionRadius: 0.32,
+    chase: { ...HARD_ENEMY_CHASE },
   },
 ];

@@ -937,6 +937,7 @@ export class LevelBuilder {
         ].join(":"))
       )
       : null;
+    const chaseConfig = enemyDefinition?.chase ?? spawn.chase;
 
     return {
       ...spawn,
@@ -953,6 +954,7 @@ export class LevelBuilder {
       attackRange: enemyDefinition?.attackRange ?? spawn.attackRange,
       attackCooldown: enemyDefinition?.attackCooldown ?? spawn.attackCooldown,
       collisionRadius: enemyDefinition?.collisionRadius ?? spawn.collisionRadius,
+      chase: chaseConfig ? { ...chaseConfig } : undefined,
       patrolStopRange: enemyDefinition?.patrolStopRange ?? spawn.patrolStopRange,
       patrolMoveDuration:
         enemyDefinition?.patrolMoveDuration ?? spawn.patrolMoveDuration,

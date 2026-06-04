@@ -49,11 +49,12 @@ export function setupInput(
   renderer.domElement.addEventListener("pointerdown", (event) => {
     updatePointerState(pointerState, event);
     updatePointer(event, renderer, camera, raycaster, pointer);
-    const enemy = getPointedEnemy(raycaster, getEnemyTargets);
+    const enemyHit = getPointedEnemyHit(raycaster, getEnemyTargets);
 
-    if (enemy) {
+    if (enemyHit) {
       onClick({
-        enemy,
+        enemy: enemyHit.enemy,
+        point: enemyHit.point,
       });
       return;
     }
@@ -353,6 +354,10 @@ function updatePointerFromClientPosition(
 }
 
 function getPointedEnemy(raycaster, getEnemyTargets) {
+  return getPointedEnemyHit(raycaster, getEnemyTargets)?.enemy ?? null;
+}
+
+function getPointedEnemyHit(raycaster, getEnemyTargets) {
   const enemyTargets =
     typeof getEnemyTargets === "function" ? getEnemyTargets() : [];
   const enemyHits = raycaster.intersectObjects(enemyTargets, true);
@@ -360,7 +365,12 @@ function getPointedEnemy(raycaster, getEnemyTargets) {
   for (const hit of enemyHits) {
     const enemy = findEnemyFromObject(hit.object);
 
-    if (enemy?.alive) return enemy;
+    if (enemy?.alive) {
+      return {
+        enemy,
+        point: hit.point.clone(),
+      };
+    }
   }
 
   return null;

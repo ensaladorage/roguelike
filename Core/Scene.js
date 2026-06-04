@@ -9,6 +9,7 @@ import { ItemEffects } from "./ItemEffects.js";
 import { GameManager } from "../Game/GameManager.js";
 import { flatDistance } from "../Game/Utils.js";
 import { HUD } from "../UI/HUD.js";
+import { PauseMenu } from "../UI/PauseMenu.js";
 import { SFX } from "../UI/SFX.js";
 import { VFX } from "../UI/VFX.js";
 import { DebugCheats } from "../UI/DebugCheats.js";
@@ -46,6 +47,9 @@ const DEBUG_SUPER_SPEED_MULTIPLIER = 5;
 const DEBUG_EXTERMINATOR_DAMAGE = 999999;
 const DEBUG_GOLD_AMOUNT = 999;
 const MAX_RENDER_PIXEL_RATIO = 1.75;
+const PAUSE_LOCK_REASON = "pauseMenu";
+const MOVEMENT_CLICK_FEEDBACK_COLOR = 0x63d982;
+const ATTACK_CLICK_FEEDBACK_COLOR = 0xff4058;
 const FRONT_DIRECTION_BY_SIDE = {
   north: { x: 0, z: 1 },
   south: { x: 0, z: -1 },
@@ -113,6 +117,7 @@ export class GameScene {
     this.playerControlLocks = new Set();
     this.playerAttackPathRefreshTimer = 0;
     this.inputController = null;
+    this.isPaused = false;
 
     this.hud = new HUD();
     this.debugCheatState = {
@@ -132,6 +137,13 @@ export class GameScene {
       getItemState: () => this.getDebugItemCheatStates(),
     });
     this.sfx = new SFX();
+    this.pauseMenu = new PauseMenu({
+      initialSoundLevel: this.sfx.getSoundLevelPercent(),
+      onOpenChange: (isOpen) => this.setPaused(isOpen),
+      onSoundLevelChange: (soundLevel) =>
+        this.sfx.setSoundLevelPercent(soundLevel),
+      canOpen: () => !this.shopManager?.pendingConfirmation,
+    });
     this.vfx = new VFX({ root: this.levelGroup });
     this.gameManager = new GameManager(this);
     this.itemEffects = new ItemEffects();
@@ -695,6 +707,16 @@ export class GameScene {
     return this.playerControlLocks.size > 0;
   }
 
+  setPaused(paused) {
+    this.isPaused = Boolean(paused);
+    this.setPlayerControlLocked(this.isPaused, PAUSE_LOCK_REASON);
+  }
+
+  updatePausedFrame() {
+    this.inputController?.updateCursor?.();
+    this.renderer.render(this.scene, this.camera);
+  }
+
   placePlayer(position) {
     const safePosition = this.getSafePlayerStartPosition(position);
     const spawnRotationY = this.getPlayerSpawnRotation(position, safePosition);
@@ -999,6 +1021,7 @@ export class GameScene {
       attackRange: data.attackRange,
       attackCooldown: data.attackCooldown,
       collisionRadius: data.collisionRadius ?? ENEMY_COLLISION_RADIUS,
+      chase: data.chase,
       patrolStopRange: data.patrolStopRange,
       patrolMoveDuration: data.patrolMoveDuration,
       patrolPauseDurations: data.patrolPauseDurations,
@@ -1042,7 +1065,9 @@ export class GameScene {
       const navigation = this.getEnemyAttackNavigation(payload.enemy);
       if (!navigation) return;
 
-      this.createClickFeedback(navigation.target);
+      this.createClickFeedback(payload.point ?? navigation.target, {
+        color: ATTACK_CLICK_FEEDBACK_COLOR,
+      });
       this.player.setAttackTarget(payload.enemy, navigation.path);
       return;
     }
@@ -1067,9 +1092,9 @@ export class GameScene {
     };
   }
 
-  createClickFeedback(position) {
+  createClickFeedback(position, options = {}) {
     const material = new THREE.MeshBasicMaterial({
-      color: 0x63d982,
+      color: options.color ?? MOVEMENT_CLICK_FEEDBACK_COLOR,
       transparent: true,
       opacity: 0.9,
       side: THREE.DoubleSide,
@@ -1924,6 +1949,12 @@ export class GameScene {
 
   animate() {
     const delta = this.clock.getDelta();
+
+    if (this.isPaused) {
+      this.updatePausedFrame();
+      requestAnimationFrame(() => this.animate());
+      return;
+    }
 
     this.gameManager.update(delta);
 

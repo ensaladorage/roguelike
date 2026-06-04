@@ -1,9 +1,15 @@
+const DEFAULT_SOUND_LEVEL = 100;
+const REFERENCE_SOUND_LEVEL = 100;
+const MAX_OUTPUT_BOOST = 2;
+const SOUND_LEVEL_STORAGE_KEY = "roguelike.soundLevel";
+
 export class SFX {
   constructor() {
     this.audioContext = null;
     this.audioUnlocked = false;
     this.pendingType = null;
     this.audioFiles = {};
+    this.soundLevel = this.loadSoundLevel();
 
     this.tones = {
       playerAttack: {
@@ -53,6 +59,58 @@ export class SFX {
     this.setupAudioUnlock();
   }
 
+  getSoundLevelPercent() {
+    return this.soundLevel;
+  }
+
+  setSoundLevelPercent(value) {
+    this.soundLevel = this.normalizeSoundLevel(value);
+    this.persistSoundLevel();
+    this.applySoundLevelToCachedFiles();
+  }
+
+  getVolumeMultiplier() {
+    return (this.soundLevel / REFERENCE_SOUND_LEVEL) * MAX_OUTPUT_BOOST;
+  }
+
+  resolveOutputVolume(baseVolume = 1) {
+    if (this.soundLevel <= 0) return 0;
+
+    return Math.max(
+      0,
+      Math.min(1, baseVolume * this.getVolumeMultiplier())
+    );
+  }
+
+  loadSoundLevel() {
+    try {
+      const storedValue = window.localStorage?.getItem(SOUND_LEVEL_STORAGE_KEY);
+
+      if (storedValue !== null) {
+        return this.normalizeSoundLevel(Number(storedValue));
+      }
+    } catch (error) {}
+
+    return DEFAULT_SOUND_LEVEL;
+  }
+
+  persistSoundLevel() {
+    try {
+      window.localStorage?.setItem(
+        SOUND_LEVEL_STORAGE_KEY,
+        String(this.soundLevel)
+      );
+    } catch (error) {}
+  }
+
+  normalizeSoundLevel(value) {
+    const numericValue = Number(value);
+
+    if (!Number.isFinite(numericValue)) return DEFAULT_SOUND_LEVEL;
+
+    return Math.max(0, Math.min(100, Math.round(numericValue)));
+  }
+
   play(type) {
     const file = this.files[type];
     if (file) {
@@ -99,7 +157,7 @@ export class SFX {
     const audio = this.getAudioFile(type, file);
 
     audio.currentTime = 0;
-    audio.volume = file.volume ?? 1;
+    audio.volume = this.resolveOutputVolume(file.volume ?? 1);
     audio.play().catch(() => {
       this.pendingType = type;
       this.audioUnlocked = false;
@@ -112,7 +170,7 @@ export class SFX {
       const audio = new Audio(file.src);
 
       audio.preload = "auto";
-      audio.volume = file.volume ?? 1;
+      audio.volume = this.resolveOutputVolume(file.volume ?? 1);
       this.audioFiles[type] = audio;
     }
 
@@ -120,6 +178,8 @@ export class SFX {
   }
 
   playTone(tone) {
+    if (this.soundLevel <= 0) return;
+
     const now = this.audioContext.currentTime;
     const osc = this.audioContext.createOscillator();
     const gain = this.audioContext.createGain();
@@ -134,7 +194,10 @@ export class SFX {
       );
     }
 
-    gain.gain.setValueAtTime(tone.gain ?? 0.05, now);
+    gain.gain.setValueAtTime(
+      (tone.gain ?? 0.05) * this.getVolumeMultiplier(),
+      now
+    );
     gain.gain.exponentialRampToValueAtTime(
       0.001,
       now + tone.duration
@@ -145,6 +208,15 @@ export class SFX {
 
     osc.start(now);
     osc.stop(now + tone.duration);
+  }
+
+  applySoundLevelToCachedFiles() {
+    for (const [type, audio] of Object.entries(this.audioFiles)) {
+      const file = this.files[type];
+      if (!file) continue;
+
+      audio.volume = this.resolveOutputVolume(file.volume ?? 1);
+    }
   }
 
   setupAudioUnlock() {
