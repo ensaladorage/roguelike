@@ -186,7 +186,10 @@ export class GameScene {
       this.floor,
       () => this.getEnemyClickTargets(),
       () => this.getInteractableClickTargets(),
-      (payload) => this.handleWorldClick(payload)
+      (payload) => this.handleWorldClick(payload),
+      {
+        onKeyboardMovementStart: () => this.handleKeyboardMovementStart(),
+      }
     );
 
     setupInventoryInput((slotIndex) => {
@@ -1062,15 +1065,30 @@ export class GameScene {
   handleWorldClick(payload) {
     if (this.isPlayerControlLocked()) return;
 
+    const keyboardMovementActive = this.isKeyboardMovementActive();
     const chest = this.getChestFromInteractable(payload?.interactable);
     if (chest) {
-      this.handleChestClick(chest, payload);
+      this.handleChestClick(chest, payload, {
+        keyboardMovementActive,
+      });
       return;
     }
 
     this.chestManager?.cancelPendingChestOpen?.();
 
     if (payload?.enemy?.alive) {
+      if (keyboardMovementActive) {
+        if (!this.isEnemyInPlayerAttackRange(payload.enemy)) return;
+
+        this.createClickFeedback(payload.point ?? payload.enemy.model.position, {
+          color: ATTACK_CLICK_FEEDBACK_COLOR,
+        });
+        this.player.setAttackTarget(payload.enemy, [], {
+          autoPursuit: false,
+        });
+        return;
+      }
+
       const navigation = this.getEnemyAttackNavigation(payload.enemy);
       if (!navigation) return;
 
@@ -1082,6 +1100,7 @@ export class GameScene {
     }
 
     if (!payload?.point) return;
+    if (keyboardMovementActive) return;
 
     const navigation = this.getClickNavigation(payload.point);
     if (!navigation) return;
@@ -1090,16 +1109,53 @@ export class GameScene {
     this.player.setPath(navigation.path);
   }
 
+  handleKeyboardMovementStart() {
+    if (this.isPlayerControlLocked()) return;
+
+    this.player?.cancelAttackAutoPursuit?.();
+    this.player?.stopMovement?.();
+  }
+
   getChestFromInteractable(interactable) {
     if (interactable?.type !== "chest") return null;
 
     return interactable.chest ?? null;
   }
 
-  handleChestClick(chest, payload = {}) {
+  isEnemyInPlayerAttackRange(enemy) {
+    if (!enemy?.model?.position || !this.player?.model?.position) return false;
+
+    return flatDistance(
+      this.player.model.position,
+      enemy.model.position
+    ) <= this.player.attackRange;
+  }
+
+  isChestInPlayerInteractionRange(chest) {
+    if (!chest?.model?.position || !this.player?.model?.position) return false;
+
+    const triggerRange = chest.triggerRange ?? 1.25;
+
+    return flatDistance(
+      this.player.model.position,
+      chest.model.position
+    ) <= triggerRange;
+  }
+
+  handleChestClick(chest, payload = {}, options = {}) {
     this.chestManager?.cancelPendingChestOpen?.();
 
     if (!this.chestManager?.isChestInteractable?.(chest)) return;
+
+    if (options.keyboardMovementActive) {
+      if (!this.isChestInPlayerInteractionRange(chest)) return;
+
+      this.chestManager.requestChestOpen(chest);
+      this.createClickFeedback(payload.point ?? chest.model.position, {
+        color: INTERACTION_CLICK_FEEDBACK_COLOR,
+      });
+      return;
+    }
 
     const navigation = this.getChestInteractionNavigation(
       chest,
@@ -1581,6 +1637,11 @@ export class GameScene {
 
   updatePlayerAttackPursuit(delta) {
     const enemy = this.player?.attackTarget;
+
+    if (!this.player?.canAutoPursueAttackTarget?.()) {
+      this.playerAttackPathRefreshTimer = 0;
+      return;
+    }
 
     if (!enemy?.alive || this.player.hp <= 0) {
       this.playerAttackPathRefreshTimer = 0;
@@ -2106,9 +2167,14 @@ export class GameScene {
     if (this.shopManager) this.shopManager.update(delta);
     if (this.vfx) this.vfx.update(delta, this.camera);
 
+    const keyboardMovementInput = this.getKeyboardMovementInput();
     const previousPlayerPosition = this.player.model.position.clone();
-    this.updatePlayerAttackPursuit(delta);
-    this.player.update(delta);
+
+    if (!keyboardMovementInput) {
+      this.updatePlayerAttackPursuit(delta);
+    }
+
+    this.player.update(delta, keyboardMovementInput);
     this.applyPlayerWorldCollision(previousPlayerPosition);
     this.applyPlayerEnemyCollision(previousPlayerPosition);
     this.roomVisibilityManager.update(this.player.model.position, delta);
@@ -2132,6 +2198,19 @@ export class GameScene {
     this.renderer.render(this.scene, this.camera);
 
     requestAnimationFrame(() => this.animate());
+  }
+
+  getKeyboardMovementInput() {
+    if (this.isPlayerControlLocked()) return null;
+
+    const movementInput = this.inputController?.getMovementInput?.();
+    if (!movementInput || movementInput.lengthSq() <= 0.000001) return null;
+
+    return movementInput;
+  }
+
+  isKeyboardMovementActive() {
+    return Boolean(this.getKeyboardMovementInput());
   }
 
   useInventorySlot(slotIndex) {

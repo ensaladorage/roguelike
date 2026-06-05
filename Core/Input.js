@@ -14,6 +14,17 @@ const AIM_ASSIST_SMOOTHING = 0.26;
 const AIM_ASSIST_POINTER_SNAP_DELTA_PX = 72;
 const AIM_ASSIST_TARGET_HEIGHT_RATIO = 0.56;
 const AIM_ASSIST_GROUND_Y = 0;
+const KEYBOARD_MOVEMENT_DIRECTIONS = {
+  KeyW: { screenX: 0, screenY: 1 },
+  KeyA: { screenX: -1, screenY: 0 },
+  KeyS: { screenX: 0, screenY: -1 },
+  KeyD: { screenX: 1, screenY: 0 },
+};
+const KEYBOARD_INPUT_TAGS_TO_IGNORE = new Set([
+  "INPUT",
+  "SELECT",
+  "TEXTAREA",
+]);
 
 export function setupInput(
   renderer,
@@ -21,11 +32,13 @@ export function setupInput(
   floor,
   getEnemyTargets,
   getInteractableTargets,
-  onClick
+  onClick,
+  options = {}
 ) {
   const raycaster = new THREE.Raycaster();
   const pointer = new THREE.Vector2();
   const cursorOverlay = createCursorOverlay(renderer.domElement);
+  const keyboardMovement = createKeyboardMovementState();
   const attackFeedback = {
     attackState: "ready",
     cooldownProgress: 1,
@@ -149,12 +162,137 @@ export function setupInput(
     );
   };
 
+  const handleKeyDown = (event) => {
+    if (!isKeyboardMovementEvent(event)) return;
+    if (shouldIgnoreKeyboardInput(event)) return;
+
+    const wasMoving = hasKeyboardMovementInput(keyboardMovement);
+    keyboardMovement.pressedCodes.add(event.code);
+    event.preventDefault();
+
+    if (!wasMoving && hasKeyboardMovementInput(keyboardMovement)) {
+      options.onKeyboardMovementStart?.();
+    }
+  };
+
+  const handleKeyUp = (event) => {
+    if (!isKeyboardMovementEvent(event)) return;
+
+    keyboardMovement.pressedCodes.delete(event.code);
+    event.preventDefault();
+  };
+
+  window.addEventListener("keydown", handleKeyDown);
+  window.addEventListener("keyup", handleKeyUp);
+  window.addEventListener("blur", () => keyboardMovement.pressedCodes.clear());
+
   return {
     updateCursor,
     setAttackFeedback(feedback = {}) {
       Object.assign(attackFeedback, feedback);
     },
+    getMovementInput() {
+      return getKeyboardMovementInput(keyboardMovement, camera);
+    },
   };
+}
+
+function createKeyboardMovementState() {
+  return {
+    pressedCodes: new Set(),
+  };
+}
+
+function isKeyboardMovementEvent(event) {
+  return Object.prototype.hasOwnProperty.call(
+    KEYBOARD_MOVEMENT_DIRECTIONS,
+    event.code
+  );
+}
+
+function shouldIgnoreKeyboardInput(event) {
+  if (event.altKey || event.ctrlKey || event.metaKey) return true;
+
+  const target = event.target;
+  if (!target) return false;
+  if (target.isContentEditable) return true;
+
+  return KEYBOARD_INPUT_TAGS_TO_IGNORE.has(target.tagName);
+}
+
+function hasKeyboardMovementInput(keyboardMovement) {
+  return getKeyboardScreenMovementInput(keyboardMovement).lengthSq() > 0;
+}
+
+function getKeyboardMovementInput(keyboardMovement, camera) {
+  const screenDirection = getKeyboardScreenMovementInput(keyboardMovement);
+  if (screenDirection.lengthSq() <= 0.000001) return new THREE.Vector3();
+
+  const screenAxes = getCameraScreenGroundAxes(camera);
+  const worldDirection = new THREE.Vector3()
+    .addScaledVector(screenAxes.right, screenDirection.x)
+    .addScaledVector(screenAxes.up, screenDirection.y);
+
+  if (worldDirection.lengthSq() > 1) {
+    worldDirection.normalize();
+  }
+
+  return worldDirection;
+}
+
+function getKeyboardScreenMovementInput(keyboardMovement) {
+  const direction = new THREE.Vector2();
+
+  for (const code of keyboardMovement.pressedCodes) {
+    const keyDirection = KEYBOARD_MOVEMENT_DIRECTIONS[code];
+    if (!keyDirection) continue;
+
+    direction.x += keyDirection.screenX;
+    direction.y += keyDirection.screenY;
+  }
+
+  if (direction.lengthSq() > 1) {
+    direction.normalize();
+  }
+
+  return direction;
+}
+
+function getCameraScreenGroundAxes(camera) {
+  camera.updateMatrixWorld();
+
+  const right = getGroundDirectionFromCameraColumn(camera, 0);
+  let up = getGroundDirectionFromCameraColumn(camera, 1);
+
+  if (up.lengthSq() <= 0.000001) {
+    camera.getWorldDirection(up);
+    up.y = 0;
+    up.multiplyScalar(-1);
+  }
+
+  if (up.lengthSq() <= 0.000001) {
+    up.set(0, 0, -1);
+  } else {
+    up.normalize();
+  }
+
+  return {
+    right: right.lengthSq() > 0.000001
+      ? right.normalize()
+      : new THREE.Vector3(1, 0, 0),
+    up,
+  };
+}
+
+function getGroundDirectionFromCameraColumn(camera, columnIndex) {
+  const elements = camera.matrixWorld.elements;
+  const offset = columnIndex * 4;
+
+  return new THREE.Vector3(
+    elements[offset],
+    0,
+    elements[offset + 2]
+  );
 }
 
 function createCursorOverlay(canvas) {

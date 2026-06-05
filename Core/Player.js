@@ -19,6 +19,8 @@ const OCCLUSION_RING_Y = 0.06;
 const OCCLUSION_SAMPLE_HEIGHTS = [0.12, 0.42, 0.75];
 const OCCLUSION_MIN_COVERED_SAMPLES = 1;
 const MIN_ATTACK_SPEED = 0.1;
+const DIRECT_MOVEMENT_ACCELERATION = 100;
+const DIRECT_MOVEMENT_ROTATION_RESPONSE = 45;
 export const PLAYER_COMBAT_CONFIG = {
   attackWindupDuration: 0.18,
 };
@@ -58,8 +60,10 @@ export class Player {
 
     this.attackTarget = null;
     this.currentEnemy = null;
+    this.attackAutoPursuitEnabled = false;
 
     this.events = [];
+    this.directMovementVelocity = new THREE.Vector3();
 
     // 🔥 IMPORTANTE
     // Guardamos la rotación visual aparte para evitar
@@ -144,11 +148,13 @@ export class Player {
     this.path = [];
     this.attackTarget = null;
     this.currentEnemy = null;
+    this.attackAutoPursuitEnabled = false;
     this.state = PLAYER_STATES.IDLE;
     this.attackTimer = this.attackCooldown;
     this.attackState = PLAYER_ATTACK_STATES.READY;
     this.attackWindupTimer = 0;
     this.events = [];
+    this.stopDirectMovement();
     this.visualRotation = 0;
     this.model.rotation.y = 0;
     this.model.visible = true;
@@ -240,6 +246,7 @@ export class Player {
     if (this.state === PLAYER_STATES.DEAD) return;
 
     this.clearAttackTarget();
+    this.stopDirectMovement();
     this.path = [];
 
     this.target = position.clone();
@@ -257,6 +264,7 @@ export class Player {
   }
 
   applyPath(points) {
+    this.stopDirectMovement();
     this.path = points.map((point) => {
       const waypoint = point.clone();
       waypoint.y = this.groundY;
@@ -271,15 +279,17 @@ export class Player {
     this.enterCombat(enemy);
   }
 
-  setAttackTarget(enemy, path = []) {
+  setAttackTarget(enemy, path = [], options = {}) {
     if (this.hp <= 0) return;
     if (this.state === PLAYER_STATES.DEAD) return;
     if (!enemy || !enemy.alive) return;
 
     const previousTarget = this.attackTarget;
+    const autoPursuit = options.autoPursuit ?? true;
 
     this.attackTarget = enemy;
     this.currentEnemy = enemy;
+    this.attackAutoPursuitEnabled = autoPursuit;
 
     if (path.length > 0) {
       this.applyPath(path);
@@ -310,6 +320,7 @@ export class Player {
 
     this.attackTarget = null;
     this.currentEnemy = null;
+    this.attackAutoPursuitEnabled = false;
     this.cancelAttackWindup(enemy);
 
     if (!wasAttacking) return;
@@ -414,12 +425,26 @@ export class Player {
   stopMovement() {
     if (this.state === PLAYER_STATES.DEAD) return;
 
+    this.stopDirectMovement();
     this.target = null;
     this.path = [];
 
     this.state = this.attackTarget
       ? PLAYER_STATES.COMBAT
       : PLAYER_STATES.IDLE;
+  }
+
+  cancelAttackAutoPursuit() {
+    if (!this.attackTarget) return;
+
+    this.attackAutoPursuitEnabled = false;
+    this.target = null;
+    this.path = [];
+    this.cancelAttackWindup(this.attackTarget);
+  }
+
+  canAutoPursueAttackTarget() {
+    return Boolean(this.attackTarget && this.attackAutoPursuitEnabled);
   }
 
   emit(event) {
@@ -433,12 +458,23 @@ export class Player {
     return events;
   }
 
-  update(delta) {
+  update(delta, movementInput = null) {
     if (
       this.state !== PLAYER_STATES.DEAD &&
       this.attackState === PLAYER_ATTACK_STATES.COOLDOWN
     ) {
       this.updateAttackCooldown(delta);
+    }
+
+    if (this.hasDirectMovementInput(movementInput)) {
+      this.updateDirectMovement(delta, movementInput);
+      return;
+    }
+
+    this.stopDirectMovement();
+
+    if (this.attackTarget && !this.attackAutoPursuitEnabled) {
+      this.clearAttackTarget();
     }
 
     switch (this.state) {
@@ -460,6 +496,99 @@ export class Player {
         this.updateCombat(delta);
         break;
     }
+  }
+
+  hasDirectMovementInput(movementInput) {
+    return Boolean(
+      this.state !== PLAYER_STATES.DEAD &&
+      movementInput &&
+      typeof movementInput.lengthSq === "function" &&
+      movementInput.lengthSq() > 0.000001
+    );
+  }
+
+  updateDirectMovement(delta, movementInput) {
+    const direction = movementInput.clone();
+    direction.y = 0;
+
+    if (direction.lengthSq() <= 0.000001) return;
+    if (direction.lengthSq() > 1) {
+      direction.normalize();
+    }
+
+    this.target = null;
+    this.path = [];
+    this.state = PLAYER_STATES.MOVING;
+
+    if (this.attackTarget) {
+      this.attackAutoPursuitEnabled = false;
+    }
+
+    const targetVelocity = direction.multiplyScalar(this.speed);
+    const velocityDelta = targetVelocity.clone().sub(this.directMovementVelocity);
+    const maxVelocityDelta = DIRECT_MOVEMENT_ACCELERATION * delta;
+
+    if (velocityDelta.length() > maxVelocityDelta) {
+      velocityDelta.setLength(maxVelocityDelta);
+    }
+
+    this.directMovementVelocity.add(velocityDelta);
+
+    this.model.position.addScaledVector(
+      this.directMovementVelocity,
+      delta
+    );
+
+    if (this.directMovementVelocity.lengthSq() > 0.000001) {
+      const targetRotation = Math.atan2(
+        this.directMovementVelocity.x,
+        this.directMovementVelocity.z
+      );
+
+      this.visualRotation = this.dampAngle(
+        this.visualRotation,
+        targetRotation,
+        DIRECT_MOVEMENT_ROTATION_RESPONSE,
+        delta
+      );
+
+      this.model.rotation.y = this.visualRotation;
+    }
+
+    this.updateCombatWhileMoving(delta);
+  }
+
+  stopDirectMovement() {
+    this.directMovementVelocity.set(0, 0, 0);
+  }
+
+  dampAngle(current, target, response, delta) {
+    const difference = Math.atan2(
+      Math.sin(target - current),
+      Math.cos(target - current)
+    );
+    const blend = 1 - Math.exp(-response * delta);
+
+    return current + difference * blend;
+  }
+
+  updateCombatWhileMoving(delta) {
+    if (!this.attackTarget || !this.attackTarget.alive) {
+      this.clearAttackTarget();
+      return;
+    }
+
+    const enemyPos = this.attackTarget.model.position;
+    const dx = enemyPos.x - this.model.position.x;
+    const dz = enemyPos.z - this.model.position.z;
+    const distance = Math.sqrt(dx * dx + dz * dz);
+
+    if (distance > this.attackRange) {
+      this.cancelAttackWindup(this.attackTarget);
+      return;
+    }
+
+    this.updateAttackState(delta);
   }
 
   updateMoving(delta) {

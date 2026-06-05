@@ -66,7 +66,7 @@ export const PROP_PLACEMENT_RULES = {
     // Huella usada solo para separar colocaciones; no cambia tamano visual ni colision.
     placementFootprint: { w: 0.55, d: 0.55 },
     // Huella usada para validar navegacion; debe parecerse a la colision real del barril.
-    collisionFootprint: { w: 0.7, d: 0.7 },
+    collisionFootprint: { w: 0.4, d: 0.4 },
     // Offset extra para scatter; los clusters usan clusterScatterRadius para separacion visual.
     positionJitter: 0.28,
     scaleVariation: { min: 0.94, max: 1.06 },
