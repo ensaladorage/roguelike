@@ -88,6 +88,13 @@ export const MODEL_DEFINITIONS = {
       textureId: "charactersColormap",
       scale: 1.3,
     },
+    enemy_boss_warden_01: {
+      id: "enemy_boss_warden_01",
+      category: MODEL_CATEGORIES.ENEMY,
+      assetPath: "Assets/Models/character-orc.glb",
+      textureId: "charactersColormap",
+      scale: 2.35,
+    },
     enemy_vampire_01: {
       id: "enemy_vampire_01",
       category: MODEL_CATEGORIES.ENEMY,

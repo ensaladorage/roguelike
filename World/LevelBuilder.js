@@ -5,6 +5,7 @@ import {
 } from "../Game/Chest.js";
 import {
   ENEMY_DIFFICULTY,
+  getEnemyDefinition,
   pickEnemyDefinitionForDifficulty,
 } from "../CharacterData/enemyDefinitions.js";
 import {
@@ -926,20 +927,44 @@ export class LevelBuilder {
       room.enemyDifficulty ??
       levelDefinition.enemyDifficulty ??
       ENEMY_DIFFICULTY.EASY;
-    const enemyDefinition = room.type === "combat"
-      ? pickEnemyDefinitionForDifficulty(
-        difficulty,
-        this.createSeededRandomValue([
-          buildOptions.runSeed ?? levelDefinition.decorationFill?.seed ?? "level",
-          levelDefinition.name ?? "unnamed-level",
-          room.id,
-          spawnIndex,
-          spawn.x,
-          spawn.z,
-        ].join(":"))
-      )
+    const explicitEnemyDefinition = spawn.enemyTypeId
+      ? getEnemyDefinition(spawn.enemyTypeId)
       : null;
+    const enemyDefinition = explicitEnemyDefinition ?? (
+      room.type === "combat"
+        ? pickEnemyDefinitionForDifficulty(
+          difficulty,
+          this.createSeededRandomValue([
+            buildOptions.runSeed ?? levelDefinition.decorationFill?.seed ?? "level",
+            levelDefinition.name ?? "unnamed-level",
+            room.id,
+            spawnIndex,
+            spawn.x,
+            spawn.z,
+          ].join(":"))
+        )
+        : null
+    );
     const chaseConfig = enemyDefinition?.chase ?? spawn.chase;
+    const difficultyScale = Math.max(
+      0,
+      Number(buildOptions.difficultyScale ?? levelDefinition.difficultyScale ?? 1) || 1
+    );
+    const maxHp = this.scaleEnemyStat(
+      enemyDefinition?.maxHp ?? spawn.maxHp,
+      difficultyScale,
+      "ceil"
+    );
+    const hp = this.scaleEnemyStat(
+      enemyDefinition?.hp ?? spawn.hp,
+      difficultyScale,
+      "ceil"
+    );
+    const attackDamage = this.scaleEnemyStat(
+      enemyDefinition?.attackDamage ?? spawn.attackDamage,
+      difficultyScale,
+      "round"
+    );
 
     return {
       ...spawn,
@@ -949,14 +974,16 @@ export class LevelBuilder {
       enemyName: enemyDefinition?.name ?? spawn.enemyName,
       enemyDifficulty: enemyDefinition?.difficulty ?? spawn.enemyDifficulty,
       modelId: enemyDefinition?.modelId ?? spawn.modelId,
-      maxHp: enemyDefinition?.maxHp ?? spawn.maxHp,
-      hp: enemyDefinition?.hp ?? spawn.hp,
+      isBoss: enemyDefinition?.isBoss ?? spawn.isBoss,
+      maxHp,
+      hp,
       speed: enemyDefinition?.speed ?? spawn.speed,
-      attackDamage: enemyDefinition?.attackDamage ?? spawn.attackDamage,
+      attackDamage,
       attackRange: enemyDefinition?.attackRange ?? spawn.attackRange,
       attackCooldown: enemyDefinition?.attackCooldown ?? spawn.attackCooldown,
       collisionRadius: enemyDefinition?.collisionRadius ?? spawn.collisionRadius,
       chase: chaseConfig ? { ...chaseConfig } : undefined,
+      boss: enemyDefinition?.boss ?? spawn.boss,
       patrolStopRange: enemyDefinition?.patrolStopRange ?? spawn.patrolStopRange,
       patrolMoveDuration:
         enemyDefinition?.patrolMoveDuration ?? spawn.patrolMoveDuration,
@@ -968,6 +995,16 @@ export class LevelBuilder {
         : room.walkableAreas
       ).map(cloneArea),
     };
+  }
+
+  scaleEnemyStat(value, difficultyScale = 1, rounding = "round") {
+    if (value === undefined || value === null) return value;
+
+    const scaled = value * difficultyScale;
+
+    if (rounding === "ceil") return Math.ceil(scaled);
+    if (rounding === "floor") return Math.floor(scaled);
+    return Math.round(scaled);
   }
 
   resolveRoomChestSpawns({

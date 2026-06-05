@@ -166,6 +166,9 @@ function tryCreateProceduralLevelOne(rng, options, attempt) {
   const floorIndex = getFloorIndex(options);
   const floorSeed = options.floorSeed ?? `${options.runSeed ?? "run"}:floor:${floorIndex}`;
   const difficultyTier = options.difficultyTier ?? ENEMY_DIFFICULTY.EASY;
+  const cycleIndex = options.cycleIndex ?? 0;
+  const cycleFloorIndex = options.cycleFloorIndex ?? floorIndex;
+  const difficultyScale = options.difficultyScale ?? 1;
 
   return {
     kind: "assembled",
@@ -173,6 +176,9 @@ function tryCreateProceduralLevelOne(rng, options, attempt) {
     name: `Procedural Floor ${floorIndex} (${roomSummary})`,
     connectorStyleId: "openCorridor",
     enemyDifficulty: difficultyTier,
+    cycleIndex,
+    cycleFloorIndex,
+    difficultyScale,
     roomTagFilters: options.roomTagFilters ?? options.roomTags ?? null,
     decorationFill: PROCEDURAL_DECORATION_FILL,
     playerStart,
@@ -183,6 +189,9 @@ function tryCreateProceduralLevelOne(rng, options, attempt) {
       floorSeed,
       floorType: options.floorType ?? "normal",
       difficultyTier,
+      cycleIndex,
+      cycleFloorIndex,
+      difficultyScale,
       attempt,
       roomCount: rooms.length,
       treasureCount,

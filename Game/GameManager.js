@@ -2,6 +2,7 @@ import { GAME_CONFIG, GAME_MODES } from "./GameConfig.js";
 import { ROOM_TESTER_LEVELS, getRoomTesterLevel } from "./RoomTester.js";
 import { createProceduralFloor } from "./ProceduralLevelFactory.js";
 import { createShopFloor } from "./ShopFloorFactory.js";
+import { createBossFloor } from "./BossFloorFactory.js";
 import { RUN_FLOOR_TYPES, RunState, createRunSeed } from "./RunState.js";
 import { ENEMY_DIFFICULTY } from "../CharacterData/enemyDefinitions.js";
 
@@ -145,6 +146,9 @@ export class GameManager {
       floorSeed: this.createFloorSeed(nextFloorIndex),
       floorType: floorPlan.floorType,
       difficultyTier: floorPlan.difficultyTier,
+      cycleIndex: floorPlan.cycleIndex,
+      cycleFloorIndex: floorPlan.cycleFloorIndex,
+      difficultyScale: floorPlan.difficultyScale,
     });
 
     if (!floorPlan.implemented) {
@@ -179,6 +183,9 @@ export class GameManager {
       floorSeed: `tester:${levelIndex}:${this.runState.runSeed}`,
       floorType: RUN_FLOOR_TYPES.TESTER,
       difficultyTier: ENEMY_DIFFICULTY.EASY,
+      cycleIndex: 0,
+      cycleFloorIndex: levelIndex + 1,
+      difficultyScale: 1,
     });
   }
 
@@ -193,6 +200,9 @@ export class GameManager {
       floorSeed: this.createFloorSeed(floorIndex),
       floorType: floorPlan.floorType,
       difficultyTier: floorPlan.difficultyTier,
+      cycleIndex: floorPlan.cycleIndex,
+      cycleFloorIndex: floorPlan.cycleFloorIndex,
+      difficultyScale: floorPlan.difficultyScale,
     });
   }
 
@@ -230,19 +240,7 @@ export class GameManager {
       };
     }
 
-    const definition = floorPlan.floorType === RUN_FLOOR_TYPES.SHOP
-      ? createShopFloor({
-        runSeed: snapshot.runSeed,
-        floorSeed: snapshot.currentFloorSeed,
-        floorIndex: snapshot.currentFloorIndex,
-      })
-      : createProceduralFloor({
-        runSeed: snapshot.runSeed,
-        floorSeed: snapshot.currentFloorSeed,
-        floorIndex: snapshot.currentFloorIndex,
-        floorType: snapshot.floorType,
-        difficultyTier: snapshot.difficultyTier,
-      });
+    const definition = this.createRunFloorDefinition(floorPlan, snapshot);
 
     return {
       ...snapshot,
@@ -251,36 +249,78 @@ export class GameManager {
     };
   }
 
+  createRunFloorDefinition(floorPlan, snapshot) {
+    if (floorPlan.floorType === RUN_FLOOR_TYPES.SHOP) {
+      return createShopFloor({
+        runSeed: snapshot.runSeed,
+        floorSeed: snapshot.currentFloorSeed,
+        floorIndex: snapshot.currentFloorIndex,
+      });
+    }
+
+    if (floorPlan.floorType === RUN_FLOOR_TYPES.BOSS) {
+      return createBossFloor({
+        runSeed: snapshot.runSeed,
+        floorSeed: snapshot.currentFloorSeed,
+        floorIndex: snapshot.currentFloorIndex,
+        cycleIndex: snapshot.cycleIndex,
+        difficultyScale: snapshot.difficultyScale,
+      });
+    }
+
+    return createProceduralFloor({
+      runSeed: snapshot.runSeed,
+      floorSeed: snapshot.currentFloorSeed,
+      floorIndex: snapshot.currentFloorIndex,
+      floorType: snapshot.floorType,
+      difficultyTier: snapshot.difficultyTier,
+      cycleIndex: snapshot.cycleIndex,
+      cycleFloorIndex: snapshot.cycleFloorIndex,
+      difficultyScale: snapshot.difficultyScale,
+    });
+  }
+
   getRunFloorPlan(floorIndex) {
     const normalFloorCount = this.config.run?.normalFloorCount ?? 10;
     const shopFloorIndex = this.config.run?.shopFloorIndex ?? normalFloorCount + 1;
     const bossFloorIndex = this.config.run?.bossFloorIndex ?? shopFloorIndex + 1;
+    const cycleLength = bossFloorIndex;
+    const cycleIndex = Math.floor((floorIndex - 1) / cycleLength);
+    const cycleFloorIndex = ((floorIndex - 1) % cycleLength) + 1;
+    const difficultyScale = 1 + cycleIndex * 0.15;
+    const basePlan = {
+      cycleIndex,
+      cycleFloorIndex,
+      difficultyScale,
+      implemented: true,
+    };
 
-    if (floorIndex <= normalFloorCount) {
+    if (cycleFloorIndex <= normalFloorCount) {
       return {
+        ...basePlan,
         floorType: RUN_FLOOR_TYPES.NORMAL,
-        difficultyTier: this.getDifficultyTierForFloor(floorIndex),
-        implemented: true,
+        difficultyTier: this.getDifficultyTierForFloor(cycleFloorIndex),
       };
     }
 
-    if (floorIndex === shopFloorIndex) {
+    if (cycleFloorIndex === shopFloorIndex) {
       return {
+        ...basePlan,
         floorType: RUN_FLOOR_TYPES.SHOP,
         difficultyTier: ENEMY_DIFFICULTY.EASY,
-        implemented: true,
       };
     }
 
-    if (floorIndex === bossFloorIndex) {
+    if (cycleFloorIndex === bossFloorIndex) {
       return {
-        floorType: RUN_FLOOR_TYPES.BOSS_FUTURE,
+        ...basePlan,
+        floorType: RUN_FLOOR_TYPES.BOSS,
         difficultyTier: ENEMY_DIFFICULTY.HARD,
-        implemented: false,
       };
     }
 
     return {
+      ...basePlan,
       floorType: RUN_FLOOR_TYPES.COMPLETE,
       difficultyTier: ENEMY_DIFFICULTY.HARD,
       implemented: false,

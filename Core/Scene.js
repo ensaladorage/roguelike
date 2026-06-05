@@ -51,6 +51,8 @@ const PAUSE_LOCK_REASON = "pauseMenu";
 const MOVEMENT_CLICK_FEEDBACK_COLOR = 0x63d982;
 const ATTACK_CLICK_FEEDBACK_COLOR = 0xff4058;
 const INTERACTION_CLICK_FEEDBACK_COLOR = 0xffd84a;
+const BOSS_ATTACK_FEEDBACK_RADIUS_SCALE = 0.82;
+const BOSS_ATTACK_FEEDBACK_MIN_RADIUS = 0.48;
 const FRONT_DIRECTION_BY_SIDE = {
   north: { x: 0, z: 1 },
   south: { x: 0, z: -1 },
@@ -100,6 +102,7 @@ export class GameScene {
     this.floorSize = 48;
     this.levelIndex = 0;
     this.currentFloorLoad = null;
+    this.currentLevel = null;
     this.levelGroup = new THREE.Group();
     this.scene.add(this.levelGroup);
 
@@ -119,6 +122,8 @@ export class GameScene {
     this.playerAttackPathRefreshTimer = 0;
     this.inputController = null;
     this.isPaused = false;
+    this.bossExitBlockedNotified = false;
+    this.bossHudDiscovered = false;
 
     this.hud = new HUD();
     this.debugCheatState = {
@@ -448,6 +453,9 @@ export class GameScene {
       floorSeed: floorLoad.currentFloorSeed,
       floorIndex: floorLoad.currentFloorIndex,
       floorType: floorLoad.floorType,
+      cycleIndex: floorLoad.cycleIndex,
+      cycleFloorIndex: floorLoad.cycleFloorIndex,
+      difficultyScale: floorLoad.difficultyScale,
       mode: floorLoad.mode,
     });
     const levelBuiltAt = this.nowMs();
@@ -456,6 +464,7 @@ export class GameScene {
     this.currentFloorLoad = floorLoad;
     this.levelIndex = floorLoad.levelIndex ?? floorLoad.currentFloorIndex ?? 0;
     this.clearCurrentFloorState();
+    this.currentLevel = level;
 
     if (options.resetProgress) {
       this.resetGameplayProgress();
@@ -524,6 +533,9 @@ export class GameScene {
       floorSeed: floorLoad.currentFloorSeed,
       floorType: floorLoad.floorType,
       difficultyTier: floorLoad.difficultyTier,
+      cycleIndex: floorLoad.cycleIndex,
+      cycleFloorIndex: floorLoad.cycleFloorIndex,
+      difficultyScale: floorLoad.difficultyScale,
       status: floorLoad.status,
       procedural: level.procedural ?? null,
       navigation: {
@@ -598,9 +610,13 @@ export class GameScene {
     if (this.itemDropManager) this.itemDropManager.clear();
     if (this.shopManager) this.shopManager.clearFloor();
     if (this.roomVisibilityManager) this.roomVisibilityManager.clear();
+    this.hud?.hideBoss?.();
     this.playerControlLocks.clear();
+    this.bossExitBlockedNotified = false;
+    this.bossHudDiscovered = false;
 
     this.levelGroup.clear();
+    this.currentLevel = null;
     this.enemy = null;
     this.enemies = [];
     this.chests = [];
@@ -656,6 +672,9 @@ export class GameScene {
         floorIndex: this.currentFloorLoad?.currentFloorIndex ?? null,
         floorSeed: this.currentFloorLoad?.currentFloorSeed ?? null,
         floorType: this.currentFloorLoad?.floorType ?? null,
+        cycleIndex: this.currentFloorLoad?.cycleIndex ?? null,
+        cycleFloorIndex: this.currentFloorLoad?.cycleFloorIndex ?? null,
+        difficultyScale: this.currentFloorLoad?.difficultyScale ?? null,
       },
       shop: this.shopManager?.createProgressSnapshot?.() ?? null,
     };
@@ -690,7 +709,10 @@ export class GameScene {
     this.player?.resetForNewRun?.();
     this.inventory?.reset?.();
     this.shopManager?.clear?.();
+    this.hud?.hideBoss?.();
     this.playerControlLocks.clear();
+    this.bossExitBlockedNotified = false;
+    this.bossHudDiscovered = false;
     this.refreshDebugCheatBaseStats();
     this.hud?.clearLog?.();
     this.syncDebugCheatEffects();
@@ -975,15 +997,37 @@ export class GameScene {
   addLevelEnemies(level) {
     this.enemies = (level.enemies ?? []).map((data) => this.createEnemy(data));
     this.enemy = this.enemies[0] ?? null;
+    this.syncBossHud();
   }
 
   spawnRuntimeEnemy(data) {
-    const enemy = this.createEnemy(data);
+    const enemy = this.createEnemy(this.applyRuntimeEnemyDifficultyScale(data));
 
     this.enemies.push(enemy);
     this.enemy = this.enemy ?? enemy;
+    this.syncBossHud();
 
     return enemy;
+  }
+
+  applyRuntimeEnemyDifficultyScale(data) {
+    const difficultyScale = this.currentFloorLoad?.difficultyScale ?? 1;
+
+    if (difficultyScale === 1 || data.difficultyScaleApplied) return data;
+
+    return {
+      ...data,
+      difficultyScaleApplied: true,
+      maxHp: data.maxHp === undefined
+        ? data.maxHp
+        : Math.ceil(data.maxHp * difficultyScale),
+      hp: data.hp === undefined
+        ? data.hp
+        : Math.ceil(data.hp * difficultyScale),
+      attackDamage: data.attackDamage === undefined
+        ? data.attackDamage
+        : Math.round(data.attackDamage * difficultyScale),
+    };
   }
 
   createEnemy(data) {
@@ -1018,6 +1062,7 @@ export class GameScene {
       enemyTypeId: data.enemyTypeId,
       enemyName: data.enemyName,
       enemyDifficulty: data.enemyDifficulty,
+      isBoss: data.isBoss,
       maxHp: data.maxHp,
       hp: data.hp,
       speed: data.speed,
@@ -1031,6 +1076,7 @@ export class GameScene {
       patrolPauseDurations: data.patrolPauseDurations,
       coinDrop: data.coinDrop,
       potionDrop: data.potionDrop,
+      boss: data.boss,
       patrolAreas: data.patrolAreas,
       navigation: this.createEnemyNavigation(),
     });
@@ -1040,6 +1086,61 @@ export class GameScene {
     enemyRoot.userData.enemy = enemy;
 
     return enemy;
+  }
+
+  getBossEnemies() {
+    return this.enemies.filter((enemy) => enemy?.isBoss);
+  }
+
+  getPrimaryBossEnemy() {
+    return this.getBossEnemies()[0] ?? null;
+  }
+
+  hasLivingBoss() {
+    return this.getBossEnemies().some((enemy) => enemy?.alive);
+  }
+
+  isBossFloor() {
+    return (
+      this.currentFloorLoad?.floorType === "boss" ||
+      this.currentLevel?.floorType === "boss"
+    );
+  }
+
+  isBossExitLocked() {
+    return this.isBossFloor() && this.hasLivingBoss();
+  }
+
+  syncBossHud() {
+    if (!this.hud?.updateBoss) return;
+
+    const boss = this.getPrimaryBossEnemy();
+    this.updateBossHudDiscovery();
+
+    if (!this.isBossFloor() || !boss || !this.bossHudDiscovered || this.player?.hp <= 0) {
+      this.hud.hideBoss?.();
+      return;
+    }
+
+    this.hud.updateBoss(boss);
+  }
+
+  updateBossHudDiscovery() {
+    if (this.bossHudDiscovered || !this.isBossFloor()) return;
+
+    const room = this.getCurrentVisibilityRoom();
+    if (room?.type !== "boss") return;
+
+    this.bossHudDiscovered = true;
+  }
+
+  getCurrentVisibilityRoom() {
+    const manager = this.roomVisibilityManager;
+    const roomId = manager?.currentRoomId;
+
+    if (!roomId || !manager?.rooms?.get) return null;
+
+    return manager.rooms.get(roomId) ?? null;
   }
 
   getEnemyClickTargets() {
@@ -1092,9 +1193,7 @@ export class GameScene {
         }
 
         this.cancelStoredActionIntents({ keepAttack: true });
-        this.createClickFeedback(payload.point ?? payload.enemy.model.position, {
-          color: ATTACK_CLICK_FEEDBACK_COLOR,
-        });
+        this.createEnemyAttackClickFeedback(payload.enemy, payload.point);
         this.player.setAttackTarget(payload.enemy, [], {
           autoPursuit: false,
         });
@@ -1108,9 +1207,7 @@ export class GameScene {
       }
 
       this.cancelStoredActionIntents({ keepAttack: true });
-      this.createClickFeedback(payload.point ?? navigation.target, {
-        color: ATTACK_CLICK_FEEDBACK_COLOR,
-      });
+      this.createEnemyAttackClickFeedback(payload.enemy, navigation.target);
       this.player.setAttackTarget(payload.enemy, navigation.path);
       return;
     }
@@ -1256,7 +1353,31 @@ export class GameScene {
     };
   }
 
+  createEnemyAttackClickFeedback(enemy, fallbackPosition = null) {
+    if (enemy?.isBoss && enemy.model?.position) {
+      const radius = Math.max(
+        BOSS_ATTACK_FEEDBACK_MIN_RADIUS,
+        (enemy.collisionRadius ?? ENEMY_COLLISION_RADIUS) *
+          BOSS_ATTACK_FEEDBACK_RADIUS_SCALE
+      );
+
+      this.createClickFeedback(enemy.model.position, {
+        color: ATTACK_CLICK_FEEDBACK_COLOR,
+        radius,
+      });
+      return;
+    }
+
+    this.createClickFeedback(fallbackPosition ?? enemy?.model?.position, {
+      color: ATTACK_CLICK_FEEDBACK_COLOR,
+    });
+  }
+
   createClickFeedback(position, options = {}) {
+    if (!position) return;
+
+    const radius = options.radius ?? 0.36;
+    const thickness = options.thickness ?? Math.max(0.045, radius * 0.16);
     const material = new THREE.MeshBasicMaterial({
       color: options.color ?? MOVEMENT_CLICK_FEEDBACK_COLOR,
       transparent: true,
@@ -1267,7 +1388,7 @@ export class GameScene {
     });
 
     const mesh = new THREE.Mesh(
-      new THREE.RingGeometry(0.32, 0.39, 48),
+      new THREE.RingGeometry(radius, radius + thickness, 48),
       material
     );
 
@@ -2374,6 +2495,7 @@ export class GameScene {
     ];
 
     this.handleGameEvents(events);
+    this.syncBossHud();
     this.chestManager.update(delta);
     this.checkLevelExitTrigger();
     this.updateClickEffects(delta);
@@ -2668,6 +2790,14 @@ export class GameScene {
 
     if (distance > 0.6) return;
 
+    if (this.isBossExitLocked()) {
+      if (!this.bossExitBlockedNotified) {
+        this.addLog("The stairs are sealed until The Hollow Warden falls.");
+        this.bossExitBlockedNotified = true;
+      }
+      return;
+    }
+
     this.levelExitTrigger.activated = true;
     console.log("levelExitTriggerReached", {
       from: this.currentFloorLoad?.currentFloorIndex ?? this.levelIndex,
@@ -2740,8 +2870,9 @@ export class GameScene {
           if (event.damage > 0) {
             const flashColor =
               event.source?.type === "poison" ? 0x9c61ff : 0xff4058;
-            this.flashModel(event.enemy.model, flashColor, 0.12);
+            this.playEnemyDamageFlash(event.enemy, flashColor);
           }
+          this.syncBossHud();
           break;
 
         case "playerDamaged":
@@ -2768,8 +2899,20 @@ export class GameScene {
           break;
 
         case "enemyDefeated":
-          this.addLog("Enemy defeated.");
+          if (event.enemy?.isBoss) {
+            this.addLog(`${event.enemy.enemyName} defeated. The stairs are open.`);
+            this.bossExitBlockedNotified = false;
+            this.syncBossHud();
+          } else {
+            this.addLog("Enemy defeated.");
+          }
           this.sfx.play("enemyDefeated");
+          break;
+
+        case "bossPhaseChanged":
+          this.addLog(`${event.enemy.enemyName} enters ${event.phaseName}.`);
+          this.flashModel(event.enemy.model, 0xff1f2f, 0.24);
+          this.syncBossHud();
           break;
 
         case "enemyStunned":
@@ -2848,11 +2991,25 @@ export class GameScene {
           break;
 
         case "playerDefeated":
+          this.hud?.hideBoss?.();
           this.flashModel(this.player.model, 0x7a1020, 0.6);
           this.updateHud();
           break;
       }
     }
+  }
+
+  playEnemyDamageFlash(enemy, color) {
+    if (!enemy?.model) return;
+
+    if (enemy.isBoss) {
+      this.vfx?.playModelFlash?.(enemy.model, color, 0.18, {
+        emissiveIntensity: 1.4,
+      });
+      return;
+    }
+
+    this.flashModel(enemy.model, color, 0.12);
   }
 
   flashModel(model, color, duration) {
@@ -2925,6 +3082,7 @@ export class GameScene {
     if (this.inventory) {
       this.hud.updateInventory(this.inventory);
     }
+    this.syncBossHud();
   }
 
   highlightItemStat(result) {

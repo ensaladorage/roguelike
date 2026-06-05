@@ -1,0 +1,103 @@
+export const BOSS_ROOM_TEMPLATES = [
+  {
+    id: "boss_room_square_01",
+    type: "boss",
+    name: "Boss Room Square 01",
+    tags: ["boss", "large", "square", "east_west", "open"],
+    dimensions: { w: 21, d: 21 },
+    floorModules: [
+      {
+        x: 0,
+        z: 0,
+        w: 21,
+        d: 21,
+        moduleId: "floor",
+      },
+    ],
+    walkableAreas: [
+      {
+        x: 0,
+        z: 0,
+        w: 21,
+        d: 21,
+      },
+    ],
+    wallModules: [
+      { x: -10, z: -10, w: 1, d: 1, corner: "northWest", rotationY: 0, moduleId: "wallCorner" },
+      { x: 10, z: -10, w: 1, d: 1, corner: "northEast", rotationY: Math.PI / 2, moduleId: "wallCorner" },
+      { x: 10, z: 10, w: 1, d: 1, corner: "southEast", rotationY: Math.PI, moduleId: "wallCorner" },
+      { x: -10, z: 10, w: 1, d: 1, corner: "southWest", rotationY: -Math.PI / 2, moduleId: "wallCorner" },
+      { x: 0, z: -10, w: 19, d: 1, side: "north", rotationY: 0, moduleId: "wallHalf" },
+      { x: 0, z: 10, w: 19, d: 1, side: "south", rotationY: Math.PI, moduleId: "wallHalf" },
+      { x: -10, z: -5.5, w: 1, d: 8, side: "west", rotationY: Math.PI / 2, moduleId: "wallHalf" },
+      { x: -10, z: 5.5, w: 1, d: 8, side: "west", rotationY: Math.PI / 2, moduleId: "wallHalf" },
+      { x: 10, z: -5.5, w: 1, d: 8, side: "east", rotationY: -Math.PI / 2, moduleId: "wallHalf" },
+      { x: 10, z: 5.5, w: 1, d: 8, side: "east", rotationY: -Math.PI / 2, moduleId: "wallHalf" },
+    ],
+    doorwayModules: [
+      { x: -10, z: 0, w: 1, d: 3, side: "west", rotationY: Math.PI / 2, moduleId: "wallHalf" },
+      { x: 10, z: 0, w: 1, d: 3, side: "east", rotationY: -Math.PI / 2, moduleId: "wallHalf" },
+    ],
+    doorOpenings: [
+      { side: "west", offset: 0, width: 1 },
+      { side: "east", offset: 0, width: 1 },
+    ],
+    enemySpawns: [
+      {
+        x: 0,
+        z: 0,
+        rotationY: Math.PI,
+        enemyTypeId: "boss_hollow_warden_01",
+        enemyName: "The Hollow Warden",
+        enemyDifficulty: "hard",
+        modelId: "enemy_boss_warden_01",
+        isBoss: true,
+        maxHp: 520,
+        speed: 0.68,
+        attackDamage: 28,
+        attackRange: 2.1,
+        attackCooldown: 1.65,
+        collisionRadius: 0.72,
+        patrolStopRange: 0.14,
+        chase: {
+          aggroRange: 10,
+          leashDistance: 24,
+          leashTime: 8,
+        },
+        boss: {
+          phaseTwoHpRatio: 0.5,
+          phaseTwo: {
+            name: "Rage",
+            speedMultiplier: 1.22,
+            attackDamageMultiplier: 1.18,
+            attackCooldownMultiplier: 0.82,
+          },
+        },
+        coinDrop: {
+          totalValueMin: 0,
+          totalValueMax: 0,
+        },
+        potionDrop: {
+          chancePercent: 0,
+        },
+        patrol: [
+          { x: 0, z: 0 },
+          { x: -3.5, z: -2.5 },
+          { x: 3.5, z: 2.5 },
+          { x: 0, z: 4 },
+        ],
+      },
+    ],
+    chestSpawns: [],
+    setDressingModules: [
+      { x: -8, z: -8, w: 1, d: 1, moduleId: "rocks", collision: true, collisionScale: 0.55, scaleMultiplier: 1.4 },
+      { x: 8, z: -8, w: 1, d: 1, moduleId: "rocks", collision: true, collisionScale: 0.55, scaleMultiplier: 1.4 },
+      { x: -8, z: 8, w: 1, d: 1, moduleId: "rocks", collision: true, collisionScale: 0.55, scaleMultiplier: 1.2 },
+      { x: 8, z: 8, w: 1, d: 1, moduleId: "rocks", collision: true, collisionScale: 0.55, scaleMultiplier: 1.2 },
+      { x: 0, z: -9.45, w: 1, d: 1, side: "north", rotationY: Math.PI, moduleId: "banner" },
+      { x: 0, z: 9.45, w: 1, d: 1, side: "south", rotationY: 0, moduleId: "banner" },
+    ],
+    obstacleModules: [],
+    decorZones: [],
+  },
+];

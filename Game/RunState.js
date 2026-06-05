@@ -8,7 +8,7 @@ export const RUN_FLOOR_TYPES = Object.freeze({
   TESTER: "tester",
   NORMAL: "normal",
   SHOP: "shop",
-  BOSS_FUTURE: "boss_future",
+  BOSS: "boss",
   COMPLETE: "complete",
 });
 
@@ -25,6 +25,9 @@ export class RunState {
     currentFloorSeed = null,
     floorType = RUN_FLOOR_TYPES.TESTER,
     difficultyTier = "easy",
+    cycleIndex = 0,
+    cycleFloorIndex = currentFloorIndex,
+    difficultyScale = 1,
     status = RUN_STATUSES.ACTIVE,
   } = {}) {
     this.mode = mode;
@@ -34,6 +37,9 @@ export class RunState {
       currentFloorSeed ?? this.createFloorSeed(currentFloorIndex);
     this.floorType = floorType;
     this.difficultyTier = difficultyTier;
+    this.cycleIndex = cycleIndex;
+    this.cycleFloorIndex = cycleFloorIndex;
+    this.difficultyScale = difficultyScale;
     this.status = status;
   }
 
@@ -51,10 +57,16 @@ export class RunState {
     floorSeed = null,
     floorType = RUN_FLOOR_TYPES.NORMAL,
     difficultyTier = "easy",
+    cycleIndex = 0,
+    cycleFloorIndex = floorIndex,
+    difficultyScale = 1,
   }) {
     this.currentFloorIndex = floorIndex;
     this.floorType = floorType;
     this.difficultyTier = difficultyTier;
+    this.cycleIndex = cycleIndex;
+    this.cycleFloorIndex = cycleFloorIndex;
+    this.difficultyScale = difficultyScale;
     this.currentFloorSeed = floorSeed ?? this.createFloorSeed(floorIndex);
   }
 
@@ -82,6 +94,9 @@ export class RunState {
       currentFloorSeed: this.currentFloorSeed,
       floorType: this.floorType,
       difficultyTier: this.difficultyTier,
+      cycleIndex: this.cycleIndex,
+      cycleFloorIndex: this.cycleFloorIndex,
+      difficultyScale: this.difficultyScale,
       status: this.status,
     };
   }

@@ -16,6 +16,10 @@ export class HUD {
     this.logElement = document.querySelector("#log");
     this.quickUseElement = document.querySelector("#quickUseBar");
     this.defeatOverlay = document.querySelector("#defeatOverlay");
+    this.bossOverlay = document.querySelector("#bossHealth");
+    this.bossNameText = document.querySelector("#bossName");
+    this.bossHpText = document.querySelector("#bossHpText");
+    this.bossHpBar = document.querySelector("#bossHpBar");
     this.quickUseButtons = new Map();
     this.onUseConsumableSlot = null;
     this.logEntries = [];
@@ -38,6 +42,38 @@ export class HUD {
     if (!this.defeatOverlay) return;
 
     this.defeatOverlay.hidden = true;
+  }
+
+  updateBoss(boss) {
+    if (!this.bossOverlay || !boss) return;
+
+    const maxHp = Math.max(1, boss.maxHp ?? 1);
+    const hp = Math.max(0, Math.ceil(boss.hp ?? 0));
+    const ratio = Math.max(0, Math.min(1, hp / maxHp));
+
+    this.bossOverlay.hidden = false;
+
+    if (this.bossNameText) {
+      this.bossNameText.textContent = boss.enemyName ?? "Boss";
+    }
+
+    if (this.bossHpText) {
+      this.bossHpText.textContent = `${hp} / ${Math.ceil(maxHp)} HP`;
+    }
+
+    if (this.bossHpBar) {
+      this.bossHpBar.style.width = `${ratio * 100}%`;
+    }
+  }
+
+  hideBoss() {
+    if (!this.bossOverlay) return;
+
+    this.bossOverlay.hidden = true;
+
+    if (this.bossNameText) this.bossNameText.textContent = "";
+    if (this.bossHpText) this.bossHpText.textContent = "";
+    if (this.bossHpBar) this.bossHpBar.style.width = "0%";
   }
 
   updatePlayer(player) {

@@ -1,6 +1,7 @@
 import { EASY_ENEMY_DEFINITIONS } from "./easyEnemies.js";
 import { MEDIUM_ENEMY_DEFINITIONS } from "./mediumEnemies.js";
 import { HARD_ENEMY_DEFINITIONS } from "./hardEnemies.js";
+import { BOSS_ENEMY_DEFINITIONS } from "./bossEnemies.js";
 
 export const ENEMY_DIFFICULTY = {
   EASY: "easy",
@@ -18,6 +19,7 @@ export const ENEMY_DEFINITIONS = [
   ...EASY_ENEMY_DEFINITIONS,
   ...MEDIUM_ENEMY_DEFINITIONS,
   ...HARD_ENEMY_DEFINITIONS,
+  ...BOSS_ENEMY_DEFINITIONS,
 ];
 
 export const ENEMY_DEFINITIONS_BY_ID = Object.fromEntries(

@@ -57,6 +57,67 @@
       backdrop-filter: blur(10px);
     }
 
+    .boss-health {
+      position: fixed;
+      top: 16px;
+      left: 50%;
+      z-index: 9;
+      width: min(560px, calc(100vw - 380px));
+      min-width: 320px;
+      padding: 10px 14px 12px;
+      border: 1px solid rgba(255, 76, 76, 0.36);
+      border-radius: 8px;
+      background: rgba(17, 19, 23, 0.78);
+      box-shadow: 0 16px 36px rgba(0, 0, 0, 0.3);
+      backdrop-filter: blur(10px);
+      transform: translateX(-50%);
+      pointer-events: none;
+    }
+
+    .boss-health[hidden] {
+      display: none;
+    }
+
+    .boss-health__header {
+      display: flex;
+      align-items: baseline;
+      justify-content: space-between;
+      gap: 14px;
+      margin-bottom: 7px;
+      font-size: 13px;
+      line-height: 1.1;
+      color: rgba(244, 241, 232, 0.78);
+    }
+
+    .boss-health__name {
+      color: #fff1f1;
+      font-size: 18px;
+      font-weight: 900;
+    }
+
+    .boss-health__value {
+      white-space: nowrap;
+      font-weight: 800;
+    }
+
+    .boss-health__bar {
+      position: relative;
+      height: 16px;
+      overflow: hidden;
+      border-radius: 999px;
+      background: rgba(255, 76, 76, 0.16);
+      box-shadow: inset 0 0 0 1px rgba(255, 76, 76, 0.2);
+    }
+
+    .boss-health__bar span {
+      display: block;
+      width: 100%;
+      height: 100%;
+      border-radius: inherit;
+      background: linear-gradient(90deg, #9c1024, #ff3448);
+      transition: width 180ms ease;
+    }
+
     .stats {
       display: grid;
       gap: 8px;
@@ -340,6 +401,16 @@
       pointer-events: none;
     }
 
+    @media (max-width: 900px) {
+      .boss-health {
+        left: auto;
+        right: 16px;
+        width: min(420px, calc(100vw - 380px));
+        min-width: 260px;
+        transform: none;
+      }
+    }
+
     @media (max-width: 640px) {
       .hud {
         top: calc(8px + env(safe-area-inset-top));
@@ -361,6 +432,30 @@
 
       .bar {
         height: 7px;
+      }
+
+      .boss-health {
+        top: calc(8px + env(safe-area-inset-top));
+        left: auto;
+        right: calc(8px + env(safe-area-inset-right));
+        width: min(310px, calc(100vw - 292px));
+        min-width: 190px;
+        padding: 8px 10px 9px;
+        transform: none;
+      }
+
+      .boss-health__header {
+        gap: 8px;
+        margin-bottom: 5px;
+        font-size: 11px;
+      }
+
+      .boss-health__name {
+        font-size: 14px;
+      }
+
+      .boss-health__bar {
+        height: 11px;
       }
 
       .inventory-items {
@@ -465,6 +560,14 @@
         width: 35px;
         height: 35px;
       }
+
+      .boss-health {
+        top: calc(88px + env(safe-area-inset-top));
+        left: calc(6px + env(safe-area-inset-left));
+        right: calc(6px + env(safe-area-inset-right));
+        width: auto;
+        min-width: 0;
+      }
     }
 
     @media (max-height: 560px) and (max-width: 900px) {
@@ -529,6 +632,14 @@
     </div>
 
     <div class="panel log" id="log"></div>
+  </section>
+
+  <section class="boss-health" id="bossHealth" aria-live="polite" hidden>
+    <div class="boss-health__header">
+      <strong class="boss-health__name" id="bossName"></strong>
+      <span class="boss-health__value" id="bossHpText"></span>
+    </div>
+    <div class="boss-health__bar" aria-hidden="true"><span id="bossHpBar"></span></div>
   </section>
 
   <div class="quick-use-bar" id="quickUseBar" aria-label="Consumable quick use"></div>

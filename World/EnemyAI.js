@@ -73,6 +73,10 @@ export class EnemyAI {
     this.enemyTypeId = options.enemyTypeId ?? "enemy_unknown";
     this.enemyName = options.enemyName ?? "Enemy";
     this.enemyDifficulty = options.enemyDifficulty ?? "easy";
+    this.isBoss = Boolean(options.isBoss);
+    this.bossConfig = options.boss ?? null;
+    this.bossPhase = 1;
+    this.bossPhaseTwoApplied = false;
 
     this.speed = options.speed ?? 1.2;
     this.patrolStopRange = options.patrolStopRange ?? 0.08;
@@ -115,6 +119,11 @@ export class EnemyAI {
 
     this.maxHp = options.maxHp ?? options.hp ?? 50;
     this.hp = options.hp ?? this.maxHp;
+    this.baseBossStats = {
+      speed: this.speed,
+      attackDamage: this.attackDamage,
+      attackCooldown: this.attackCooldown,
+    };
     this.patrolRegenPercentPerSecond = this.normalizePercentChance(
       options.patrolRegenPercentPerSecond ??
         ENEMY_PATROL_REGEN.maxHpPercentPerSecond
@@ -124,8 +133,10 @@ export class EnemyAI {
     this.target = null;
     this.events = [];
     this.hasTakenCombatHit = this.hp < this.maxHp;
-    this.healthBar = this.createHealthBar();
-    this.model.add(this.healthBar);
+    this.healthBar = this.isBoss ? null : this.createHealthBar();
+    if (this.healthBar) {
+      this.model.add(this.healthBar);
+    }
     this.stunMarkerPulseTime = 0;
     this.stunMarkerBaseColor = new THREE.Color(STUN_MARKER_BASE_COLOR);
     this.stunMarkerPulseColor = new THREE.Color(STUN_MARKER_PULSE_COLOR);
@@ -940,8 +951,12 @@ export class EnemyAI {
 
     if (this.hp <= 0) {
       this.die();
-    } else if (!options.suppressAggro && source?.model) {
-      this.startChase(source, "damage");
+    } else {
+      this.updateBossPhase();
+
+      if (!options.suppressAggro && source?.model) {
+        this.startChase(source, "damage");
+      }
     }
 
     this.hasTakenCombatHit = true;
@@ -961,7 +976,9 @@ export class EnemyAI {
     this.poisonEffects = [];
     this.state = ENEMY_STATES.DEAD;
     this.model.visible = false;
-    this.healthBar.visible = false;
+    if (this.healthBar) {
+      this.healthBar.visible = false;
+    }
     this.setStunMarkerVisible(false);
 
     this.emit({
@@ -982,6 +999,40 @@ export class EnemyAI {
     this.emit({
       type: "enemyDefeated",
       enemy: this,
+    });
+  }
+
+  updateBossPhase() {
+    if (!this.isBoss || !this.bossConfig || this.bossPhaseTwoApplied) return;
+    if (this.maxHp <= 0) return;
+
+    const threshold = this.bossConfig.phaseTwoHpRatio ?? 0.5;
+    const hpRatio = this.hp / this.maxHp;
+
+    if (hpRatio > threshold) return;
+
+    const phaseTwo = this.bossConfig.phaseTwo ?? {};
+
+    this.bossPhase = 2;
+    this.bossPhaseTwoApplied = true;
+    this.speed = this.baseBossStats.speed * (phaseTwo.speedMultiplier ?? 1);
+    this.attackDamage = Math.max(
+      1,
+      Math.round(this.baseBossStats.attackDamage * (phaseTwo.attackDamageMultiplier ?? 1))
+    );
+    this.attackCooldown = Math.max(
+      0.1,
+      this.baseBossStats.attackCooldown * (phaseTwo.attackCooldownMultiplier ?? 1)
+    );
+    this.attackTimer = Math.min(this.attackTimer, this.attackCooldown);
+
+    this.emit({
+      type: "bossPhaseChanged",
+      enemy: this,
+      phase: this.bossPhase,
+      phaseName: phaseTwo.name ?? "Phase 2",
+      hp: this.hp,
+      maxHp: this.maxHp,
     });
   }
 
@@ -1224,6 +1275,8 @@ export class EnemyAI {
   }
 
   updateHealthBar() {
+    if (!this.healthBar) return;
+
     const fill = this.healthBar.getObjectByName("healthFill");
     if (!fill) return;
 
@@ -1242,7 +1295,7 @@ export class EnemyAI {
   }
 
   updateHealthBarBillboard(camera) {
-    if (!camera || !this.healthBar.visible) return;
+    if (!camera || !this.healthBar?.visible) return;
 
     const parentWorldRotation = new THREE.Quaternion();
     this.model.getWorldQuaternion(parentWorldRotation);
