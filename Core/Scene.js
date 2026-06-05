@@ -15,7 +15,7 @@ import { VFX } from "../UI/VFX.js";
 import { DebugCheats } from "../UI/DebugCheats.js";
 import { ChestManager } from "../Game/Chest.js";
 import { CoinManager } from "../Game/Coin.js";
-import { ShopManager } from "../Game/ShopManager.js";
+import { SHOP_INTERACTION_RANGE, ShopManager } from "../Game/ShopManager.js";
 import { ItemDropManager } from "../World/ItemDrop.js";
 import { Environment } from "../World/Environment.js";
 import { ROOM_TEMPLATES } from "../RoomData/roomTemplates.js";
@@ -1068,18 +1068,30 @@ export class GameScene {
     const keyboardMovementActive = this.isKeyboardMovementActive();
     const chest = this.getChestFromInteractable(payload?.interactable);
     if (chest) {
+      this.cancelStoredActionIntents();
       this.handleChestClick(chest, payload, {
         keyboardMovementActive,
       });
       return;
     }
 
-    this.chestManager?.cancelPendingChestOpen?.();
+    const shopStand = this.getShopStandFromInteractable(payload?.interactable);
+    if (shopStand) {
+      this.cancelStoredActionIntents();
+      this.handleShopStandClick(shopStand, payload, {
+        keyboardMovementActive,
+      });
+      return;
+    }
 
     if (payload?.enemy?.alive) {
       if (keyboardMovementActive) {
-        if (!this.isEnemyInPlayerAttackRange(payload.enemy)) return;
+        if (!this.isEnemyInPlayerAttackRange(payload.enemy)) {
+          this.cancelStoredActionIntents();
+          return;
+        }
 
+        this.cancelStoredActionIntents({ keepAttack: true });
         this.createClickFeedback(payload.point ?? payload.enemy.model.position, {
           color: ATTACK_CLICK_FEEDBACK_COLOR,
         });
@@ -1090,8 +1102,12 @@ export class GameScene {
       }
 
       const navigation = this.getEnemyAttackNavigation(payload.enemy);
-      if (!navigation) return;
+      if (!navigation) {
+        this.cancelStoredActionIntents();
+        return;
+      }
 
+      this.cancelStoredActionIntents({ keepAttack: true });
       this.createClickFeedback(payload.point ?? navigation.target, {
         color: ATTACK_CLICK_FEEDBACK_COLOR,
       });
@@ -1102,6 +1118,7 @@ export class GameScene {
     if (!payload?.point) return;
     if (keyboardMovementActive) return;
 
+    this.cancelStoredActionIntents();
     const navigation = this.getClickNavigation(payload.point);
     if (!navigation) return;
 
@@ -1112,14 +1129,32 @@ export class GameScene {
   handleKeyboardMovementStart() {
     if (this.isPlayerControlLocked()) return;
 
-    this.player?.cancelAttackAutoPursuit?.();
+    this.cancelStoredActionIntents();
     this.player?.stopMovement?.();
+  }
+
+  cancelStoredActionIntents({
+    keepAttack = false,
+  } = {}) {
+    if (!keepAttack) {
+      this.player?.clearAttackTarget?.();
+    }
+
+    // Add future delayed interactables here so manual movement/clicks clear stale actions.
+    this.chestManager?.cancelPendingChestOpen?.();
+    this.shopManager?.cancelPendingStandInteraction?.();
   }
 
   getChestFromInteractable(interactable) {
     if (interactable?.type !== "chest") return null;
 
     return interactable.chest ?? null;
+  }
+
+  getShopStandFromInteractable(interactable) {
+    if (interactable?.type !== "shop") return null;
+
+    return this.shopManager?.findStand?.(interactable.offerId) ?? null;
   }
 
   isEnemyInPlayerAttackRange(enemy) {
@@ -1173,12 +1208,58 @@ export class GameScene {
     }
   }
 
+  isShopStandInPlayerInteractionRange(stand) {
+    if (!stand?.model?.position || !this.player?.model?.position) return false;
+
+    return flatDistance(
+      this.player.model.position,
+      stand.model.position
+    ) <= SHOP_INTERACTION_RANGE;
+  }
+
+  handleShopStandClick(stand, payload = {}, options = {}) {
+    if (options.keyboardMovementActive) {
+      if (!this.isShopStandInPlayerInteractionRange(stand)) return;
+
+      const result = this.shopManager?.requestStandInteraction?.(stand);
+      if (!result) return;
+
+      this.createClickFeedback(payload.point ?? stand.model.position, {
+        color: INTERACTION_CLICK_FEEDBACK_COLOR,
+      });
+      return;
+    }
+
+    const navigation = this.getShopStandInteractionNavigation(
+      stand,
+      payload.point
+    );
+    if (!navigation) return;
+
+    const result = this.shopManager?.requestStandInteraction?.(stand);
+    if (!result) return;
+    if (result.reason === "interactionUnavailable") return;
+
+    this.createClickFeedback(payload.point ?? navigation.target, {
+      color: INTERACTION_CLICK_FEEDBACK_COLOR,
+    });
+
+    if (
+      result.reason === "movingToInteraction" &&
+      navigation.path.length > 0
+    ) {
+      this.player.setPath(navigation.path);
+    }
+  }
+
   createEnemyNavigation() {
     return {
       canMoveBetween: (from, to, radius) =>
         this.canMoveBetween(from, to, radius),
       findPath: (from, to, radius) =>
         this.findNavigationPath(from, to, radius),
+      findReachableTargetNear: (from, to, radius) =>
+        this.findReachableNavigationTargetNear(from, to, radius),
       getRandomWalkablePoint: (areas, radius, origin) =>
         this.getRandomWalkablePoint(areas, radius, origin),
     };
@@ -1306,6 +1387,24 @@ export class GameScene {
     }
 
     return [];
+  }
+
+  findReachableNavigationTargetNear(
+    from,
+    to,
+    radius = PLAYER_COLLISION_RADIUS
+  ) {
+    const candidates = this.getWalkableTargetCandidates(to, radius);
+
+    for (const target of candidates) {
+      const path = this.findNavigationPath(from, target, radius);
+
+      if (path.length > 0) {
+        return { target, path };
+      }
+    }
+
+    return null;
   }
 
   worldToNavCell(position) {
@@ -1599,6 +1698,103 @@ export class GameScene {
       (a, b) =>
         a.distanceToSquared(chestPosition) -
         b.distanceToSquared(chestPosition)
+    );
+
+    return candidates;
+  }
+
+  getShopStandInteractionNavigation(stand, clickPoint = null) {
+    if (!stand?.model?.position || !this.player) return null;
+
+    const playerPosition = this.player.model.position;
+    const standPosition = stand.model.position;
+
+    if (flatDistance(playerPosition, standPosition) <= SHOP_INTERACTION_RANGE) {
+      return {
+        target: clickPoint?.clone?.() ?? standPosition.clone(),
+        path: [],
+      };
+    }
+
+    const candidates = this.getShopStandInteractionTargetCandidates(
+      stand,
+      clickPoint
+    );
+
+    for (const target of candidates) {
+      const path = this.findNavigationPath(
+        playerPosition,
+        target,
+        PLAYER_COLLISION_RADIUS
+      );
+
+      if (path.length > 0) {
+        return { target, path };
+      }
+    }
+
+    return null;
+  }
+
+  getShopStandInteractionTargetCandidates(stand, clickPoint = null) {
+    const standPosition = stand.model.position;
+    const approachDistance = Math.max(
+      PLAYER_COLLISION_RADIUS * 2,
+      Math.min(SHOP_INTERACTION_RANGE - 0.08, SHOP_INTERACTION_RANGE * 0.85)
+    );
+    const candidates = [];
+    const seen = new Set();
+
+    const addCandidate = (point) => {
+      const target = point.clone();
+      target.y = PLAYER_GROUND_Y;
+      const key = `${target.x.toFixed(3)},${target.z.toFixed(3)}`;
+
+      if (seen.has(key)) return;
+      if (
+        flatDistance(target, standPosition) <
+        PLAYER_COLLISION_RADIUS * 1.5
+      ) {
+        return;
+      }
+      if (!this.isWalkablePosition(target, PLAYER_COLLISION_RADIUS)) return;
+
+      seen.add(key);
+      candidates.push(target);
+    };
+
+    if (clickPoint) {
+      this.getWalkableTargetCandidates(
+        clickPoint,
+        PLAYER_COLLISION_RADIUS
+      ).forEach(addCandidate);
+    }
+
+    const towardPlayer = this.player.model.position.clone().sub(standPosition);
+    towardPlayer.y = 0;
+
+    if (towardPlayer.lengthSq() > 0.0001) {
+      towardPlayer.normalize();
+      addCandidate(
+        standPosition.clone().addScaledVector(towardPlayer, approachDistance)
+      );
+    }
+
+    for (let i = 0; i < 16; i += 1) {
+      const angle = (i / 16) * Math.PI * 2;
+      addCandidate(
+        new THREE.Vector3(
+          standPosition.x + Math.cos(angle) * approachDistance,
+          PLAYER_GROUND_Y,
+          standPosition.z + Math.sin(angle) * approachDistance
+        )
+      );
+    }
+
+    candidates.sort(
+      (a, b) =>
+        a.distanceToSquared(standPosition) -
+        b.distanceToSquared(standPosition)
     );
 
     return candidates;
@@ -2551,7 +2747,9 @@ export class GameScene {
 
         case "enemyDamaged":
           if (event.damage > 0) {
-            this.flashModel(event.enemy.model, 0xff4058, 0.12);
+            const flashColor =
+              event.source?.type === "poison" ? 0x9c61ff : 0xff4058;
+            this.flashModel(event.enemy.model, flashColor, 0.12);
           }
           break;
 
@@ -2586,6 +2784,12 @@ export class GameScene {
         case "enemyStunned":
           this.addLog(`Enemy stunned for ${event.duration.toFixed(1)}s.`);
           this.flashModel(event.enemy.model, 0x9c61ff, 0.22);
+          break;
+
+        case "enemyPoisoned":
+          this.addLog(
+            `Enemy poisoned for ${event.duration.toFixed(1)}s.`
+          );
           break;
 
         case "itemPickedUp":
@@ -2741,10 +2945,13 @@ export class GameScene {
   playItemUseFeedback(event) {
     if (event.itemId !== "purpleShroom") return;
 
-    const target = event.result?.enemy;
+    const target = event.result?.center ?? event.result?.enemy;
     if (!target) return;
 
-    this.vfx.playPurpleGasCloud(target);
+    this.vfx.playPurpleGasCloud(target, {
+      radius: event.result?.vfxRadius ?? event.result?.radius,
+      duration: event.result?.poisonDuration,
+    });
     this.sfx.play("purpleShroom");
   }
 
@@ -2754,7 +2961,7 @@ export class GameScene {
         return "You do not need healing right now.";
 
       case "noEnemyInRange":
-        return "No enemy is close enough to stun.";
+        return "No enemy is close enough for the shroom.";
 
       case "missingItem":
         return "You do not have that consumable.";

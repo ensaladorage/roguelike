@@ -8,7 +8,7 @@ import {
 import { SHOP_DEFINITION, SHOP_EVENTS } from "./shopDefinitions.js";
 import { DEFAULT_SHOP_ALTAR_MODEL_ID } from "../CharacterData/modelDefinitions.js";
 
-const SHOP_INTERACTION_RANGE = 1.2;
+export const SHOP_INTERACTION_RANGE = 1.2;
 const SHOP_INTERACTION_COOLDOWN = 1.15;
 const SHOP_CONFIRM_LOCK_REASON = "shopPurchaseConfirmation";
 const SHOP_FALLBACK_ALTAR_SCALE = 0.86;
@@ -29,6 +29,7 @@ export class ShopManager {
     this.stands = [];
     this.events = [];
     this.lastContext = null;
+    this.pendingStand = null;
     this.pendingConfirmation = null;
     this.confirmationElement = null;
   }
@@ -116,9 +117,7 @@ export class ShopManager {
   }
 
   update(delta = 0) {
-    if (!this.scene?.player || this.stands.length === 0) return;
-
-    const playerPosition = this.scene.player.model.position;
+    if (this.stands.length === 0) return;
 
     for (const stand of this.stands) {
       if (stand.cooldown > 0) {
@@ -126,21 +125,101 @@ export class ShopManager {
       }
 
       this.updateStandAnimation(stand, delta);
-
-      if (this.pendingConfirmation) continue;
-      if (stand.model?.visible === false) continue;
-      if (stand.cooldown > 0) continue;
-
-      const distance = this.getFlatDistance(playerPosition, stand.model.position);
-      if (distance > SHOP_INTERACTION_RANGE) continue;
-
-      const result = this.requestPurchaseConfirmation(stand);
-      stand.cooldown = SHOP_INTERACTION_COOLDOWN;
-
-      if (result.success) {
-        this.refreshStand(stand);
-      }
     }
+
+    this.checkPendingStandInteraction();
+  }
+
+  requestStandInteraction(standOrOfferId) {
+    const stand = typeof standOrOfferId === "string"
+      ? this.findStand(standOrOfferId)
+      : standOrOfferId;
+
+    if (!stand) {
+      return this.failPurchase({
+        reason: "offerMissing",
+        offerId: standOrOfferId,
+      });
+    }
+
+    const offer = this.findOffer(stand.offerId);
+    if (!offer) {
+      return this.failPurchase({
+        reason: "offerMissing",
+        offerId: stand.offerId,
+      });
+    }
+
+    if (offer.purchased) {
+      this.emit({
+        type: SHOP_EVENTS.OFFER_ALREADY_PURCHASED,
+        offer,
+        itemId: offer.itemId,
+        item: offer.itemDefinition,
+        rarity: offer.rarity,
+        price: offer.price,
+      });
+
+      return {
+        success: false,
+        reason: "alreadyPurchased",
+        offer,
+      };
+    }
+
+    if (this.pendingConfirmation) {
+      return {
+        success: false,
+        reason: "confirmationPending",
+        offer,
+      };
+    }
+
+    if (stand.model?.visible === false || stand.cooldown > 0) {
+      return {
+        success: false,
+        reason: "interactionUnavailable",
+        offer,
+      };
+    }
+
+    if (!this.isStandInInteractionRange(stand)) {
+      this.pendingStand = stand;
+
+      return {
+        success: false,
+        reason: "movingToInteraction",
+        offer,
+      };
+    }
+
+    this.pendingStand = null;
+    return this.requestPurchaseConfirmation(stand);
+  }
+
+  cancelPendingStandInteraction(stand = null) {
+    if (stand && this.pendingStand !== stand) return;
+
+    this.pendingStand = null;
+  }
+
+  checkPendingStandInteraction() {
+    const stand = this.pendingStand;
+    if (!stand) return;
+
+    if (this.pendingConfirmation) return;
+
+    const offer = this.findOffer(stand.offerId);
+    if (!offer || offer.purchased || stand.model?.visible === false) {
+      this.pendingStand = null;
+      return;
+    }
+
+    if (stand.cooldown > 0) return;
+    if (!this.isStandInInteractionRange(stand)) return;
+
+    this.pendingStand = null;
+    this.requestPurchaseConfirmation(stand);
   }
 
   requestPurchaseConfirmation(stand) {
@@ -151,6 +230,14 @@ export class ShopManager {
         reason: "offerMissing",
         offerId: stand.offerId,
       });
+    }
+
+    if (!this.isStandInInteractionRange(stand)) {
+      return {
+        success: false,
+        reason: "outOfRange",
+        offer,
+      };
     }
 
     if (offer.purchased) {
@@ -230,13 +317,11 @@ export class ShopManager {
 
       if (action === "yes") {
         const result = this.purchaseOffer(offer.id);
-        stand.cooldown = SHOP_INTERACTION_COOLDOWN;
 
         if (result.success) {
+          stand.cooldown = SHOP_INTERACTION_COOLDOWN;
           this.refreshStand(stand);
         }
-      } else {
-        stand.cooldown = SHOP_INTERACTION_COOLDOWN;
       }
 
       this.closePurchaseConfirmation();
@@ -245,7 +330,6 @@ export class ShopManager {
     const keyHandler = (event) => {
       if (event.key === "Escape") {
         event.preventDefault();
-        stand.cooldown = SHOP_INTERACTION_COOLDOWN;
         this.closePurchaseConfirmation();
         return;
       }
@@ -253,9 +337,9 @@ export class ShopManager {
       if (event.key === "Enter") {
         event.preventDefault();
         const result = this.purchaseOffer(offer.id);
-        stand.cooldown = SHOP_INTERACTION_COOLDOWN;
 
         if (result.success) {
+          stand.cooldown = SHOP_INTERACTION_COOLDOWN;
           this.refreshStand(stand);
         }
 
@@ -396,6 +480,19 @@ export class ShopManager {
     }
 
     return this.offers.find((offer) => offer.id === offerIdOrIndex) ?? null;
+  }
+
+  findStand(offerId) {
+    return this.stands.find((stand) => stand.offerId === offerId) ?? null;
+  }
+
+  isStandInInteractionRange(stand) {
+    const playerPosition = this.scene?.player?.model?.position;
+    const standPosition = stand?.model?.position;
+    if (!playerPosition || !standPosition) return false;
+
+    return this.getFlatDistance(playerPosition, standPosition) <=
+      SHOP_INTERACTION_RANGE;
   }
 
   spendGold(player, price) {
@@ -702,6 +799,7 @@ export class ShopManager {
 
   clearFloor() {
     this.closePurchaseConfirmation();
+    this.pendingStand = null;
 
     for (const stand of this.stands) {
       this.disposeStand(stand.model);

@@ -86,12 +86,15 @@ export function setupInput(
       return;
     }
 
-    const chestHit = getPointedChestHit(raycaster, getInteractableTargets);
+    const interactableHit = getPointedInteractableHit(
+      raycaster,
+      getInteractableTargets
+    );
 
-    if (chestHit) {
+    if (interactableHit) {
       onClick({
-        point: chestHit.groundPoint,
-        interactable: chestHit.interactable,
+        point: interactableHit.groundPoint,
+        interactable: interactableHit.interactable,
       });
       return;
     }
@@ -658,14 +661,6 @@ function getPointedInteractable(raycaster, getInteractableTargets) {
   return Boolean(getPointedInteractableHit(raycaster, getInteractableTargets));
 }
 
-function getPointedChestHit(raycaster, getInteractableTargets) {
-  const hit = getPointedInteractableHit(raycaster, getInteractableTargets);
-
-  if (hit?.interactable?.type !== "chest") return null;
-
-  return hit;
-}
-
 function getPointedInteractableHit(raycaster, getInteractableTargets) {
   const interactableTargets =
     typeof getInteractableTargets === "function" ? getInteractableTargets() : [];
@@ -704,7 +699,7 @@ function getAimAssistTarget(
   const bounds = renderer.domElement.getBoundingClientRect();
   const candidates = [
     ...getEnemyAimAssistCandidates(getEnemyTargets),
-    ...getChestAimAssistCandidates(getInteractableTargets),
+    ...getInteractableAimAssistCandidates(getInteractableTargets),
   ];
   let bestTarget = null;
 
@@ -754,9 +749,10 @@ function getEnemyAimAssistCandidates(getEnemyTargets) {
     .filter((candidate) => candidate.enemy?.alive);
 }
 
-function getChestAimAssistCandidates(getInteractableTargets) {
+function getInteractableAimAssistCandidates(getInteractableTargets) {
   const interactableTargets =
     typeof getInteractableTargets === "function" ? getInteractableTargets() : [];
+  const assistedTypes = new Set(["chest", "shop"]);
 
   return interactableTargets
     .map((object) => ({
@@ -764,7 +760,7 @@ function getChestAimAssistCandidates(getInteractableTargets) {
       object,
       interactable: findInteractableFromObject(object),
     }))
-    .filter((candidate) => candidate.interactable?.type === "chest");
+    .filter((candidate) => assistedTypes.has(candidate.interactable?.type));
 }
 
 function getClientPointFromWorld(worldPoint, camera, bounds) {

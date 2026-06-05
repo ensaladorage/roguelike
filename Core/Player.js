@@ -521,7 +521,7 @@ export class Player {
     this.state = PLAYER_STATES.MOVING;
 
     if (this.attackTarget) {
-      this.attackAutoPursuitEnabled = false;
+      this.clearAttackTarget();
     }
 
     const targetVelocity = direction.multiplyScalar(this.speed);

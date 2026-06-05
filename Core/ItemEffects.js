@@ -2,6 +2,7 @@ import { flatDistance } from "../Game/Utils.js";
 import {
   ITEM_EFFECTS,
   getItemDefinition,
+  getItemStats,
 } from "../CharacterData/itemDefinitions.js";
 
 export class ItemEffects {
@@ -29,7 +30,8 @@ export class ItemEffects {
         return this.applyHeal(definition, context);
 
       case ITEM_EFFECTS.STUN_ENEMY:
-        return this.applyEnemyStun(definition, context);
+      case ITEM_EFFECTS.AREA_STUN_POISON:
+        return this.applyAreaStunPoison(definition, context);
 
       default:
         return {
@@ -72,7 +74,8 @@ export class ItemEffects {
   applyDamageUp(definition, { player } = {}) {
     if (!player) return this.missingPlayerResult();
 
-    const amount = definition.modifiers?.attackDamage ?? 0;
+    const stats = getItemStats(definition);
+    const amount = stats.attackDamage ?? 0;
     player.attackDamage += amount;
 
     return {
@@ -87,8 +90,9 @@ export class ItemEffects {
   applyAttackSpeedUp(definition, { player } = {}) {
     if (!player) return this.missingPlayerResult();
 
-    const amount = definition.modifiers?.attackSpeed ?? 0;
-    const maxAttackSpeed = definition.modifiers?.maxAttackSpeed ?? Infinity;
+    const stats = getItemStats(definition);
+    const amount = stats.attackSpeed ?? 0;
+    const maxAttackSpeed = stats.maxAttackSpeed ?? Infinity;
     const previousValue =
       player.attackSpeed ?? (player.attackCooldown > 0 ? 1 / player.attackCooldown : 1);
     const nextValue = Math.min(maxAttackSpeed, previousValue + amount);
@@ -113,8 +117,9 @@ export class ItemEffects {
   applyMaxHpUp(definition, { player } = {}) {
     if (!player) return this.missingPlayerResult();
 
-    const maxHpIncrease = definition.modifiers?.maxHp ?? 0;
-    const heal = definition.modifiers?.heal ?? 0;
+    const stats = getItemStats(definition);
+    const maxHpIncrease = stats.maxHp ?? 0;
+    const heal = stats.heal ?? 0;
 
     player.maxHp += maxHpIncrease;
     player.hp = Math.min(player.maxHp, player.hp + heal);
@@ -132,7 +137,8 @@ export class ItemEffects {
   revertDamageUp(definition, { player } = {}) {
     if (!player) return this.missingPlayerResult();
 
-    const amount = definition.modifiers?.attackDamage ?? 0;
+    const stats = getItemStats(definition);
+    const amount = stats.attackDamage ?? 0;
     player.attackDamage = Math.max(0, player.attackDamage - amount);
 
     return {
@@ -147,7 +153,8 @@ export class ItemEffects {
   revertAttackSpeedUp(definition, { player } = {}) {
     if (!player) return this.missingPlayerResult();
 
-    const amount = definition.modifiers?.attackSpeed ?? 0;
+    const stats = getItemStats(definition);
+    const amount = stats.attackSpeed ?? 0;
     const previousValue =
       player.attackSpeed ?? (player.attackCooldown > 0 ? 1 / player.attackCooldown : 1);
     const nextValue = previousValue - amount;
@@ -172,7 +179,8 @@ export class ItemEffects {
   revertMaxHpUp(definition, { player } = {}) {
     if (!player) return this.missingPlayerResult();
 
-    const maxHpDecrease = definition.modifiers?.maxHp ?? 0;
+    const stats = getItemStats(definition);
+    const maxHpDecrease = stats.maxHp ?? 0;
     player.maxHp = Math.max(1, player.maxHp - maxHpDecrease);
     player.hp = Math.min(player.hp, player.maxHp);
 
@@ -196,7 +204,8 @@ export class ItemEffects {
       };
     }
 
-    const heal = definition.consumable?.heal ?? 0;
+    const stats = getItemStats(definition);
+    const heal = stats.heal ?? 0;
     const previousHp = player.hp;
     player.hp = Math.min(player.maxHp, player.hp + heal);
 
@@ -210,14 +219,20 @@ export class ItemEffects {
     };
   }
 
-  applyEnemyStun(definition, { player, enemies = [] } = {}) {
+  applyAreaStunPoison(definition, { player, enemies = [] } = {}) {
     if (!player) return this.missingPlayerResult();
 
-    const radius = definition.consumable?.radius ?? 3;
-    const stunDuration = definition.consumable?.stunDuration ?? 3;
-    const enemy = this.findStunTarget(player, enemies, radius);
+    const stats = getItemStats(definition);
+    const radius = stats.radius ?? 3;
+    const vfxRadius = stats.vfxRadius ?? radius;
+    const stunDuration = stats.stunDuration ?? 3;
+    const poisonDamagePerSecond = stats.poisonDamagePerSecond ?? 0;
+    const poisonDuration = stats.poisonDuration ?? 0;
+    const poisonTickInterval = stats.poisonTickInterval ?? 0.5;
+    const center = player.model.position.clone();
+    const targets = this.findEnemiesInRadius(center, enemies, radius);
 
-    if (!enemy) {
+    if (targets.length === 0) {
       return {
         applied: false,
         consumed: false,
@@ -225,40 +240,65 @@ export class ItemEffects {
       };
     }
 
-    if (typeof enemy.applyStun === "function") {
-      enemy.applyStun(stunDuration, player);
+    for (const enemy of targets) {
+      if (typeof enemy.applyStun === "function") {
+        enemy.applyStun(stunDuration, player);
+      }
+
+      if (typeof enemy.applyPoison === "function") {
+        enemy.applyPoison({
+          damagePerSecond: poisonDamagePerSecond,
+          duration: poisonDuration,
+          tickInterval: poisonTickInterval,
+          source: player,
+          itemId: definition.id,
+        });
+      }
     }
 
-    if (typeof player.leaveCombat === "function") {
-      player.leaveCombat(enemy);
-    } else {
-      player.currentEnemy = null;
-      player.clearTarget();
-    }
+    const combatEnemy = targets.includes(player.currentEnemy)
+      ? player.currentEnemy
+      : targets[0];
+
+    this.leavePlayerCombat(player, combatEnemy);
 
     return {
       applied: true,
       consumed: true,
-      enemy,
+      enemy: targets[0],
+      enemies: targets,
+      enemyCount: targets.length,
+      center,
       duration: stunDuration,
+      stunDuration,
       radius,
+      vfxRadius,
+      poisonDamagePerSecond,
+      poisonDuration,
+      poisonTickInterval,
     };
   }
 
-  findStunTarget(player, enemies, radius) {
-    const currentEnemy = player.currentEnemy;
-    if (currentEnemy?.alive) return currentEnemy;
-
-    const playerPosition = player.model.position;
-
+  findEnemiesInRadius(center, enemies, radius) {
     return enemies
-      .filter((enemy) => enemy?.alive && !enemy.isStunned?.())
+      .filter((enemy) => enemy?.alive)
       .map((enemy) => ({
         enemy,
-        distance: flatDistance(playerPosition, enemy.model.position),
+        distance: flatDistance(center, enemy.model.position),
       }))
       .filter(({ distance }) => distance <= radius)
-      .sort((a, b) => a.distance - b.distance)[0]?.enemy ?? null;
+      .sort((a, b) => a.distance - b.distance)
+      .map(({ enemy }) => enemy);
+  }
+
+  leavePlayerCombat(player, enemy) {
+    if (typeof player.leaveCombat === "function") {
+      player.leaveCombat(enemy);
+      return;
+    }
+
+    player.currentEnemy = null;
+    player.clearTarget?.();
   }
 
   missingPlayerResult() {

@@ -21,6 +21,8 @@ const ENEMY_CHASE_DEFAULTS = {
   movementSpeedMultiplier: 1.5,
   attackTimerOutOfRangeGrace: 0.2,
 };
+const ENEMY_CHASE_COLLISION_RADIUS_SCALE = 0.64;
+const ENEMY_CHASE_MIN_COLLISION_RADIUS = 0.16;
 
 const ENEMY_PATROL_REGEN = {
   maxHpPercentPerSecond: 4,
@@ -36,6 +38,7 @@ const STUN_MARKER_BASE_OPACITY = 0.72;
 const STUN_MARKER_PULSE_OPACITY = 0.96;
 const STUN_MARKER_PULSE_SCALE = 0.14;
 const STUN_MARKER_PULSE_SPEED = 4.8;
+const POISON_DEFAULT_TICK_INTERVAL = 0.5;
 
 export const ENEMY_STATES = {
   PATROL: "patrol",
@@ -100,6 +103,7 @@ export class EnemyAI {
         ENEMY_CHASE_DEFAULTS.leashTime,
     };
     this.stunTimer = 0;
+    this.poisonEffects = [];
     this.coinDropConfig = {
       ...ENEMY_COIN_DROP,
       ...(options.coinDrop ?? {}),
@@ -132,6 +136,9 @@ export class EnemyAI {
   }
 
   update(delta, camera, player = null) {
+    if (!this.alive) return;
+
+    this.updatePoison(delta);
     if (!this.alive) return;
 
     switch (this.state) {
@@ -408,7 +415,11 @@ export class EnemyAI {
     this.chasePathRefreshTimer -= delta;
 
     if (this.chasePathRefreshTimer <= 0 || this.chasePath.length === 0) {
-      this.chasePath = this.getNavigationPath(this.model.position, targetPos);
+      this.chasePath = this.getNavigationPath(
+        this.model.position,
+        targetPos,
+        this.getChaseCollisionRadius()
+      );
       this.chasePathRefreshTimer = ENEMY_CHASE_DEFAULTS.pathRefreshTime;
     }
 
@@ -419,10 +430,11 @@ export class EnemyAI {
     const movement = this.moveTo(
       target,
       delta,
-      isFinalWaypoint ? this.getAttackStopRange() : this.patrolStopRange,
+      isFinalWaypoint ? this.getChaseStopRange() : this.patrolStopRange,
       {
         snapOnArrive: !isFinalWaypoint,
         speedMultiplier: ENEMY_CHASE_DEFAULTS.movementSpeedMultiplier,
+        collisionRadius: this.getChaseCollisionRadius(),
       }
     );
 
@@ -514,8 +526,98 @@ export class EnemyAI {
     return this.movementPauseReasons.size > 0;
   }
 
-  getAttackStopRange() {
-    return this.attackRange * 0.9;
+  getChaseCollisionRadius() {
+    return Math.max(
+      ENEMY_CHASE_MIN_COLLISION_RADIUS,
+      this.collisionRadius * ENEMY_CHASE_COLLISION_RADIUS_SCALE
+    );
+  }
+
+  applyPoison({
+    damagePerSecond = 0,
+    duration = 0,
+    tickInterval = POISON_DEFAULT_TICK_INTERVAL,
+    source = null,
+    itemId = null,
+  } = {}) {
+    if (!this.alive) return false;
+
+    const safeDamagePerSecond = Math.max(0, Number(damagePerSecond) || 0);
+    const safeDuration = Math.max(0, Number(duration) || 0);
+    const safeTickInterval = Math.max(
+      0.05,
+      Number(tickInterval) || POISON_DEFAULT_TICK_INTERVAL
+    );
+
+    if (safeDamagePerSecond <= 0 || safeDuration <= 0) return false;
+
+    this.poisonEffects.push({
+      damagePerSecond: safeDamagePerSecond,
+      remaining: safeDuration,
+      tickInterval: safeTickInterval,
+      tickTimer: 0,
+      source,
+      itemId,
+    });
+
+    this.emit({
+      type: "enemyPoisoned",
+      enemy: this,
+      source,
+      itemId,
+      damagePerSecond: safeDamagePerSecond,
+      duration: safeDuration,
+      tickInterval: safeTickInterval,
+    });
+
+    return true;
+  }
+
+  updatePoison(delta) {
+    if (this.poisonEffects.length === 0) return;
+
+    const activeEffects = [];
+
+    for (const effect of this.poisonEffects) {
+      if (!this.alive) break;
+
+      const elapsed = Math.min(delta, effect.remaining);
+      effect.remaining -= elapsed;
+      effect.tickTimer += elapsed;
+
+      const shouldTick =
+        effect.tickTimer >= effect.tickInterval || effect.remaining <= 0;
+
+      if (shouldTick && effect.tickTimer > 0) {
+        const damage = effect.damagePerSecond * effect.tickTimer;
+        effect.tickTimer = 0;
+
+        this.takeDamage(
+          damage,
+          {
+            type: "poison",
+            source: effect.source,
+            itemId: effect.itemId,
+          },
+          { suppressAggro: true }
+        );
+
+        if (!this.alive) break;
+      }
+
+      if (effect.remaining > 0) {
+        activeEffects.push(effect);
+      }
+    }
+
+    this.poisonEffects = activeEffects;
+  }
+
+  getChaseStopRange() {
+    return Math.max(
+      this.patrolStopRange,
+      this.getChaseCollisionRadius() * 0.6
+    );
   }
 
   advanceAttackTimer(delta) {
@@ -655,16 +757,28 @@ export class EnemyAI {
     return path;
   }
 
-  getNavigationPath(from, to) {
+  getNavigationPath(from, to, radius = this.collisionRadius) {
     if (this.navigation?.findPath) {
-      const path = this.navigation.findPath(from, to, this.collisionRadius);
+      const path = this.navigation.findPath(from, to, radius);
 
       if (path.length > 0) {
         return path.map((point) => this.toGroundPoint(point));
       }
     }
 
-    if (this.canMoveBetween(from, to)) {
+    if (this.navigation?.findReachableTargetNear) {
+      const navigation = this.navigation.findReachableTargetNear(
+        from,
+        to,
+        radius
+      );
+
+      if (navigation?.path?.length > 0) {
+        return navigation.path.map((point) => this.toGroundPoint(point));
+      }
+    }
+
+    if (this.canMoveBetween(from, to, radius)) {
       return [this.toGroundPoint(to)];
     }
 
@@ -720,6 +834,7 @@ export class EnemyAI {
   moveTo(target, delta, stopRange, options = {}) {
     const snapOnArrive = options.snapOnArrive ?? true;
     const speedMultiplier = options.speedMultiplier ?? 1;
+    const collisionRadius = options.collisionRadius ?? this.collisionRadius;
     const dir = new THREE.Vector3().subVectors(target, this.model.position);
     dir.y = 0;
 
@@ -739,7 +854,11 @@ export class EnemyAI {
     const step = Math.min(distance, this.speed * speedMultiplier * delta);
     const previousPosition = this.model.position.clone();
     const desiredPosition = previousPosition.clone().addScaledVector(dir, step);
-    const nextPosition = this.resolveMovement(previousPosition, desiredPosition);
+    const nextPosition = this.resolveMovement(
+      previousPosition,
+      desiredPosition,
+      collisionRadius
+    );
 
     if (!nextPosition) {
       return { arrived: false, blocked: true };
@@ -751,8 +870,12 @@ export class EnemyAI {
     return { arrived: false, blocked: false };
   }
 
-  resolveMovement(previousPosition, desiredPosition) {
-    if (this.canMoveBetween(previousPosition, desiredPosition)) {
+  resolveMovement(
+    previousPosition,
+    desiredPosition,
+    radius = this.collisionRadius
+  ) {
+    if (this.canMoveBetween(previousPosition, desiredPosition, radius)) {
       return desiredPosition;
     }
 
@@ -770,7 +893,7 @@ export class EnemyAI {
     ];
 
     const validCandidates = candidates.filter((candidate) =>
-      this.canMoveBetween(previousPosition, candidate)
+      this.canMoveBetween(previousPosition, candidate, radius)
     );
 
     if (validCandidates.length === 0) return null;
@@ -784,10 +907,10 @@ export class EnemyAI {
     return validCandidates[0];
   }
 
-  canMoveBetween(from, to) {
+  canMoveBetween(from, to, radius = this.collisionRadius) {
     if (!this.navigation?.canMoveBetween) return true;
 
-    return this.navigation.canMoveBetween(from, to, this.collisionRadius);
+    return this.navigation.canMoveBetween(from, to, radius);
   }
 
   toGroundPoint(point) {
@@ -798,7 +921,7 @@ export class EnemyAI {
     return min + Math.random() * (max - min);
   }
 
-  takeDamage(amount, source) {
+  takeDamage(amount, source, options = {}) {
     if (!this.alive) return 0;
 
     const previousHp = this.hp;
@@ -817,7 +940,7 @@ export class EnemyAI {
 
     if (this.hp <= 0) {
       this.die();
-    } else if (source?.model) {
+    } else if (!options.suppressAggro && source?.model) {
       this.startChase(source, "damage");
     }
 
@@ -835,6 +958,7 @@ export class EnemyAI {
     this.target = null;
     this.chasePath = [];
     this.returnPath = [];
+    this.poisonEffects = [];
     this.state = ENEMY_STATES.DEAD;
     this.model.visible = false;
     this.healthBar.visible = false;

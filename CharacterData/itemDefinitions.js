@@ -15,6 +15,7 @@ export const ITEM_EFFECTS = {
   MAX_HP_UP: "maxHpUp",
   HEAL: "heal",
   STUN_ENEMY: "stunEnemy",
+  AREA_STUN_POISON: "areaStunPoison",
 };
 
 export const ITEM_DEFINITIONS = {
@@ -26,8 +27,10 @@ export const ITEM_DEFINITIONS = {
     hudSlot: 4,
     imagePath: "Assets/Images/Steak.png",
     effect: ITEM_EFFECTS.DAMAGE_UP,
-    modifiers: {
-      attackDamage: 5,
+    statsByRarity: {
+      [ITEM_RARITIES.COMMON]: {
+        attackDamage: 5,
+      },
     },
   },
 
@@ -35,13 +38,15 @@ export const ITEM_DEFINITIONS = {
     id: "chili",
     name: "Chili",
     type: ITEM_TYPES.PASSIVE,
-    rarity: ITEM_RARITIES.RARE,
+    rarity: ITEM_RARITIES.COMMON,
     hudSlot: 5,
     imagePath: "Assets/Images/Chili.png",
     effect: ITEM_EFFECTS.ATTACK_SPEED_UP,
-    modifiers: {
-      attackSpeed: 0.2,
-      maxAttackSpeed: 4,
+    statsByRarity: {
+      [ITEM_RARITIES.COMMON]: {
+        attackSpeed: 0.2,
+        maxAttackSpeed: 4,
+      },
     },
   },
 
@@ -49,12 +54,14 @@ export const ITEM_DEFINITIONS = {
     id: "ramen",
     name: "Ramen",
     type: ITEM_TYPES.PASSIVE,
-    rarity: ITEM_RARITIES.EPIC,
+    rarity: ITEM_RARITIES.COMMON,
     hudSlot: 3,
     imagePath: "Assets/Images/Ramen.png",
     effect: ITEM_EFFECTS.MAX_HP_UP,
-    modifiers: {
-      maxHp: 25,
+    statsByRarity: {
+      [ITEM_RARITIES.COMMON]: {
+        maxHp: 25,
+      },
     },
   },
 
@@ -62,7 +69,7 @@ export const ITEM_DEFINITIONS = {
     id: "energyDrink",
     name: "Energy Drink",
     type: ITEM_TYPES.CONSUMABLE,
-    rarity: ITEM_RARITIES.RARE,
+    rarity: ITEM_RARITIES.COMMON,
     hudSlot: 1,
     useSlot: 1,
     imagePath: "Assets/Images/EnergyDrink.png",
@@ -70,8 +77,10 @@ export const ITEM_DEFINITIONS = {
     inventory: {
       maxStack: 3,
     },
-    consumable: {
-      heal: 30,
+    statsByRarity: {
+      [ITEM_RARITIES.COMMON]: {
+        heal: 30,
+      },
     },
   },
 
@@ -83,13 +92,19 @@ export const ITEM_DEFINITIONS = {
     hudSlot: 2,
     useSlot: 2,
     imagePath: "Assets/Images/PurpleShroom.png",
-    effect: ITEM_EFFECTS.STUN_ENEMY,
+    effect: ITEM_EFFECTS.AREA_STUN_POISON,
     inventory: {
       maxStack: 3,
     },
-    consumable: {
-      stunDuration: 3,
-      radius: 3,
+    statsByRarity: {
+      [ITEM_RARITIES.COMMON]: {
+        radius: 2,
+        vfxRadius: 1.5,
+        stunDuration: 3,
+        poisonDamagePerSecond: 5,
+        poisonDuration: 3,
+        poisonTickInterval: 0.5,
+      },
     },
   },
 };
@@ -100,6 +115,23 @@ export function getItemDefinition(itemId) {
 
 export function getItemMaxStack(itemId) {
   return getItemDefinition(itemId)?.inventory?.maxStack ?? Infinity;
+}
+
+export function getItemStats(itemOrDefinition) {
+  const definition =
+    typeof itemOrDefinition === "string"
+      ? getItemDefinition(itemOrDefinition)
+      : itemOrDefinition;
+  if (!definition) return {};
+
+  const rarity = definition.rarity ?? ITEM_RARITIES.COMMON;
+  const commonStats = definition.statsByRarity?.[ITEM_RARITIES.COMMON] ?? {};
+  const rarityStats = definition.statsByRarity?.[rarity] ?? {};
+
+  return {
+    ...commonStats,
+    ...rarityStats,
+  };
 }
 
 export function getItemDefinitionByUseSlot(useSlot) {
