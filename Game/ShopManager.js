@@ -151,15 +151,6 @@ export class ShopManager {
     }
 
     if (offer.purchased) {
-      this.emit({
-        type: SHOP_EVENTS.OFFER_ALREADY_PURCHASED,
-        offer,
-        itemId: offer.itemId,
-        item: offer.itemDefinition,
-        rarity: offer.rarity,
-        price: offer.price,
-      });
-
       return {
         success: false,
         reason: "alreadyPurchased",
@@ -241,15 +232,6 @@ export class ShopManager {
     }
 
     if (offer.purchased) {
-      this.emit({
-        type: SHOP_EVENTS.OFFER_ALREADY_PURCHASED,
-        offer,
-        itemId: offer.itemId,
-        item: offer.itemDefinition,
-        rarity: offer.rarity,
-        price: offer.price,
-      });
-
       return {
         success: false,
         reason: "alreadyPurchased",
@@ -389,15 +371,6 @@ export class ShopManager {
         reason: "alreadyPurchased",
         offer,
       };
-
-      this.emit({
-        type: SHOP_EVENTS.OFFER_ALREADY_PURCHASED,
-        offer,
-        itemId: offer.itemId,
-        item: offer.itemDefinition,
-        rarity: offer.rarity,
-        price: offer.price,
-      });
 
       return result;
     }
@@ -728,15 +701,23 @@ export class ShopManager {
     if (!offer) return;
 
     const visuals = stand.model.userData.shopVisuals ?? {};
+    if (visuals.itemMarker) {
+      visuals.itemMarker.visible = !offer.purchased;
+    }
+
     if (visuals.label) {
-      this.updateOfferLabel(visuals.label, offer);
+      visuals.label.visible = !offer.purchased;
+
+      if (!offer.purchased) {
+        this.updateOfferLabel(visuals.label, offer);
+      }
     }
 
     stand.model.traverse((child) => {
       if (!child.isMesh || !child.material) return;
 
-      child.material.opacity = offer.purchased ? 0.46 : 1;
-      child.material.transparent = offer.purchased;
+      child.material.opacity = 1;
+      child.material.transparent = false;
       child.material.needsUpdate = true;
     });
   }

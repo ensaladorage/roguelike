@@ -1221,12 +1221,7 @@ export class GameScene {
     if (options.keyboardMovementActive) {
       if (!this.isShopStandInPlayerInteractionRange(stand)) return;
 
-      const result = this.shopManager?.requestStandInteraction?.(stand);
-      if (!result) return;
-
-      this.createClickFeedback(payload.point ?? stand.model.position, {
-        color: INTERACTION_CLICK_FEEDBACK_COLOR,
-      });
+      this.shopManager?.requestStandInteraction?.(stand);
       return;
     }
 
@@ -1239,10 +1234,6 @@ export class GameScene {
     const result = this.shopManager?.requestStandInteraction?.(stand);
     if (!result) return;
     if (result.reason === "interactionUnavailable") return;
-
-    this.createClickFeedback(payload.point ?? navigation.target, {
-      color: INTERACTION_CLICK_FEEDBACK_COLOR,
-    });
 
     if (
       result.reason === "movingToInteraction" &&
