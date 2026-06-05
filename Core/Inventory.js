@@ -237,6 +237,14 @@ export class Inventory {
     return this.consumables.get(itemId) ?? 0;
   }
 
+  isConsumableKnown(itemId) {
+    const definition = getItemDefinition(itemId);
+    if (!definition || definition.type !== ITEM_TYPES.CONSUMABLE) return false;
+
+    return this.knownConsumables.has(definition.id) ||
+      this.getConsumableCount(definition.id) > 0;
+  }
+
   canPickupItem(itemId) {
     const definition = getItemDefinition(itemId);
     if (!definition) return false;

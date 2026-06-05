@@ -134,6 +134,8 @@ export class HUD {
       button.title = `Use ${item.name}`;
       button.setAttribute("aria-label", `Use ${item.name}`);
       button.disabled = true;
+      button.hidden = true;
+      button.style.display = "none";
       button.classList.add("is-empty");
 
       const image = document.createElement("img");
@@ -168,9 +170,12 @@ export class HUD {
       if (!item) continue;
 
       const count = inventory.getConsumableCount(item.id);
+      const isKnown = inventory.isConsumableKnown?.(item.id) ?? count > 0;
       const maxStack = getItemMaxStack(item.id);
       const isMax = Number.isFinite(maxStack) && count >= maxStack;
 
+      quickUse.button.hidden = !isKnown;
+      quickUse.button.style.display = isKnown ? "" : "none";
       quickUse.count.textContent = isMax ? "Max." : `x${count}`;
       quickUse.count.classList.toggle("is-max", isMax);
       quickUse.button.disabled = count <= 0;
