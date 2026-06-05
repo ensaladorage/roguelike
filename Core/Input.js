@@ -7,6 +7,13 @@ const CURSOR_ICONS = {
 };
 
 const MOVEMENT_CURSOR = `url("${CURSOR_ICONS.movement}") 4 3, auto`;
+const AIM_ASSIST_RADIUS_PX = 66;
+const AIM_ASSIST_MAX_OFFSET_PX = 28;
+const AIM_ASSIST_STRENGTH = 0.52;
+const AIM_ASSIST_SMOOTHING = 0.26;
+const AIM_ASSIST_POINTER_SNAP_DELTA_PX = 72;
+const AIM_ASSIST_TARGET_HEIGHT_RATIO = 0.56;
+const AIM_ASSIST_GROUND_Y = 0;
 
 export function setupInput(
   renderer,
@@ -32,6 +39,12 @@ export function setupInput(
     inside: false,
     clientX: 0,
     clientY: 0,
+    previousClientX: 0,
+    previousClientY: 0,
+    pointerDeltaPx: 0,
+    assistOffsetX: 0,
+    assistOffsetY: 0,
+    assistOffsetInitialized: false,
   };
 
   renderer.domElement.style.cursor = MOVEMENT_CURSOR;
@@ -43,6 +56,7 @@ export function setupInput(
 
   renderer.domElement.addEventListener("pointerleave", () => {
     pointerState.inside = false;
+    resetCursorAssistOffset(pointerState);
     hideCursorOverlay(renderer.domElement, cursorOverlay);
   });
 
@@ -55,6 +69,40 @@ export function setupInput(
       onClick({
         enemy: enemyHit.enemy,
         point: enemyHit.point,
+      });
+      return;
+    }
+
+    const chestHit = getPointedChestHit(raycaster, getInteractableTargets);
+
+    if (chestHit) {
+      onClick({
+        point: chestHit.groundPoint,
+        interactable: chestHit.interactable,
+      });
+      return;
+    }
+
+    const assistTarget = getAimAssistTarget(
+      pointerState,
+      renderer,
+      camera,
+      getEnemyTargets,
+      getInteractableTargets
+    );
+
+    if (assistTarget?.intent === "attack" && assistTarget.enemy?.alive) {
+      onClick({
+        enemy: assistTarget.enemy,
+        point: assistTarget.groundPoint,
+      });
+      return;
+    }
+
+    if (assistTarget?.intent === "interactable" && assistTarget.groundPoint) {
+      onClick({
+        point: assistTarget.groundPoint,
+        interactable: assistTarget.interactable,
       });
       return;
     }
@@ -79,11 +127,24 @@ export function setupInput(
       raycaster,
       pointer
     );
+    const assistTarget = getAimAssistTarget(
+      pointerState,
+      renderer,
+      camera,
+      getEnemyTargets,
+      getInteractableTargets
+    );
+    const directHoverIntent = getHoverIntent(
+      raycaster,
+      getEnemyTargets,
+      getInteractableTargets
+    );
     updateCursorOverlay(
       pointerState,
       renderer.domElement,
       cursorOverlay,
-      getHoverIntent(raycaster, getEnemyTargets, getInteractableTargets),
+      directHoverIntent ?? assistTarget?.intent ?? null,
+      directHoverIntent ? null : assistTarget,
       attackFeedback
     );
   };
@@ -216,6 +277,7 @@ function updateCursorOverlay(
   canvas,
   overlay,
   hoverIntent,
+  assistTarget,
   attackFeedback
 ) {
   const showCooldownFeedback = isAttackCooldownVisible(attackFeedback);
@@ -224,6 +286,7 @@ function updateCursorOverlay(
   );
 
   if (!cursorIntent) {
+    resetCursorAssistOffset(pointerState);
     hideCursorOverlay(canvas, overlay);
     return;
   }
@@ -239,10 +302,64 @@ function updateCursorOverlay(
   overlay.classList.toggle("is-attack", cursorIntent === "attack");
   overlay.classList.toggle("is-interactable", cursorIntent === "interactable");
   updateAttackIndicator(overlay, attackFeedback, cursorIntent);
+  const cursorPosition = getCursorOverlayPosition(pointerState, assistTarget);
   overlay.classList.add("is-active");
-  overlay.style.setProperty("--cursor-x", `${pointerState.clientX}px`);
-  overlay.style.setProperty("--cursor-y", `${pointerState.clientY}px`);
+  overlay.style.setProperty("--cursor-x", `${cursorPosition.x}px`);
+  overlay.style.setProperty("--cursor-y", `${cursorPosition.y}px`);
   canvas.style.cursor = "none";
+}
+
+function getCursorOverlayPosition(pointerState, assistTarget) {
+  const targetOffset = getCursorAssistOffset(pointerState, assistTarget);
+  const pointerDelta = pointerState.pointerDeltaPx;
+
+  if (
+    !pointerState.assistOffsetInitialized ||
+    pointerDelta > AIM_ASSIST_POINTER_SNAP_DELTA_PX
+  ) {
+    pointerState.assistOffsetX = targetOffset.x;
+    pointerState.assistOffsetY = targetOffset.y;
+    pointerState.assistOffsetInitialized = true;
+  } else {
+    pointerState.assistOffsetX = THREE.MathUtils.lerp(
+      pointerState.assistOffsetX,
+      targetOffset.x,
+      AIM_ASSIST_SMOOTHING
+    );
+    pointerState.assistOffsetY = THREE.MathUtils.lerp(
+      pointerState.assistOffsetY,
+      targetOffset.y,
+      AIM_ASSIST_SMOOTHING
+    );
+  }
+  pointerState.pointerDeltaPx = 0;
+
+  return {
+    x: pointerState.clientX + pointerState.assistOffsetX,
+    y: pointerState.clientY + pointerState.assistOffsetY,
+  };
+}
+
+function getCursorAssistOffset(pointerState, assistTarget) {
+  if (!assistTarget) return { x: 0, y: 0 };
+
+  const offsetX = assistTarget.clientX - pointerState.clientX;
+  const offsetY = assistTarget.clientY - pointerState.clientY;
+  const distance = Math.hypot(offsetX, offsetY);
+
+  if (distance <= 0.001) return { x: 0, y: 0 };
+
+  const assistFalloff = 1 - Math.min(1, distance / AIM_ASSIST_RADIUS_PX);
+  const assistedDistance = Math.min(
+    distance * AIM_ASSIST_STRENGTH * assistFalloff,
+    AIM_ASSIST_MAX_OFFSET_PX
+  );
+  const assistScale = assistedDistance / distance;
+
+  return {
+    x: offsetX * assistScale,
+    y: offsetY * assistScale,
+  };
 }
 
 function getCursorIcon(cursorIntent) {
@@ -308,7 +425,11 @@ function isAttackCooldownVisible(attackFeedback) {
   );
 }
 
-function getHoverIntent(raycaster, getEnemyTargets, getInteractableTargets) {
+function getHoverIntent(
+  raycaster,
+  getEnemyTargets,
+  getInteractableTargets
+) {
   if (getPointedEnemy(raycaster, getEnemyTargets)) {
     return "attack";
   }
@@ -332,9 +453,28 @@ function updatePointer(event, renderer, camera, raycaster, pointer) {
 }
 
 function updatePointerState(pointerState, event) {
+  const wasInside = pointerState.inside;
+
+  pointerState.previousClientX = wasInside
+    ? pointerState.clientX
+    : event.clientX;
+  pointerState.previousClientY = wasInside
+    ? pointerState.clientY
+    : event.clientY;
   pointerState.inside = true;
   pointerState.clientX = event.clientX;
   pointerState.clientY = event.clientY;
+  pointerState.pointerDeltaPx = Math.hypot(
+    pointerState.clientX - pointerState.previousClientX,
+    pointerState.clientY - pointerState.previousClientY
+  );
+}
+
+function resetCursorAssistOffset(pointerState) {
+  pointerState.assistOffsetX = 0;
+  pointerState.assistOffsetY = 0;
+  pointerState.assistOffsetInitialized = false;
+  pointerState.pointerDeltaPx = 0;
 }
 
 function updatePointerFromClientPosition(
@@ -377,15 +517,178 @@ function getPointedEnemyHit(raycaster, getEnemyTargets) {
 }
 
 function getPointedInteractable(raycaster, getInteractableTargets) {
+  return Boolean(getPointedInteractableHit(raycaster, getInteractableTargets));
+}
+
+function getPointedChestHit(raycaster, getInteractableTargets) {
+  const hit = getPointedInteractableHit(raycaster, getInteractableTargets);
+
+  if (hit?.interactable?.type !== "chest") return null;
+
+  return hit;
+}
+
+function getPointedInteractableHit(raycaster, getInteractableTargets) {
   const interactableTargets =
     typeof getInteractableTargets === "function" ? getInteractableTargets() : [];
   const hits = raycaster.intersectObjects(interactableTargets, true);
 
   for (const hit of hits) {
-    if (findInteractableFromObject(hit.object)) return true;
+    const interactable = findInteractableFromObject(hit.object);
+
+    if (interactable) {
+      const targetRoot = findInteractableRoot(hit.object);
+      const groundPoint = getGroundPoint(
+        targetRoot ? getObjectAimPoint(targetRoot) : hit.point
+      );
+
+      return {
+        interactable,
+        object: targetRoot ?? hit.object,
+        point: hit.point.clone(),
+        groundPoint,
+      };
+    }
   }
 
-  return false;
+  return null;
+}
+
+function getAimAssistTarget(
+  pointerState,
+  renderer,
+  camera,
+  getEnemyTargets,
+  getInteractableTargets
+) {
+  if (!pointerState.inside) return null;
+
+  const bounds = renderer.domElement.getBoundingClientRect();
+  const candidates = [
+    ...getEnemyAimAssistCandidates(getEnemyTargets),
+    ...getChestAimAssistCandidates(getInteractableTargets),
+  ];
+  let bestTarget = null;
+
+  for (const candidate of candidates) {
+    if (!candidate.object?.visible) continue;
+
+    const aimPoint = getObjectAimPoint(candidate.object);
+    const screenPoint = getClientPointFromWorld(aimPoint, camera, bounds);
+    if (!screenPoint) continue;
+
+    const distance = Math.hypot(
+      screenPoint.x - pointerState.clientX,
+      screenPoint.y - pointerState.clientY
+    );
+
+    if (distance > AIM_ASSIST_RADIUS_PX) continue;
+
+    const score =
+      distance / AIM_ASSIST_RADIUS_PX +
+      (candidate.intent === "attack" ? -0.08 : 0);
+
+    if (bestTarget && score >= bestTarget.score) continue;
+
+    bestTarget = {
+      ...candidate,
+      score,
+      clientX: screenPoint.x,
+      clientY: screenPoint.y,
+      point: aimPoint,
+      groundPoint: getGroundPoint(aimPoint),
+    };
+  }
+
+  return bestTarget;
+}
+
+function getEnemyAimAssistCandidates(getEnemyTargets) {
+  const enemyTargets =
+    typeof getEnemyTargets === "function" ? getEnemyTargets() : [];
+
+  return enemyTargets
+    .map((object) => ({
+      intent: "attack",
+      object,
+      enemy: findEnemyFromObject(object),
+    }))
+    .filter((candidate) => candidate.enemy?.alive);
+}
+
+function getChestAimAssistCandidates(getInteractableTargets) {
+  const interactableTargets =
+    typeof getInteractableTargets === "function" ? getInteractableTargets() : [];
+
+  return interactableTargets
+    .map((object) => ({
+      intent: "interactable",
+      object,
+      interactable: findInteractableFromObject(object),
+    }))
+    .filter((candidate) => candidate.interactable?.type === "chest");
+}
+
+function getClientPointFromWorld(worldPoint, camera, bounds) {
+  const projected = worldPoint.clone().project(camera);
+
+  if (
+    projected.z < -1 ||
+    projected.z > 1 ||
+    !Number.isFinite(projected.x) ||
+    !Number.isFinite(projected.y)
+  ) {
+    return null;
+  }
+
+  return {
+    x: bounds.left + ((projected.x + 1) / 2) * bounds.width,
+    y: bounds.top + ((1 - projected.y) / 2) * bounds.height,
+  };
+}
+
+function getObjectAimPoint(object) {
+  const box = new THREE.Box3().setFromObject(object);
+
+  if (!isFiniteBox(box)) {
+    const position = new THREE.Vector3();
+    object.getWorldPosition(position);
+    return position;
+  }
+
+  const center = box.getCenter(new THREE.Vector3());
+  const size = box.getSize(new THREE.Vector3());
+
+  center.y = box.min.y + size.y * AIM_ASSIST_TARGET_HEIGHT_RATIO;
+
+  return center;
+}
+
+function getGroundPoint(point) {
+  return new THREE.Vector3(point.x, AIM_ASSIST_GROUND_Y, point.z);
+}
+
+function isFiniteBox(box) {
+  return Number.isFinite(box.min.x) &&
+    Number.isFinite(box.min.y) &&
+    Number.isFinite(box.min.z) &&
+    Number.isFinite(box.max.x) &&
+    Number.isFinite(box.max.y) &&
+    Number.isFinite(box.max.z);
+}
+
+function findInteractableRoot(object) {
+  let current = object;
+
+  while (current) {
+    if (current.userData?.interactable) {
+      return current;
+    }
+
+    current = current.parent;
+  }
+
+  return null;
 }
 
 function findEnemyFromObject(object) {

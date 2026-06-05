@@ -255,6 +255,7 @@ export class ChestManager {
     this.scene = scene;
 
     this.chests = [];
+    this.pendingChest = null;
   }
 
   // =========================
@@ -266,17 +267,7 @@ export class ChestManager {
     this.chests = level.chests.map((data) => {
       const model = this.createChestModel(data.modelId);
       const animation = this.createChestAnimation(model);
-
-      model.position.set(data.x, 0, data.z);
-      model.rotation.y = data.rotationY;
-      model.userData.interactable = {
-        type: "chest",
-      };
-      this.applySpawnScale(model, data);
-
-      this.scene.levelGroup.add(model);
-
-      return {
+      const chest = {
         model,
         animation,
         roomId: data.roomId,
@@ -287,6 +278,18 @@ export class ChestManager {
         rewardOverrides: data.rewardOverrides,
         collected: false,
       };
+
+      model.position.set(data.x, 0, data.z);
+      model.rotation.y = data.rotationY;
+      model.userData.interactable = {
+        type: "chest",
+        chest,
+      };
+      this.applySpawnScale(model, data);
+
+      this.scene.levelGroup.add(model);
+
+      return chest;
     });
   }
 
@@ -298,27 +301,52 @@ export class ChestManager {
       chest.animation?.mixer?.update(delta);
     }
 
-    this.checkChestProximity();
+    this.checkPendingChestInteraction();
   }
 
   // =========================
-  // PROXIMITY CHECK
+  // CLICK-REQUESTED INTERACTION
   // =========================
-  checkChestProximity() {
-    const playerPos = this.scene.player.model.position;
+  requestChestOpen(chest) {
+    if (!this.isChestInteractable(chest)) return false;
 
-    for (const chest of this.chests) {
-      if (chest.collected) continue;
-      if (chest.model?.visible === false) continue;
+    this.pendingChest = chest;
+    this.checkPendingChestInteraction();
 
-      const distance = flatDistance(playerPos, chest.model.position);
+    return true;
+  }
 
-      const triggerRange = chest.triggerRange ?? 1.25;
+  cancelPendingChestOpen(chest = null) {
+    if (chest && this.pendingChest !== chest) return;
 
-      if (distance <= triggerRange) {
-        this.collectChest(chest);
-      }
+    this.pendingChest = null;
+  }
+
+  checkPendingChestInteraction() {
+    const chest = this.pendingChest;
+    if (!chest) return;
+
+    if (!this.isChestInteractable(chest)) {
+      this.pendingChest = null;
+      return;
     }
+
+    const playerPos = this.scene.player.model.position;
+    const distance = flatDistance(playerPos, chest.model.position);
+    const triggerRange = chest.triggerRange ?? 1.25;
+
+    if (distance > triggerRange) return;
+
+    this.pendingChest = null;
+    this.collectChest(chest);
+  }
+
+  isChestInteractable(chest) {
+    return Boolean(
+      chest &&
+      !chest.collected &&
+      chest.model?.visible !== false
+    );
   }
 
   // =========================
@@ -746,6 +774,8 @@ export class ChestManager {
   // CLEAN
   // =========================
   clear() {
+    this.pendingChest = null;
+
     for (const chest of this.chests) {
       chest.animation?.mixer?.stopAllAction();
       chest.model.removeFromParent();

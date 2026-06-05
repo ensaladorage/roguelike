@@ -50,6 +50,7 @@ const MAX_RENDER_PIXEL_RATIO = 1.75;
 const PAUSE_LOCK_REASON = "pauseMenu";
 const MOVEMENT_CLICK_FEEDBACK_COLOR = 0x63d982;
 const ATTACK_CLICK_FEEDBACK_COLOR = 0xff4058;
+const INTERACTION_CLICK_FEEDBACK_COLOR = 0xffd84a;
 const FRONT_DIRECTION_BY_SIDE = {
   north: { x: 0, z: 1 },
   south: { x: 0, z: -1 },
@@ -1061,6 +1062,14 @@ export class GameScene {
   handleWorldClick(payload) {
     if (this.isPlayerControlLocked()) return;
 
+    const chest = this.getChestFromInteractable(payload?.interactable);
+    if (chest) {
+      this.handleChestClick(chest, payload);
+      return;
+    }
+
+    this.chestManager?.cancelPendingChestOpen?.();
+
     if (payload?.enemy?.alive) {
       const navigation = this.getEnemyAttackNavigation(payload.enemy);
       if (!navigation) return;
@@ -1079,6 +1088,33 @@ export class GameScene {
 
     this.createClickFeedback(navigation.target);
     this.player.setPath(navigation.path);
+  }
+
+  getChestFromInteractable(interactable) {
+    if (interactable?.type !== "chest") return null;
+
+    return interactable.chest ?? null;
+  }
+
+  handleChestClick(chest, payload = {}) {
+    this.chestManager?.cancelPendingChestOpen?.();
+
+    if (!this.chestManager?.isChestInteractable?.(chest)) return;
+
+    const navigation = this.getChestInteractionNavigation(
+      chest,
+      payload.point
+    );
+    if (!navigation) return;
+
+    this.chestManager.requestChestOpen(chest);
+    this.createClickFeedback(payload.point ?? navigation.target, {
+      color: INTERACTION_CLICK_FEEDBACK_COLOR,
+    });
+
+    if (navigation.path.length > 0) {
+      this.player.setPath(navigation.path);
+    }
   }
 
   createEnemyNavigation() {
@@ -1408,6 +1444,105 @@ export class GameScene {
     }
 
     return null;
+  }
+
+  getChestInteractionNavigation(chest, clickPoint = null) {
+    if (!chest?.model?.position || !this.player) return null;
+
+    const playerPosition = this.player.model.position;
+    const chestPosition = chest.model.position;
+    const triggerRange = chest.triggerRange ?? 1.25;
+
+    if (flatDistance(playerPosition, chestPosition) <= triggerRange) {
+      return {
+        target: clickPoint?.clone?.() ?? chestPosition.clone(),
+        path: [],
+      };
+    }
+
+    const candidates = this.getChestInteractionTargetCandidates(
+      chest,
+      clickPoint
+    );
+
+    for (const target of candidates) {
+      const path = this.findNavigationPath(
+        playerPosition,
+        target,
+        PLAYER_COLLISION_RADIUS
+      );
+
+      if (path.length > 0) {
+        return { target, path };
+      }
+    }
+
+    return null;
+  }
+
+  getChestInteractionTargetCandidates(chest, clickPoint = null) {
+    const chestPosition = chest.model.position;
+    const triggerRange = chest.triggerRange ?? 1.25;
+    const approachDistance = Math.max(
+      PLAYER_COLLISION_RADIUS * 2,
+      Math.min(triggerRange - 0.08, triggerRange * 0.85)
+    );
+    const candidates = [];
+    const seen = new Set();
+
+    const addCandidate = (point) => {
+      const target = point.clone();
+      target.y = PLAYER_GROUND_Y;
+      const key = `${target.x.toFixed(3)},${target.z.toFixed(3)}`;
+
+      if (seen.has(key)) return;
+      if (
+        flatDistance(target, chestPosition) <
+        PLAYER_COLLISION_RADIUS * 1.5
+      ) {
+        return;
+      }
+      if (!this.isWalkablePosition(target, PLAYER_COLLISION_RADIUS)) return;
+
+      seen.add(key);
+      candidates.push(target);
+    };
+
+    if (clickPoint) {
+      this.getWalkableTargetCandidates(
+        clickPoint,
+        PLAYER_COLLISION_RADIUS
+      ).forEach(addCandidate);
+    }
+
+    const towardPlayer = this.player.model.position.clone().sub(chestPosition);
+    towardPlayer.y = 0;
+
+    if (towardPlayer.lengthSq() > 0.0001) {
+      towardPlayer.normalize();
+      addCandidate(
+        chestPosition.clone().addScaledVector(towardPlayer, approachDistance)
+      );
+    }
+
+    for (let i = 0; i < 16; i += 1) {
+      const angle = (i / 16) * Math.PI * 2;
+      addCandidate(
+        new THREE.Vector3(
+          chestPosition.x + Math.cos(angle) * approachDistance,
+          PLAYER_GROUND_Y,
+          chestPosition.z + Math.sin(angle) * approachDistance
+        )
+      );
+    }
+
+    candidates.sort(
+      (a, b) =>
+        a.distanceToSquared(chestPosition) -
+        b.distanceToSquared(chestPosition)
+    );
+
+    return candidates;
   }
 
   getEnemyAttackNavigation(enemy) {
