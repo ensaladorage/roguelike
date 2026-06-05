@@ -1183,7 +1183,10 @@ export class GameScene {
     }
 
     const start = this.getNearestWalkableNavCell(from, radius, {
-      maxRing: 2,
+      maxRing: 3,
+      mustConnectToPosition: true,
+    }) ?? this.getNearestWalkableNavCell(from, radius, {
+      maxRing: 3,
     });
 
     const goal = this.getNearestWalkableNavCell(to, radius, {

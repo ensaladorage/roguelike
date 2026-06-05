@@ -32,7 +32,7 @@ export const ROOM_TESTER_LEVELS = [
           clusterRadius: 1,
           clusterScatterRadius: 0.4,
           placementFootprint: { w: 0.6, d: 0.6 },
-          collisionFootprint: { w: 0.1, d: 0.1 },
+          collisionFootprint: { w: 0.7, d: 0.7 },
           positionJitter: 1,
           scaleVariation: { min: 0.8, max: 1.6 },
         },

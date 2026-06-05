@@ -835,10 +835,12 @@ export class DecorationBuilder {
   }
 
   createBlockingArea(module) {
+    const scaleMultiplier = module.scaleMultiplier ?? 1;
+
     return {
       ...module,
-      w: module.collisionFootprint?.w ?? module.w,
-      d: module.collisionFootprint?.d ?? module.d,
+      w: (module.collisionFootprint?.w ?? module.w) * scaleMultiplier,
+      d: (module.collisionFootprint?.d ?? module.d) * scaleMultiplier,
     };
   }
 

@@ -34,7 +34,7 @@ const OPPOSITE_SIDE = {
 };
 
 const ROCK_COLLISION_SCALE = 0.55;
-const BARREL_COLLISION_SCALE = 0.1;
+const BARREL_COLLISION_SCALE = 0.7;
 const ENTRY_STAIRS_OFFSET_FROM_WALL = 1.5;
 const EXIT_STAIRS_OFFSET_FROM_WALL = 1.5;
 const EXIT_STAIRS_Y = -0.9;
@@ -898,11 +898,13 @@ export class LevelBuilder {
 
   createObstacleCollision(module) {
     const scale = module.collisionScale ?? this.getObstacleCollisionScale(module);
+    const scaleMultiplier = module.scaleMultiplier ?? 1;
+    const footprint = module.collisionFootprint ?? null;
 
     return {
       ...module,
-      w: module.w * scale,
-      d: module.d * scale,
+      w: (footprint?.w ?? module.w * scale) * scaleMultiplier,
+      d: (footprint?.d ?? module.d * scale) * scaleMultiplier,
     };
   }
 
