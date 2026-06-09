@@ -77,16 +77,6 @@ export function setupInput(
   renderer.domElement.addEventListener("pointerdown", (event) => {
     updatePointerState(pointerState, event);
     updatePointer(event, renderer, camera, raycaster, pointer);
-    const enemyHit = getPointedEnemyHit(raycaster, getEnemyTargets);
-
-    if (enemyHit) {
-      onClick({
-        enemy: enemyHit.enemy,
-        point: enemyHit.point,
-      });
-      return;
-    }
-
     const interactableHit = getPointedInteractableHit(
       raycaster,
       getInteractableTargets
@@ -100,6 +90,15 @@ export function setupInput(
       return;
     }
 
+    const enemyHit = getPointedEnemyHit(raycaster, getEnemyTargets);
+
+    if (enemyHit) {
+      onClick({
+        point: enemyHit.point,
+      });
+      return;
+    }
+
     const assistTarget = getAimAssistTarget(
       pointerState,
       renderer,
@@ -108,18 +107,17 @@ export function setupInput(
       getInteractableTargets
     );
 
-    if (assistTarget?.intent === "attack" && assistTarget.enemy?.alive) {
-      onClick({
-        enemy: assistTarget.enemy,
-        point: assistTarget.groundPoint,
-      });
-      return;
-    }
-
     if (assistTarget?.intent === "interactable" && assistTarget.groundPoint) {
       onClick({
         point: assistTarget.groundPoint,
         interactable: assistTarget.interactable,
+      });
+      return;
+    }
+
+    if (assistTarget?.intent === "attack" && assistTarget.enemy?.alive) {
+      onClick({
+        point: assistTarget.groundPoint,
       });
       return;
     }
@@ -151,15 +149,20 @@ export function setupInput(
       getEnemyTargets,
       getInteractableTargets
     );
-    const directEnemyHit = getPointedEnemyHit(raycaster, getEnemyTargets);
-    const directInteractableHit = directEnemyHit
+    const directInteractableHit = getPointedInteractableHit(
+      raycaster,
+      getInteractableTargets
+    );
+    const directEnemyHit = directInteractableHit
       ? null
-      : getPointedInteractableHit(raycaster, getInteractableTargets);
-    const directHoverIntent = directEnemyHit
-      ? "attack"
-      : directInteractableHit
-        ? "interactable"
+      : getPointedEnemyHit(raycaster, getEnemyTargets);
+    const directHoverIntent = directInteractableHit
+      ? "interactable"
+      : directEnemyHit
+        ? "attack"
         : null;
+    const assistedHoverIntent =
+      assistTarget?.intent === "interactable" ? "interactable" : null;
     options.onInteractableHover?.(
       directInteractableHit?.interactable ?? null,
       {
@@ -171,8 +174,8 @@ export function setupInput(
       pointerState,
       renderer.domElement,
       cursorOverlay,
-      directHoverIntent ?? assistTarget?.intent ?? null,
-      directHoverIntent ? null : assistTarget,
+      directHoverIntent ?? assistedHoverIntent,
+      assistedHoverIntent ? assistTarget : null,
       attackFeedback
     );
   };
@@ -433,10 +436,8 @@ function updateCursorOverlay(
   assistTarget,
   attackFeedback
 ) {
-  const showCooldownFeedback = isAttackCooldownVisible(attackFeedback);
-  const cursorIntent = hoverIntent ?? (
-    showCooldownFeedback ? "movement" : null
-  );
+  const showAttackCooldown = isAttackCooldownVisible(attackFeedback);
+  const cursorIntent = showAttackCooldown ? "attack" : hoverIntent;
 
   if (!cursorIntent) {
     resetCursorAssistOffset(pointerState);
@@ -686,8 +687,8 @@ function getAimAssistTarget(
 
   const bounds = renderer.domElement.getBoundingClientRect();
   const candidates = [
-    ...getEnemyAimAssistCandidates(getEnemyTargets),
     ...getInteractableAimAssistCandidates(getInteractableTargets),
+    ...getEnemyAimAssistCandidates(getEnemyTargets),
   ];
   let bestTarget = null;
 
@@ -707,7 +708,7 @@ function getAimAssistTarget(
 
     const score =
       distance / AIM_ASSIST_RADIUS_PX +
-      (candidate.intent === "attack" ? -0.08 : 0);
+      (candidate.intent === "interactable" ? -0.08 : 0);
 
     if (bestTarget && score >= bestTarget.score) continue;
 

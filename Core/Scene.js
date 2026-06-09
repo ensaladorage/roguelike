@@ -39,7 +39,6 @@ const CLICK_TARGET_SEARCH_STEP = 0.22;
 const PLAYER_COLLISION_SKIN = 0.04;
 const PLAYER_ENEMY_COLLISION_SKIN = -0.03;
 const PLAYER_ENEMY_COLLISION_RADIUS_SCALE = 0.72;
-const PLAYER_ATTACK_PATH_REFRESH_TIME = 0.2;
 const ENTRY_STAIRS_FRONT_OFFSET = 2;
 const EXIT_INTERACTABLE_HOLE_SIZE = 1;
 const EXIT_INTERACTABLE_HOLE_Y = 0.08;
@@ -48,11 +47,7 @@ const DEBUG_EXTERMINATOR_DAMAGE = 999999;
 const DEBUG_GOLD_AMOUNT = 999;
 const MAX_RENDER_PIXEL_RATIO = 1.75;
 const PAUSE_LOCK_REASON = "pauseMenu";
-const MOVEMENT_CLICK_FEEDBACK_COLOR = 0x63d982;
-const ATTACK_CLICK_FEEDBACK_COLOR = 0xff4058;
 const INTERACTION_CLICK_FEEDBACK_COLOR = 0xffd84a;
-const BOSS_ATTACK_FEEDBACK_RADIUS_SCALE = 0.82;
-const BOSS_ATTACK_FEEDBACK_MIN_RADIUS = 0.48;
 const FRONT_DIRECTION_BY_SIDE = {
   north: { x: 0, z: 1 },
   south: { x: 0, z: -1 },
@@ -119,7 +114,6 @@ export class GameScene {
     this.clickEffects = [];
     this.feedbackEffects = [];
     this.playerControlLocks = new Set();
-    this.playerAttackPathRefreshTimer = 0;
     this.inputController = null;
     this.isPaused = false;
     this.bossExitBlockedNotified = false;
@@ -646,7 +640,6 @@ export class GameScene {
     this.navBounds = null;
     this.levelExitTrigger = null;
     this.exitInteractableTargets = [];
-    this.playerAttackPathRefreshTimer = 0;
   }
 
   clearClickEffects() {
@@ -770,6 +763,7 @@ export class GameScene {
     this.player.groundY = PLAYER_GROUND_Y;
     this.player.resetRuntimeState?.();
     this.player.setFacingRotation?.(spawnRotationY);
+    this.vfx?.addPlayerAttackRangeIndicator?.(this.player);
   }
 
   getPlayerSpawnRotation(startPosition, safePosition) {
@@ -1249,48 +1243,24 @@ export class GameScene {
       return;
     }
 
-    if (payload?.enemy?.alive) {
-      if (keyboardMovementActive) {
-        if (!this.isEnemyInPlayerAttackRange(payload.enemy)) {
-          this.cancelStoredActionIntents();
-          return;
-        }
-
-        this.cancelStoredActionIntents({ keepAttack: true });
-        this.createEnemyAttackClickFeedback(payload.enemy, payload.point);
-        this.player.setAttackTarget(payload.enemy, [], {
-          autoPursuit: false,
-        });
-        return;
-      }
-
-      const navigation = this.getEnemyAttackNavigation(payload.enemy);
-      if (!navigation) {
-        this.cancelStoredActionIntents();
-        return;
-      }
-
-      this.cancelStoredActionIntents({ keepAttack: true });
-      this.createEnemyAttackClickFeedback(payload.enemy, navigation.target);
-      this.player.setAttackTarget(payload.enemy, navigation.path);
-      return;
-    }
-
     if (!payload?.point) return;
-    if (keyboardMovementActive) return;
 
-    this.cancelStoredActionIntents();
-    const navigation = this.getClickNavigation(payload.point);
-    if (!navigation) return;
+    this.handleDirectionalAttackClick(payload.point);
+  }
 
-    this.createClickFeedback(navigation.target);
-    this.player.setPath(navigation.path);
+  handleDirectionalAttackClick(point) {
+    if (!point || !this.player) return;
+
+    this.cancelStoredActionIntents({ keepAttack: true });
+    this.player.requestDirectionalAttack(point, {
+      enemies: this.enemies,
+    });
   }
 
   handleKeyboardMovementStart() {
     if (this.isPlayerControlLocked()) return;
 
-    this.cancelStoredActionIntents();
+    this.cancelStoredActionIntents({ keepAttack: true });
     this.player?.stopMovement?.();
   }
 
@@ -1301,7 +1271,7 @@ export class GameScene {
       this.player?.clearAttackTarget?.();
     }
 
-    // Add future delayed interactables here so manual movement/clicks clear stale actions.
+    // Add future delayed interactables here so manual movement/interactions clear stale actions.
     this.chestManager?.cancelPendingChestOpen?.();
     this.shopManager?.cancelPendingStandInteraction?.();
     this.shopManager?.cancelPendingFountainInteraction?.();
@@ -1339,15 +1309,6 @@ export class GameScene {
     }
 
     this.hud?.showItemTooltip?.(itemDrop.item, pointer);
-  }
-
-  isEnemyInPlayerAttackRange(enemy) {
-    if (!enemy?.model?.position || !this.player?.model?.position) return false;
-
-    return flatDistance(
-      this.player.model.position,
-      enemy.model.position
-    ) <= this.player.attackRange;
   }
 
   isChestInPlayerInteractionRange(chest) {
@@ -1517,33 +1478,13 @@ export class GameScene {
     };
   }
 
-  createEnemyAttackClickFeedback(enemy, fallbackPosition = null) {
-    if (enemy?.isBoss && enemy.model?.position) {
-      const radius = Math.max(
-        BOSS_ATTACK_FEEDBACK_MIN_RADIUS,
-        (enemy.collisionRadius ?? ENEMY_COLLISION_RADIUS) *
-          BOSS_ATTACK_FEEDBACK_RADIUS_SCALE
-      );
-
-      this.createClickFeedback(enemy.model.position, {
-        color: ATTACK_CLICK_FEEDBACK_COLOR,
-        radius,
-      });
-      return;
-    }
-
-    this.createClickFeedback(fallbackPosition ?? enemy?.model?.position, {
-      color: ATTACK_CLICK_FEEDBACK_COLOR,
-    });
-  }
-
   createClickFeedback(position, options = {}) {
     if (!position) return;
 
     const radius = options.radius ?? 0.36;
     const thickness = options.thickness ?? Math.max(0.045, radius * 0.16);
     const material = new THREE.MeshBasicMaterial({
-      color: options.color ?? MOVEMENT_CLICK_FEEDBACK_COLOR,
+      color: options.color ?? INTERACTION_CLICK_FEEDBACK_COLOR,
       transparent: true,
       opacity: 0.9,
       side: THREE.DoubleSide,
@@ -1859,27 +1800,6 @@ export class GameScene {
     return simplified;
   }
 
-  getClickNavigation(point) {
-    const candidates = this.getWalkableTargetCandidates(
-      point,
-      PLAYER_COLLISION_RADIUS
-    );
-
-    for (const target of candidates) {
-      const path = this.findNavigationPath(
-        this.player.model.position,
-        target,
-        PLAYER_COLLISION_RADIUS
-      );
-
-      if (path.length > 0) {
-        return { target, path };
-      }
-    }
-
-    return null;
-  }
-
   getChestInteractionNavigation(chest, clickPoint = null) {
     if (!chest?.model?.position || !this.player) return null;
 
@@ -2164,132 +2084,6 @@ export class GameScene {
       (a, b) =>
         a.distanceToSquared(standPosition) -
         b.distanceToSquared(standPosition)
-    );
-
-    return candidates;
-  }
-
-  getEnemyAttackNavigation(enemy) {
-    if (!enemy?.alive || !this.player) return null;
-
-    const playerPosition = this.player.model.position;
-    const enemyPosition = enemy.model.position;
-    const attackRange = this.player.attackRange ?? 1.65;
-
-    if (flatDistance(playerPosition, enemyPosition) <= attackRange) {
-      return {
-        target: enemyPosition.clone(),
-        path: [],
-      };
-    }
-
-    const candidates = this.getEnemyAttackTargetCandidates(enemy, attackRange);
-
-    for (const target of candidates) {
-      const path = this.findNavigationPath(
-        playerPosition,
-        target,
-        PLAYER_COLLISION_RADIUS
-      );
-
-      if (path.length > 0) {
-        return { target, path };
-      }
-    }
-
-    return null;
-  }
-
-  updatePlayerAttackPursuit(delta) {
-    const enemy = this.player?.attackTarget;
-
-    if (!this.player?.canAutoPursueAttackTarget?.()) {
-      this.playerAttackPathRefreshTimer = 0;
-      return;
-    }
-
-    if (!enemy?.alive || this.player.hp <= 0) {
-      this.playerAttackPathRefreshTimer = 0;
-      return;
-    }
-
-    const distance = flatDistance(
-      this.player.model.position,
-      enemy.model.position
-    );
-
-    if (distance <= this.player.attackRange) {
-      if (this.player.target || this.player.path.length > 0) {
-        this.player.stopMovement();
-      }
-      this.playerAttackPathRefreshTimer = 0;
-      return;
-    }
-
-    this.playerAttackPathRefreshTimer -= delta;
-
-    if (
-      this.playerAttackPathRefreshTimer > 0 &&
-      (this.player.target || this.player.path.length > 0)
-    ) {
-      return;
-    }
-
-    const navigation = this.getEnemyAttackNavigation(enemy);
-
-    if (navigation?.path?.length > 0) {
-      this.player.applyPath(navigation.path);
-      this.playerAttackPathRefreshTimer = PLAYER_ATTACK_PATH_REFRESH_TIME;
-      return;
-    }
-
-    this.playerAttackPathRefreshTimer = PLAYER_ATTACK_PATH_REFRESH_TIME;
-  }
-
-  getEnemyAttackTargetCandidates(enemy, attackRange) {
-    const enemyPosition = enemy.model.position;
-    const playerPosition = this.player.model.position;
-    const approachDistance = Math.max(
-      PLAYER_COLLISION_RADIUS * 2,
-      Math.min(attackRange - 0.08, attackRange * 0.85)
-    );
-    const candidates = [];
-    const seen = new Set();
-
-    const addCandidate = (x, z) => {
-      const target = new THREE.Vector3(x, PLAYER_GROUND_Y, z);
-      const key = `${target.x.toFixed(3)},${target.z.toFixed(3)}`;
-
-      if (seen.has(key)) return;
-      if (!this.isWalkablePosition(target, PLAYER_COLLISION_RADIUS)) return;
-
-      seen.add(key);
-      candidates.push(target);
-    };
-
-    const towardPlayer = playerPosition.clone().sub(enemyPosition);
-    towardPlayer.y = 0;
-
-    if (towardPlayer.lengthSq() > 0.0001) {
-      towardPlayer.normalize();
-      addCandidate(
-        enemyPosition.x + towardPlayer.x * approachDistance,
-        enemyPosition.z + towardPlayer.z * approachDistance
-      );
-    }
-
-    for (let i = 0; i < 16; i += 1) {
-      const angle = (i / 16) * Math.PI * 2;
-      addCandidate(
-        enemyPosition.x + Math.cos(angle) * approachDistance,
-        enemyPosition.z + Math.sin(angle) * approachDistance
-      );
-    }
-
-    candidates.sort(
-      (a, b) =>
-        a.distanceToSquared(playerPosition) -
-        b.distanceToSquared(playerPosition)
     );
 
     return candidates;
@@ -2735,10 +2529,6 @@ export class GameScene {
     const keyboardMovementInput = this.getKeyboardMovementInput();
     const previousPlayerPosition = this.player.model.position.clone();
 
-    if (!keyboardMovementInput) {
-      this.updatePlayerAttackPursuit(delta);
-    }
-
     this.player.update(delta, keyboardMovementInput);
     this.applyPlayerWorldCollision(previousPlayerPosition);
     this.applyPlayerEnemyCollision(previousPlayerPosition);
@@ -3115,7 +2905,28 @@ export class GameScene {
 
         case "playerAttack":
           this.addLog(`Enemy takes ${event.damage} damage.`);
-          this.sfx.play("playerAttack");
+          break;
+
+        case "playerAttackHit":
+          this.vfx?.playPlayerAttackSlash?.(
+            event.impactPoint,
+            event.direction,
+            {
+              color: 0xfff1b0,
+            }
+          );
+          this.sfx.play("playerAttackHit");
+          break;
+
+        case "playerAttackWhiff":
+          this.vfx?.playPlayerAttackSlash?.(
+            event.impactPoint,
+            event.direction,
+            {
+              color: 0xd7e6ff,
+            }
+          );
+          this.sfx.play("playerAttackWhiff");
           break;
 
         case "enemyAttack":

@@ -23,6 +23,7 @@ const DIRECT_MOVEMENT_ACCELERATION = 100;
 const DIRECT_MOVEMENT_ROTATION_RESPONSE = 45;
 export const PLAYER_COMBAT_CONFIG = {
   attackWindupDuration: 0.18,
+  attackArcDegrees: 105,
 };
 const BASE_PLAYER_STATS = {
   maxHp: 100,
@@ -31,7 +32,10 @@ const BASE_PLAYER_STATS = {
   attackDamage: 10,
   attackRange: 1.65,
   attackSpeed: 1.2,
+  attackArcDegrees: PLAYER_COMBAT_CONFIG.attackArcDegrees,
 };
+
+const ATTACK_DIRECTION_EPSILON = 0.0001;
 
 export class Player {
   constructor(model) {
@@ -52,11 +56,14 @@ export class Player {
     this.attackDamage = BASE_PLAYER_STATS.attackDamage;
     this.attackRange = BASE_PLAYER_STATS.attackRange;
     this.attackSpeed = BASE_PLAYER_STATS.attackSpeed;
+    this.attackArcDegrees = BASE_PLAYER_STATS.attackArcDegrees;
     this.attackCooldown = this.getAttackCooldownFromSpeed(this.attackSpeed);
     this.attackTimer = this.attackCooldown;
     this.attackState = PLAYER_ATTACK_STATES.READY;
     this.attackWindupDuration = PLAYER_COMBAT_CONFIG.attackWindupDuration;
     this.attackWindupTimer = 0;
+    this.lockedAttackDirection = null;
+    this.pendingAttackEnemies = [];
 
     this.attackTarget = null;
     this.currentEnemy = null;
@@ -107,6 +114,7 @@ export class Player {
       attackDamage: this.attackDamage,
       attackRange: this.attackRange,
       attackSpeed: this.attackSpeed,
+      attackArcDegrees: this.attackArcDegrees,
       attackCooldown: this.attackCooldown,
       attackWindupDuration: this.attackWindupDuration,
     };
@@ -120,6 +128,7 @@ export class Player {
     this.gold = snapshot.gold ?? this.gold;
     this.attackDamage = snapshot.attackDamage ?? this.attackDamage;
     this.attackRange = snapshot.attackRange ?? this.attackRange;
+    this.attackArcDegrees = snapshot.attackArcDegrees ?? this.attackArcDegrees;
 
     if (snapshot.attackSpeed !== undefined) {
       this.setAttackSpeed(snapshot.attackSpeed);
@@ -138,6 +147,7 @@ export class Player {
     this.gold = BASE_PLAYER_STATS.gold;
     this.attackDamage = BASE_PLAYER_STATS.attackDamage;
     this.attackRange = BASE_PLAYER_STATS.attackRange;
+    this.attackArcDegrees = BASE_PLAYER_STATS.attackArcDegrees;
     this.setAttackSpeed(BASE_PLAYER_STATS.attackSpeed);
     this.setAttackWindupDuration(PLAYER_COMBAT_CONFIG.attackWindupDuration);
     this.resetRuntimeState();
@@ -153,6 +163,8 @@ export class Player {
     this.attackTimer = this.attackCooldown;
     this.attackState = PLAYER_ATTACK_STATES.READY;
     this.attackWindupTimer = 0;
+    this.lockedAttackDirection = null;
+    this.pendingAttackEnemies = [];
     this.events = [];
     this.stopDirectMovement();
     this.visualRotation = 0;
@@ -398,6 +410,8 @@ export class Player {
     this.currentEnemy = null;
     this.attackState = PLAYER_ATTACK_STATES.READY;
     this.attackWindupTimer = 0;
+    this.lockedAttackDirection = null;
+    this.pendingAttackEnemies = [];
 
     this.state = PLAYER_STATES.DEAD;
 
@@ -447,6 +461,42 @@ export class Player {
     return Boolean(this.attackTarget && this.attackAutoPursuitEnabled);
   }
 
+  requestDirectionalAttack(point, { enemies = [] } = {}) {
+    if (this.hp <= 0) return false;
+    if (this.state === PLAYER_STATES.DEAD) return false;
+    if (this.attackState !== PLAYER_ATTACK_STATES.READY) return false;
+    if (!point) return false;
+
+    const direction = new THREE.Vector3(
+      point.x - this.model.position.x,
+      0,
+      point.z - this.model.position.z
+    );
+
+    if (direction.lengthSq() <= ATTACK_DIRECTION_EPSILON) {
+      return false;
+    }
+
+    direction.normalize();
+    this.startDirectionalAttackWindup(direction, enemies);
+    return true;
+  }
+
+  startDirectionalAttackWindup(direction, enemies = []) {
+    this.clearAttackTarget();
+    this.lockedAttackDirection = direction.clone();
+    this.pendingAttackEnemies = Array.isArray(enemies) ? [...enemies] : [];
+    this.attackState = PLAYER_ATTACK_STATES.WINDUP;
+    this.attackWindupTimer = 0;
+    this.faceAttackDirection();
+
+    this.emit({
+      type: "attackWindupStarted",
+      direction: this.lockedAttackDirection.clone(),
+      duration: this.attackWindupDuration,
+    });
+  }
+
   emit(event) {
     this.events.push(event);
   }
@@ -473,16 +523,9 @@ export class Player {
 
     this.stopDirectMovement();
 
-    if (this.attackTarget && !this.attackAutoPursuitEnabled) {
-      this.clearAttackTarget();
-    }
-
     switch (this.state) {
       case PLAYER_STATES.IDLE:
-        if (this.attackTarget) {
-          this.state = PLAYER_STATES.COMBAT;
-          this.updateCombat(delta);
-        }
+        this.updateAttackState(delta);
         break;
 
       case PLAYER_STATES.DEAD:
@@ -520,10 +563,6 @@ export class Player {
     this.path = [];
     this.state = PLAYER_STATES.MOVING;
 
-    if (this.attackTarget) {
-      this.clearAttackTarget();
-    }
-
     const targetVelocity = direction.multiplyScalar(this.speed);
     const velocityDelta = targetVelocity.clone().sub(this.directMovementVelocity);
     const maxVelocityDelta = DIRECT_MOVEMENT_ACCELERATION * delta;
@@ -545,17 +584,21 @@ export class Player {
         this.directMovementVelocity.z
       );
 
-      this.visualRotation = this.dampAngle(
-        this.visualRotation,
-        targetRotation,
-        DIRECT_MOVEMENT_ROTATION_RESPONSE,
-        delta
-      );
+      if (this.shouldFaceAttackDirection()) {
+        this.faceAttackDirection();
+      } else {
+        this.visualRotation = this.dampAngle(
+          this.visualRotation,
+          targetRotation,
+          DIRECT_MOVEMENT_ROTATION_RESPONSE,
+          delta
+        );
 
-      this.model.rotation.y = this.visualRotation;
+        this.model.rotation.y = this.visualRotation;
+      }
     }
 
-    this.updateCombatWhileMoving(delta);
+    this.updateAttackState(delta);
   }
 
   stopDirectMovement() {
@@ -594,6 +637,7 @@ export class Player {
   updateMoving(delta) {
     if (!this.target) {
       this.state = PLAYER_STATES.IDLE;
+      this.updateAttackState(delta);
       return;
     }
 
@@ -616,6 +660,7 @@ export class Player {
           : PLAYER_STATES.IDLE;
       }
 
+      this.updateAttackState(delta);
       return;
     }
 
@@ -632,13 +677,19 @@ export class Player {
     );
 
     // 🔥 ROTACIÓN MANUAL LIMPIA
-    this.visualRotation = Math.atan2(
-      direction.x,
-      direction.z
-    );
+    if (this.shouldFaceAttackDirection()) {
+      this.faceAttackDirection();
+    } else {
+      this.visualRotation = Math.atan2(
+        direction.x,
+        direction.z
+      );
 
-    this.model.rotation.y =
-      this.visualRotation;
+      this.model.rotation.y =
+        this.visualRotation;
+    }
+
+    this.updateAttackState(delta);
   }
 
   updateCombat(delta) {
@@ -682,7 +733,6 @@ export class Player {
   updateAttackState(delta) {
     switch (this.attackState) {
       case PLAYER_ATTACK_STATES.READY:
-        this.startAttackWindup();
         break;
 
       case PLAYER_ATTACK_STATES.WINDUP:
@@ -708,52 +758,70 @@ export class Player {
   }
 
   updateAttackWindup(delta) {
-    if (!this.isAttackTargetValid()) {
+    if (!this.lockedAttackDirection) {
       this.cancelAttackWindup();
       return;
     }
 
+    this.faceAttackDirection();
     this.attackWindupTimer += delta;
 
     if (this.attackWindupTimer < this.attackWindupDuration) return;
 
-    this.strikeAttackTarget();
+    this.strikeDirectionalAttack();
   }
 
-  strikeAttackTarget() {
-    if (!this.isAttackTargetValid()) {
+  strikeDirectionalAttack() {
+    if (!this.lockedAttackDirection) {
       this.cancelAttackWindup();
       return;
     }
 
-    if (!this.attackTarget.takeDamage) {
-      this.cancelAttackWindup();
-      return;
-    }
+    const direction = this.lockedAttackDirection.clone();
+    const whiffImpactPoint = this.getDirectionalAttackImpactPoint(direction);
+    const enemies = this.findDirectionalAttackHits(this.pendingAttackEnemies);
+    const hitImpactPoint = enemies[0]?.model?.position
+      ? this.getEnemyAttackImpactPoint(enemies[0])
+      : whiffImpactPoint;
 
-    const enemy = this.attackTarget;
+    for (const enemy of enemies) {
+      if (!enemy?.takeDamage) continue;
 
-    const damageDone =
-      enemy.takeDamage(
+      const damageDone = enemy.takeDamage(
         this.attackDamage,
         this
       );
 
-    this.emit({
-      type: "playerAttack",
-      enemy,
-      damage: damageDone,
-      enemyHp: enemy.hp,
-    });
+      this.emit({
+        type: "playerAttack",
+        enemy,
+        damage: damageDone,
+        enemyHp: enemy.hp,
+        direction: direction.clone(),
+        impactPoint: this.getEnemyAttackImpactPoint(enemy),
+      });
+    }
+
+    if (enemies.length === 0) {
+      this.emit({
+        type: "playerAttackWhiff",
+        direction: direction.clone(),
+        impactPoint: whiffImpactPoint.clone(),
+      });
+    } else {
+      this.emit({
+        type: "playerAttackHit",
+        direction: direction.clone(),
+        impactPoint: hitImpactPoint.clone(),
+        hitCount: enemies.length,
+      });
+    }
 
     this.attackState = PLAYER_ATTACK_STATES.COOLDOWN;
     this.attackTimer = 0;
     this.attackWindupTimer = 0;
-
-    if (!enemy.alive) {
-      this.clearAttackTarget();
-      this.state = PLAYER_STATES.IDLE;
-    }
+    this.lockedAttackDirection = null;
+    this.pendingAttackEnemies = [];
   }
 
   updateAttackCooldown(delta) {
@@ -767,7 +835,6 @@ export class Player {
     this.attackState = PLAYER_ATTACK_STATES.READY;
     this.emit({
       type: "attackReady",
-      enemy: this.attackTarget,
       cooldown: this.attackCooldown,
     });
   }
@@ -777,6 +844,8 @@ export class Player {
 
     this.attackState = PLAYER_ATTACK_STATES.READY;
     this.attackWindupTimer = 0;
+    this.lockedAttackDirection = null;
+    this.pendingAttackEnemies = [];
 
     this.emit({
       type: "attackWindupCanceled",
@@ -810,11 +879,87 @@ export class Player {
       isReady: this.attackState === PLAYER_ATTACK_STATES.READY,
       isWindup: this.attackState === PLAYER_ATTACK_STATES.WINDUP,
       isCoolingDown: this.attackState === PLAYER_ATTACK_STATES.COOLDOWN,
-      hasAttackTarget: Boolean(this.attackTarget?.alive),
+      hasAttackTarget: false,
     };
   }
 
   isAttackReady() {
     return this.attackState === PLAYER_ATTACK_STATES.READY;
+  }
+
+  findDirectionalAttackHits(enemies = []) {
+    const attackDirection = this.lockedAttackDirection;
+    if (!attackDirection) return [];
+
+    const attackArcDegrees =
+      this.attackArcDegrees ?? PLAYER_COMBAT_CONFIG.attackArcDegrees;
+    const halfArcRadians = THREE.MathUtils.degToRad(attackArcDegrees) / 2;
+    const minDot = Math.cos(halfArcRadians);
+
+    return enemies
+      .filter((enemy) =>
+        enemy?.alive &&
+        enemy.model?.position &&
+        enemy.model.visible !== false
+      )
+      .map((enemy) => {
+        const toEnemy = new THREE.Vector3(
+          enemy.model.position.x - this.model.position.x,
+          0,
+          enemy.model.position.z - this.model.position.z
+        );
+        const distance = toEnemy.length();
+
+        if (distance > ATTACK_DIRECTION_EPSILON) {
+          toEnemy.normalize();
+        }
+
+        return {
+          enemy,
+          distance,
+          dot: distance <= ATTACK_DIRECTION_EPSILON
+            ? 1
+            : attackDirection.dot(toEnemy),
+        };
+      })
+      .filter(({ distance, dot }) =>
+        distance <= this.attackRange &&
+        dot >= minDot
+      )
+      .sort((a, b) => a.distance - b.distance)
+      .map(({ enemy }) => enemy);
+  }
+
+  getDirectionalAttackImpactPoint(direction) {
+    return new THREE.Vector3(
+      this.model.position.x + direction.x * this.attackRange,
+      this.groundY,
+      this.model.position.z + direction.z * this.attackRange
+    );
+  }
+
+  getEnemyAttackImpactPoint(enemy) {
+    return new THREE.Vector3(
+      enemy.model.position.x,
+      this.groundY,
+      enemy.model.position.z
+    );
+  }
+
+  shouldFaceAttackDirection() {
+    return Boolean(
+      this.lockedAttackDirection &&
+      this.attackState === PLAYER_ATTACK_STATES.WINDUP
+    );
+  }
+
+  faceAttackDirection() {
+    if (!this.lockedAttackDirection) return;
+
+    this.visualRotation = Math.atan2(
+      this.lockedAttackDirection.x,
+      this.lockedAttackDirection.z
+    );
+    this.model.rotation.y = this.visualRotation;
   }
 }

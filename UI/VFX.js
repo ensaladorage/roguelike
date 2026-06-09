@@ -46,6 +46,23 @@ export const VFX_DEFAULTS = {
     opacity: 1,
     zRotation: -0.55,
   },
+  playerAttackRangeIndicator: {
+    color: 0xffffff,
+    opacity: 0.22,
+    y: 0.055,
+    thickness: 0.018,
+    segments: 96,
+  },
+  playerAttackSlash: {
+    color: 0xffffff,
+    duration: 0.16,
+    width: 0.86,
+    height: 0.11,
+    y: 0.22,
+    opacity: 0.82,
+    hitColor: 0xfff1b0,
+    whiffColor: 0xd7e6ff,
+  },
   modelFlash: {
     duration: 0.16,
     emissiveIntensity: 0.9,
@@ -285,6 +302,51 @@ export class VFX {
     });
   }
 
+  playPlayerAttackSlash(position, direction, options = {}) {
+    if (!this.root || !position || !direction) return;
+
+    const config = {
+      ...VFX_DEFAULTS.playerAttackSlash,
+      ...options,
+    };
+    const attackDirection = new THREE.Vector3(direction.x, 0, direction.z);
+    if (attackDirection.lengthSq() <= 0.0001) return;
+    attackDirection.normalize();
+
+    const group = new THREE.Group();
+    group.position.set(position.x, config.y, position.z);
+    group.rotation.y = Math.atan2(attackDirection.x, attackDirection.z);
+
+    const material = new THREE.MeshBasicMaterial({
+      color: config.color,
+      transparent: true,
+      opacity: config.opacity,
+      depthTest: false,
+      depthWrite: false,
+      side: THREE.DoubleSide,
+      blending: THREE.AdditiveBlending,
+    });
+    const mesh = new THREE.Mesh(
+      new THREE.PlaneGeometry(config.width, config.height),
+      material
+    );
+
+    mesh.rotation.x = -Math.PI / 2;
+    mesh.renderOrder = 96;
+    group.add(mesh);
+    this.root.add(group);
+
+    this.effects.push({
+      type: "playerAttackSlash",
+      group,
+      mesh,
+      material,
+      elapsed: 0,
+      duration: config.duration,
+      config,
+    });
+  }
+
   addPointLight(type, target, options = {}) {
     if (!this.root) return null;
 
@@ -413,6 +475,39 @@ export class VFX {
     return effect;
   }
 
+  addPlayerAttackRangeIndicator(player, options = {}) {
+    if (!this.root || !player) return null;
+
+    const config = {
+      ...VFX_DEFAULTS.playerAttackRangeIndicator,
+      ...options,
+    };
+    const group = new THREE.Group();
+    const material = new THREE.MeshBasicMaterial({
+      color: config.color,
+      transparent: true,
+      opacity: config.opacity,
+      depthWrite: false,
+      side: THREE.DoubleSide,
+    });
+    const effect = {
+      type: "playerAttackRangeIndicator",
+      group,
+      material,
+      geometry: null,
+      mesh: null,
+      player,
+      config,
+      lastRange: null,
+    };
+
+    this.root.add(group);
+    this.persistentEffects.push(effect);
+    this.updatePlayerAttackRangeIndicator(effect);
+
+    return effect;
+  }
+
   update(delta, camera) {
     this.updatePersistentEffects(delta);
     this.updateModelFlashEffects(delta);
@@ -420,6 +515,10 @@ export class VFX {
     this.effects = this.effects.filter((effect) => {
       if (effect.type === "playerHitSlash") {
         return this.updatePlayerHitSlash(effect, delta, camera);
+      }
+
+      if (effect.type === "playerAttackSlash") {
+        return this.updatePlayerAttackSlash(effect, delta);
       }
 
       effect.elapsed += delta;
@@ -554,14 +653,71 @@ export class VFX {
     return false;
   }
 
+  updatePlayerAttackSlash(effect, delta) {
+    effect.elapsed += delta;
+    const t = Math.min(1, effect.elapsed / effect.duration);
+    const eased = 1 - Math.pow(1 - t, 2);
+
+    effect.mesh.scale.x = 0.75 + eased * 0.55;
+    effect.mesh.scale.y = 1 + eased * 0.3;
+    effect.material.opacity = effect.config.opacity * (1 - eased);
+
+    if (t < 1) return true;
+
+    this.disposePlayerAttackSlash(effect);
+    return false;
+  }
+
   updatePersistentEffects(delta) {
     for (const effect of this.persistentEffects) {
       switch (effect.type) {
         case "entryStairsBlocker":
           this.updateEntryStairsBlocker(effect, delta);
           break;
+
+        case "playerAttackRangeIndicator":
+          this.updatePlayerAttackRangeIndicator(effect);
+          break;
       }
     }
+  }
+
+  updatePlayerAttackRangeIndicator(effect) {
+    const playerPosition = this.getTargetPosition(effect.player);
+    const range = Math.max(0, Number(effect.player?.attackRange) || 0);
+
+    if (!playerPosition || range <= 0) {
+      effect.group.visible = false;
+      return;
+    }
+
+    effect.group.visible = true;
+    effect.group.position.set(playerPosition.x, effect.config.y, playerPosition.z);
+
+    if (
+      effect.mesh &&
+      effect.lastRange !== null &&
+      Math.abs(effect.lastRange - range) <= 0.001
+    ) {
+      return;
+    }
+
+    effect.mesh?.removeFromParent();
+    effect.geometry?.dispose();
+
+    const innerRadius = Math.max(0.01, range - effect.config.thickness);
+    const outerRadius = range;
+    effect.geometry = new THREE.RingGeometry(
+      innerRadius,
+      outerRadius,
+      effect.config.segments
+    );
+    effect.mesh = new THREE.Mesh(effect.geometry, effect.material);
+    effect.mesh.rotation.x = -Math.PI / 2;
+    effect.mesh.renderOrder = 32;
+    effect.mesh.userData.ignoreFlash = true;
+    effect.group.add(effect.mesh);
+    effect.lastRange = range;
   }
 
   updateEntryStairsBlocker(effect, delta) {
@@ -613,6 +769,8 @@ export class VFX {
     for (const effect of this.effects) {
       if (effect.type === "playerHitSlash") {
         this.disposePlayerHitSlash(effect);
+      } else if (effect.type === "playerAttackSlash") {
+        this.disposePlayerAttackSlash(effect);
       } else {
         this.disposeEffect(effect);
       }
@@ -675,6 +833,12 @@ export class VFX {
   }
 
   disposePlayerHitSlash(effect) {
+    effect.group.removeFromParent();
+    effect.mesh.geometry.dispose();
+    effect.material.dispose();
+  }
+
+  disposePlayerAttackSlash(effect) {
     effect.group.removeFromParent();
     effect.mesh.geometry.dispose();
     effect.material.dispose();

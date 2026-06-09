@@ -17,6 +17,22 @@ export class SFX {
         duration: 0.08,
       },
 
+      playerAttackHit: {
+        frequency: 520,
+        endFrequency: 360,
+        duration: 0.09,
+        type: "triangle",
+        gain: 0.07,
+      },
+
+      playerAttackWhiff: {
+        frequency: 760,
+        endFrequency: 420,
+        duration: 0.11,
+        type: "sawtooth",
+        gain: 0.035,
+      },
+
       enemyAttack: {
         frequency: 180,
         duration: 0.12,
