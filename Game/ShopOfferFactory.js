@@ -10,15 +10,16 @@ export function createShopOffers({
   context = {},
   rng = null,
 } = {}) {
+  const effectiveConfig = createEffectiveShopConfig(config, context);
   const random = rng ?? createSeededRandom(createShopSeed(context));
-  const offerCount = Math.max(0, Math.floor(config.offerCount ?? 0));
+  const offerCount = Math.max(0, Math.floor(effectiveConfig.offerCount ?? 0));
   const offers = [];
   const usedItemIds = new Set();
 
   for (let offerIndex = 0; offerIndex < offerCount; offerIndex += 1) {
-    const rarity = rollShopRarity(config, context, random);
-    const item = pickShopItemForRarity(config, rarity, random, usedItemIds)
-      ?? pickShopItem(config, random, usedItemIds);
+    const rarity = rollShopRarity(effectiveConfig, context, random);
+    const item = pickShopItemForRarity(effectiveConfig, rarity, random, usedItemIds)
+      ?? pickShopItem(effectiveConfig, random, usedItemIds);
 
     if (!item) break;
 
@@ -26,7 +27,7 @@ export function createShopOffers({
     offers.push(createShopOffer({
       offerIndex,
       item,
-      price: getShopItemPrice(config, item),
+      price: getShopItemPrice(effectiveConfig, item),
       context,
     }));
   }
@@ -48,6 +49,12 @@ export function createShopOffer({ offerIndex, item, price, context = {} }) {
 }
 
 export function getShopRarityWeights(config = SHOP_DEFINITION, context = {}) {
+  if (context.rarityWeights ?? context.shopTierDefinition?.rarityWeights) {
+    return {
+      ...(context.rarityWeights ?? context.shopTierDefinition?.rarityWeights),
+    };
+  }
+
   return {
     ...(config.rarityWeights?.default ?? {}),
     ...(getShopRarityWeightEntry(config, context)?.weights ?? {}),
@@ -99,8 +106,30 @@ export function getShopItemPrice(config = SHOP_DEFINITION, item) {
   const fallbackPrice = config.fallbackPriceByRarity?.[item.rarity];
   const price = overridePrice ?? itemPrice ?? fallbackPrice ?? 0;
   const numericPrice = Number.parseInt(price, 10);
+  const multiplier = Number.parseFloat(config.priceMultiplier ?? 1);
+  const safeMultiplier = Number.isFinite(multiplier) ? Math.max(0, multiplier) : 1;
 
-  return Number.isFinite(numericPrice) ? Math.max(0, numericPrice) : 0;
+  return Number.isFinite(numericPrice)
+    ? Math.max(0, Math.round(numericPrice * safeMultiplier))
+    : 0;
+}
+
+function createEffectiveShopConfig(config = SHOP_DEFINITION, context = {}) {
+  const tierConfig = context.shopTierDefinition ?? {};
+
+  return {
+    ...config,
+    offerCount: tierConfig.offerCount ?? context.offerCount ?? config.offerCount,
+    possibleItemIds:
+      tierConfig.possibleItemIds ??
+      context.possibleItemIds ??
+      config.possibleItemIds,
+    priceMultiplier:
+      tierConfig.priceMultiplier ??
+      context.priceMultiplier ??
+      config.priceMultiplier ??
+      1,
+  };
 }
 
 function rollShopRarity(config, context, random) {

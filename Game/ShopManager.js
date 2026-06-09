@@ -14,6 +14,8 @@ const SHOP_CONFIRM_LOCK_REASON = "shopPurchaseConfirmation";
 const SHOP_FALLBACK_ALTAR_SCALE = 0.86;
 const SHOP_FALLBACK_ITEM_Y = 0.92;
 const SHOP_FALLBACK_LABEL_Y = 1.46;
+const SHOP_FOUNTAIN_SCALE = 0.72;
+const SHOP_FOUNTAIN_LABEL_Y = 1.32;
 
 const SHOP_RARITY_COLORS = {
   common: 0x7ecf8d,
@@ -27,9 +29,11 @@ export class ShopManager {
     this.config = config;
     this.offers = [];
     this.stands = [];
+    this.fountains = [];
     this.events = [];
     this.lastContext = null;
     this.pendingStand = null;
+    this.pendingFountain = null;
     this.pendingConfirmation = null;
     this.confirmationElement = null;
   }
@@ -66,6 +70,7 @@ export class ShopManager {
     }
 
     this.refreshStands();
+    this.loadFountains(level, context);
     return offers;
   }
 
@@ -127,7 +132,16 @@ export class ShopManager {
       this.updateStandAnimation(stand, delta);
     }
 
+    for (const fountain of this.fountains) {
+      if (fountain.cooldown > 0) {
+        fountain.cooldown -= delta;
+      }
+
+      this.updateFountainAnimation(fountain, delta);
+    }
+
     this.checkPendingStandInteraction();
+    this.checkPendingFountainInteraction();
   }
 
   requestStandInteraction(standOrOfferId) {
@@ -192,6 +206,12 @@ export class ShopManager {
     if (stand && this.pendingStand !== stand) return;
 
     this.pendingStand = null;
+  }
+
+  cancelPendingFountainInteraction(fountain = null) {
+    if (fountain && this.pendingFountain !== fountain) return;
+
+    this.pendingFountain = null;
   }
 
   checkPendingStandInteraction() {
@@ -271,6 +291,153 @@ export class ShopManager {
       reason: "confirmationPending",
       offer,
     };
+  }
+
+  loadFountains(level, context = {}) {
+    const spawns = level.healingFountainSpawns ?? [];
+
+    for (const spawn of spawns) {
+      const model = this.createFountainModel(spawn);
+      const fountain = {
+        id: spawn.id ?? `shop_fountain_${this.fountains.length + 1}`,
+        model,
+        spawn,
+        healAmount: spawn.healAmount ?? context.shopTierDefinition?.healing?.healAmount ?? 0,
+        usesRemaining: spawn.uses ?? context.shopTierDefinition?.healing?.uses ?? 0,
+        roomId: spawn.roomId,
+        roomTemplateId: spawn.roomTemplateId,
+        cooldown: 0,
+      };
+
+      model.userData.interactable = {
+        type: "shopFountain",
+        fountainId: fountain.id,
+      };
+
+      this.scene.levelGroup.add(model);
+      this.fountains.push(fountain);
+    }
+  }
+
+  requestFountainInteraction(fountainOrId) {
+    const fountain = typeof fountainOrId === "string"
+      ? this.findFountain(fountainOrId)
+      : fountainOrId;
+
+    if (!fountain) {
+      return this.failFountainUse({
+        reason: "fountainMissing",
+      });
+    }
+
+    if (fountain.usesRemaining <= 0) {
+      return this.failFountainUse({
+        reason: "depleted",
+        fountain,
+      });
+    }
+
+    if (fountain.model?.visible === false || fountain.cooldown > 0) {
+      return this.failFountainUse({
+        reason: "interactionUnavailable",
+        fountain,
+      });
+    }
+
+    if (!this.isFountainInInteractionRange(fountain)) {
+      this.pendingFountain = fountain;
+
+      return {
+        success: false,
+        reason: "movingToInteraction",
+        fountain,
+      };
+    }
+
+    this.pendingFountain = null;
+    return this.useFountain(fountain);
+  }
+
+  checkPendingFountainInteraction() {
+    const fountain = this.pendingFountain;
+    if (!fountain) return;
+
+    if (fountain.usesRemaining <= 0 || fountain.model?.visible === false) {
+      this.pendingFountain = null;
+      return;
+    }
+
+    if (fountain.cooldown > 0) return;
+
+    if (!this.isFountainInInteractionRange(fountain)) return;
+
+    this.pendingFountain = null;
+    this.useFountain(fountain);
+  }
+
+  useFountain(fountain) {
+    const player = this.scene?.player;
+
+    if (!player) {
+      return this.failFountainUse({
+        reason: "shopUnavailable",
+        fountain,
+      });
+    }
+
+    if (player.hp >= player.maxHp) {
+      return this.failFountainUse({
+        reason: "fullHp",
+        fountain,
+      });
+    }
+
+    const previousHp = player.hp;
+    player.hp = Math.min(player.maxHp, player.hp + fountain.healAmount);
+    const healed = player.hp - previousHp;
+
+    if (healed <= 0) {
+      return this.failFountainUse({
+        reason: "fullHp",
+        fountain,
+      });
+    }
+
+    fountain.usesRemaining = Math.max(0, fountain.usesRemaining - 1);
+    fountain.cooldown = SHOP_INTERACTION_COOLDOWN;
+    this.refreshFountain(fountain);
+
+    const event = {
+      type: SHOP_EVENTS.FOUNTAIN_USED,
+      fountain,
+      healAmount: healed,
+      hp: player.hp,
+      maxHp: player.maxHp,
+      usesRemaining: fountain.usesRemaining,
+    };
+
+    this.emit(event);
+
+    return {
+      success: true,
+      ...event,
+    };
+  }
+
+  failFountainUse({ reason, fountain = null }) {
+    const result = {
+      success: false,
+      reason,
+      fountain,
+    };
+
+    this.emit({
+      type: SHOP_EVENTS.FOUNTAIN_FAILED,
+      reason,
+      fountain,
+    });
+
+    return result;
   }
 
   openPurchaseConfirmation(offer, stand) {
@@ -459,12 +626,25 @@ export class ShopManager {
     return this.stands.find((stand) => stand.offerId === offerId) ?? null;
   }
 
+  findFountain(fountainId) {
+    return this.fountains.find((fountain) => fountain.id === fountainId) ?? null;
+  }
+
   isStandInInteractionRange(stand) {
     const playerPosition = this.scene?.player?.model?.position;
     const standPosition = stand?.model?.position;
     if (!playerPosition || !standPosition) return false;
 
     return this.getFlatDistance(playerPosition, standPosition) <=
+      SHOP_INTERACTION_RANGE;
+  }
+
+  isFountainInInteractionRange(fountain) {
+    const playerPosition = this.scene?.player?.model?.position;
+    const fountainPosition = fountain?.model?.position;
+    if (!playerPosition || !fountainPosition) return false;
+
+    return this.getFlatDistance(playerPosition, fountainPosition) <=
       SHOP_INTERACTION_RANGE;
   }
 
@@ -597,6 +777,89 @@ export class ShopManager {
     return group;
   }
 
+  createFountainModel(spawn) {
+    const group = new THREE.Group();
+    group.name = `shopFountain_${spawn.id ?? "fountain"}`;
+    group.position.set(spawn.x, 0, spawn.z);
+    group.rotation.y = spawn.rotationY ?? 0;
+
+    const basin = this.createAltarModel({
+      ...spawn,
+      altarScale: spawn.scale ?? SHOP_FOUNTAIN_SCALE,
+    });
+    const water = new THREE.Mesh(
+      new THREE.CylinderGeometry(0.36, 0.42, 0.08, 24),
+      new THREE.MeshStandardMaterial({
+        color: 0x5fc7ff,
+        emissive: 0x1c6f99,
+        emissiveIntensity: 0.4,
+        roughness: 0.24,
+        metalness: 0,
+        transparent: true,
+        opacity: 0.82,
+      })
+    );
+    water.position.y = 0.62;
+
+    const label = this.createFountainLabel(spawn.healAmount ?? 0);
+    label.position.y = spawn.labelY ?? SHOP_FOUNTAIN_LABEL_Y;
+
+    group.add(basin, water, label);
+    group.userData.shopFountainVisuals = {
+      water,
+      label,
+    };
+
+    return group;
+  }
+
+  createFountainLabel(healAmount) {
+    const canvas = document.createElement("canvas");
+    canvas.width = 256;
+    canvas.height = 96;
+
+    const texture = new THREE.CanvasTexture(canvas);
+    texture.colorSpace = THREE.SRGBColorSpace;
+    const material = new THREE.SpriteMaterial({
+      map: texture,
+      transparent: true,
+      depthWrite: false,
+    });
+    const sprite = new THREE.Sprite(material);
+
+    sprite.scale.set(1.65, 0.62, 1);
+    sprite.userData.canvas = canvas;
+    sprite.userData.texture = texture;
+    sprite.userData.healAmount = healAmount;
+    this.updateFountainLabel(sprite, { healAmount, usesRemaining: 1 });
+
+    return sprite;
+  }
+
+  updateFountainLabel(sprite, fountain) {
+    const canvas = sprite.userData.canvas;
+    const texture = sprite.userData.texture;
+    if (!canvas || !texture) return;
+
+    const context = canvas.getContext("2d");
+    const depleted = fountain.usesRemaining <= 0;
+    const title = depleted ? "DRY" : `HEAL +${fountain.healAmount}`;
+
+    context.clearRect(0, 0, canvas.width, canvas.height);
+    context.fillStyle = "rgba(17, 19, 23, 0.82)";
+    context.fillRect(0, 0, canvas.width, canvas.height);
+    context.strokeStyle = depleted ? "#747a80" : "#5fc7ff";
+    context.lineWidth = 6;
+    context.strokeRect(4, 4, canvas.width - 8, canvas.height - 8);
+    context.fillStyle = depleted ? "#9aa0a6" : "#f4f1e8";
+    context.font = "700 24px system-ui, sans-serif";
+    context.textAlign = "center";
+    context.textBaseline = "middle";
+    context.fillText(title, canvas.width / 2, canvas.height / 2, 220);
+
+    texture.needsUpdate = true;
+  }
+
   makeSharedAssetMaterialsLocal(root) {
     root.traverse((child) => {
       if (!child.isMesh || !child.material) return;
@@ -690,6 +953,14 @@ export class ShopManager {
     marker.position.y = itemY + Math.sin(performance.now() * 0.004) * 0.04;
   }
 
+  updateFountainAnimation(fountain, delta) {
+    const water = fountain.model.userData.shopFountainVisuals?.water;
+    if (!water || fountain.usesRemaining <= 0) return;
+
+    water.rotation.y += delta * 0.8;
+    water.position.y = 0.62 + Math.sin(performance.now() * 0.003) * 0.025;
+  }
+
   refreshStands() {
     for (const stand of this.stands) {
       this.refreshStand(stand);
@@ -722,6 +993,18 @@ export class ShopManager {
     });
   }
 
+  refreshFountain(fountain) {
+    const visuals = fountain.model.userData.shopFountainVisuals ?? {};
+
+    if (visuals.label) {
+      this.updateFountainLabel(visuals.label, fountain);
+    }
+
+    if (visuals.water) {
+      visuals.water.visible = fountain.usesRemaining > 0;
+    }
+  }
+
   getFlatDistance(a, b) {
     const dx = a.x - b.x;
     const dz = a.z - b.z;
@@ -733,6 +1016,10 @@ export class ShopManager {
     return {
       lastContext: this.lastContext,
       offers: this.offers.map((offer) => this.serializeOffer(offer)),
+      fountains: this.fountains.map((fountain) => ({
+        id: fountain.id,
+        usesRemaining: fountain.usesRemaining,
+      })),
     };
   }
 
@@ -743,6 +1030,13 @@ export class ShopManager {
     this.offers = (snapshot.offers ?? [])
       .map((offer) => this.restoreOffer(offer))
       .filter(Boolean);
+    for (const savedFountain of snapshot.fountains ?? []) {
+      const fountain = this.findFountain(savedFountain.id);
+      if (!fountain) continue;
+
+      fountain.usesRemaining = savedFountain.usesRemaining ?? fountain.usesRemaining;
+      this.refreshFountain(fountain);
+    }
     this.refreshStands();
   }
 
@@ -781,13 +1075,20 @@ export class ShopManager {
   clearFloor() {
     this.closePurchaseConfirmation();
     this.pendingStand = null;
+    this.pendingFountain = null;
 
     for (const stand of this.stands) {
       this.disposeStand(stand.model);
       stand.model.removeFromParent();
     }
 
+    for (const fountain of this.fountains) {
+      this.disposeStand(fountain.model);
+      fountain.model.removeFromParent();
+    }
+
     this.stands = [];
+    this.fountains = [];
   }
 
   clear() {

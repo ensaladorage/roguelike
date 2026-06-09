@@ -22,6 +22,7 @@ export const ITEM_DEFINITIONS = {
   steak: {
     id: "steak",
     name: "Steak",
+    description: "Increases attack damage.",
     type: ITEM_TYPES.PASSIVE,
     rarity: ITEM_RARITIES.COMMON,
     hudSlot: 4,
@@ -37,6 +38,7 @@ export const ITEM_DEFINITIONS = {
   chili: {
     id: "chili",
     name: "Chili",
+    description: "Increases attack speed.",
     type: ITEM_TYPES.PASSIVE,
     rarity: ITEM_RARITIES.COMMON,
     hudSlot: 5,
@@ -53,6 +55,7 @@ export const ITEM_DEFINITIONS = {
   ramen: {
     id: "ramen",
     name: "Ramen",
+    description: "Increases maximum HP.",
     type: ITEM_TYPES.PASSIVE,
     rarity: ITEM_RARITIES.COMMON,
     hudSlot: 3,
@@ -68,6 +71,7 @@ export const ITEM_DEFINITIONS = {
   energyDrink: {
     id: "energyDrink",
     name: "Energy Drink",
+    description: "Restores HP when used.",
     type: ITEM_TYPES.CONSUMABLE,
     rarity: ITEM_RARITIES.COMMON,
     hudSlot: 1,
@@ -87,6 +91,7 @@ export const ITEM_DEFINITIONS = {
   purpleShroom: {
     id: "purpleShroom",
     name: "Purple Shroom",
+    description: "Stuns and poisons nearby enemies.",
     type: ITEM_TYPES.CONSUMABLE,
     rarity: ITEM_RARITIES.COMMON,
     hudSlot: 2,
@@ -132,6 +137,27 @@ export function getItemStats(itemOrDefinition) {
     ...commonStats,
     ...rarityStats,
   };
+}
+
+export function getItemDescription(itemOrDefinition) {
+  const definition =
+    typeof itemOrDefinition === "string"
+      ? getItemDefinition(itemOrDefinition)
+      : itemOrDefinition;
+  if (!definition) return "";
+
+  if (definition.description) return definition.description;
+
+  const stats = getItemStats(definition);
+  const parts = [];
+
+  if (stats.attackDamage) parts.push(`+${stats.attackDamage} attack damage`);
+  if (stats.attackSpeed) parts.push(`+${stats.attackSpeed} attack speed`);
+  if (stats.maxHp) parts.push(`+${stats.maxHp} max HP`);
+  if (stats.heal) parts.push(`Restores ${stats.heal} HP`);
+  if (stats.stunDuration) parts.push(`Stuns for ${stats.stunDuration}s`);
+
+  return parts.join(", ") || "Adds a useful effect.";
 }
 
 export function getItemDefinitionByUseSlot(useSlot) {

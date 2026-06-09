@@ -16,6 +16,7 @@ export class ItemDropManager {
   constructor(scene) {
     this.scene = scene;
     this.itemDrops = [];
+    this.pendingItemDrop = null;
   }
 
   addItemDrops(items) {
@@ -98,13 +99,16 @@ export class ItemDropManager {
       speed: 2,
       amplitude: 0.07,
     };
+    group.userData.interactable = {
+      type: "itemDrop",
+      itemDrop: null,
+    };
 
     return group;
   }
 
   update(delta) {
     if (!this.scene?.player || !this.scene?.inventory) return;
-    const playerPos = this.scene.player.model.position;
 
     for (const itemDrop of this.itemDrops) {
       if (itemDrop.collected) continue;
@@ -116,14 +120,9 @@ export class ItemDropManager {
       if (itemDrop.blockedPickupTimer > 0) {
         itemDrop.blockedPickupTimer -= delta;
       }
-
-      if (!itemDrop.collectable) continue;
-
-      const distance = flatDistance(playerPos, itemDrop.model.position);
-      if (distance <= ITEM_DROP_PICKUP_RANGE) {
-        this.collectItemDrop(itemDrop);
-      }
     }
+
+    this.checkPendingItemDropInteraction();
   }
 
   updatePulse(itemDrop, delta) {
@@ -153,6 +152,67 @@ export class ItemDropManager {
     itemDrop.model.position.copy(launch.to);
     itemDrop.collectable = true;
     itemDrop.launch = null;
+    itemDrop.model.userData.interactable.itemDrop = itemDrop;
+  }
+
+  getInteractableTargets() {
+    return this.itemDrops
+      .filter((itemDrop) =>
+        itemDrop.collectable &&
+        !itemDrop.collected &&
+        itemDrop.model?.visible !== false
+      )
+      .map((itemDrop) => itemDrop.model);
+  }
+
+  findDropFromInteractable(interactable) {
+    if (interactable?.type !== "itemDrop") return null;
+
+    return interactable.itemDrop ?? null;
+  }
+
+  getPickupRange(itemDrop) {
+    return itemDrop?.pickupRange ?? ITEM_DROP_PICKUP_RANGE;
+  }
+
+  requestItemPickup(itemDrop) {
+    if (!this.isItemDropInteractable(itemDrop)) return false;
+
+    this.pendingItemDrop = itemDrop;
+    this.checkPendingItemDropInteraction();
+    return true;
+  }
+
+  cancelPendingItemPickup(itemDrop = null) {
+    if (itemDrop && this.pendingItemDrop !== itemDrop) return;
+
+    this.pendingItemDrop = null;
+  }
+
+  checkPendingItemDropInteraction() {
+    const itemDrop = this.pendingItemDrop;
+    if (!itemDrop) return;
+
+    if (!this.isItemDropInteractable(itemDrop)) {
+      this.pendingItemDrop = null;
+      return;
+    }
+
+    const playerPos = this.scene.player.model.position;
+    const distance = flatDistance(playerPos, itemDrop.model.position);
+    if (distance > this.getPickupRange(itemDrop)) return;
+
+    this.pendingItemDrop = null;
+    this.collectItemDrop(itemDrop);
+  }
+
+  isItemDropInteractable(itemDrop) {
+    return Boolean(
+      itemDrop &&
+      itemDrop.collectable &&
+      !itemDrop.collected &&
+      itemDrop.model?.visible !== false
+    );
   }
 
   collectItemDrop(itemDrop) {
@@ -284,6 +344,7 @@ export class ItemDropManager {
   }
 
   clear() {
+    this.pendingItemDrop = null;
     for (const itemDrop of this.itemDrops) {
       itemDrop.model.removeFromParent();
     }

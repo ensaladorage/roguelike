@@ -40,6 +40,7 @@ export class RoomVisibilityManager {
         enemies: this.getEntitiesForRoom(build.enemies, room.id),
         chests: this.getEntitiesForRoom(build.chests, room.id),
         shopStands: this.getEntitiesForRoom(build.shopStands, room.id),
+        shopFountains: this.getEntitiesForRoom(build.shopFountains, room.id),
         revealed: false,
       });
     }
@@ -146,6 +147,11 @@ export class RoomVisibilityManager {
     for (const stand of room.shopStands ?? []) {
       if (!stand?.model) continue;
       stand.model.visible = visible;
+    }
+
+    for (const fountain of room.shopFountains ?? []) {
+      if (!fountain?.model) continue;
+      fountain.model.visible = visible;
     }
   }
 

@@ -2,15 +2,18 @@ export function createBossFloor({
   runSeed = "run",
   floorSeed = `${runSeed}:boss`,
   floorIndex = 12,
+  stage = null,
   cycleIndex = 0,
   difficultyScale = 1,
 } = {}) {
   return {
     kind: "assembled",
     tileSetId: "scenarioDefault",
-    name: `Boss Floor ${floorIndex}`,
+    name: stage?.name ?? `Boss Floor ${floorIndex}`,
     floorIndex,
     floorType: "boss",
+    stage,
+    bossEnemyOverrides: stage?.bossEnemyOverrides ?? null,
     cycleIndex,
     difficultyScale,
     connectorStyleId: "openCorridor",
@@ -50,7 +53,7 @@ export function createBossFloor({
       },
       {
         id: "BossExit",
-        templateId: "exit_room_east_west_01",
+        templateId: "exit_room_east_west_02",
         position: {
           x: 14,
           z: 0,

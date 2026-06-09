@@ -2,13 +2,19 @@ export function createShopFloor({
   runSeed = "run",
   floorSeed = `${runSeed}:shop`,
   floorIndex = 11,
+  stage = null,
+  shopTier = null,
 } = {}) {
+  const healing = shopTier?.healing ?? stage?.shop?.healing ?? null;
+
   return {
     kind: "assembled",
     tileSetId: "scenarioDefault",
-    name: `Shop Floor ${floorIndex}`,
+    name: stage?.name ?? `Shop Floor ${floorIndex}`,
     floorIndex,
     floorType: "shop",
+    stage,
+    shopTier,
     connectorStyleId: "openCorridor",
     playerStart: {
       x: -7.5,
@@ -53,5 +59,19 @@ export function createShopFloor({
         rotationY: 0,
       },
     ],
+    healingFountainSpawns: healing?.enabled
+      ? [
+        {
+          id: "shop_fountain_01",
+          x: 1,
+          z: 1.7,
+          rotationY: Math.PI,
+          roomId: "ShopRoom01",
+          roomTemplateId: "shop_room_01",
+          healAmount: healing.healAmount ?? 25,
+          uses: healing.uses ?? 1,
+        },
+      ]
+      : [],
   };
 }

@@ -4,6 +4,7 @@ import {
   COFFIN_CHEST_MODEL_ID,
   DEFAULT_CHEST_MODEL_ID,
 } from "../CharacterData/modelDefinitions.js";
+import { EpicChestRewardManager } from "./chest-epic.js";
 import { getEnemyDefinition } from "../CharacterData/enemyDefinitions.js";
 import {
   ITEM_RARITIES,
@@ -41,6 +42,7 @@ export const CHEST_COIN_DROP = {
 export const CHEST_TYPES = {
   STANDARD: "standard",
   MIMIC_COFFIN: "mimicCoffin",
+  EPIC: "epic",
 };
 
 export const MIMIC_COFFIN_CONFIG = {
@@ -256,6 +258,7 @@ export class ChestManager {
 
     this.chests = [];
     this.pendingChest = null;
+    this.epicChestRewards = new EpicChestRewardManager(scene);
   }
 
   // =========================
@@ -276,6 +279,10 @@ export class ChestManager {
         triggerRange: data.triggerRange,
         mimicConfig: data.mimicConfig,
         rewardOverrides: data.rewardOverrides,
+        epicRewardConfig: data.epicRewardConfig,
+        coinDropConfig: data.coinDrop,
+        lockedUntilStageClear: Boolean(data.lockedUntilStageClear),
+        stageUnlocked: !data.lockedUntilStageClear,
         collected: false,
       };
 
@@ -345,8 +352,20 @@ export class ChestManager {
     return Boolean(
       chest &&
       !chest.collected &&
+      (!chest.lockedUntilStageClear || chest.stageUnlocked) &&
       chest.model?.visible !== false
     );
+  }
+
+  unlockStageClearRewards() {
+    for (const chest of this.chests) {
+      if (!chest.lockedUntilStageClear || chest.stageUnlocked) continue;
+
+      chest.stageUnlocked = true;
+      this.scene?.vfx?.playModelFlash?.(chest.model, 0xffd84a, 0.32, {
+        emissiveIntensity: 0.8,
+      });
+    }
   }
 
   // =========================
@@ -364,9 +383,11 @@ export class ChestManager {
 
     if (this.isMimicCoffin(chest)) {
       this.resolveMimicCoffin(chest);
+    } else if (this.isEpicChest(chest)) {
+      this.resolveEpicChest(chest);
     } else {
-      this.spawnCoins(chest);
-      this.collectChestItem(chest);
+      this.spawnCoins(chest, chest.coinDropConfig);
+      this.spawnChestItemDrops(chest);
       this.scene.addLog("Chest opened.");
     }
 
@@ -377,6 +398,15 @@ export class ChestManager {
 
   isMimicCoffin(chest) {
     return chest.chestType === CHEST_TYPES.MIMIC_COFFIN;
+  }
+
+  isEpicChest(chest) {
+    return chest.chestType === CHEST_TYPES.EPIC;
+  }
+
+  resolveEpicChest(chest) {
+    this.scene.addLog("Epic chest opened.");
+    this.epicChestRewards.openChest(chest);
   }
 
   resolveMimicCoffin(chest) {
@@ -587,8 +617,8 @@ export class ChestManager {
     }
   }
 
-  collectChestItem(chest) {
-    if (!this.scene.inventory) return;
+  spawnChestItemDrops(chest) {
+    if (!this.scene.itemDropManager) return;
 
     const reward = getChestReward(chest.rewardOverrides, {
       floorIndex: this.getRewardProgressFloor(),
@@ -600,17 +630,24 @@ export class ChestManager {
       itemIds,
     });
 
-    for (const itemId of itemIds) {
-      this.scene.inventory.pickupItem(itemId, {
-        source: "chest",
-        chest,
-        enemies: this.scene.enemies,
-      });
-    }
+    this.scene.itemDropManager.addItemDrops(
+      itemIds.map((itemId, index) => {
+        const origin = chest.model.position.clone();
+        const forward = this.getChestForward(chest);
+        const right = new THREE.Vector3(forward.z, 0, -forward.x);
+        const centered = index - (itemIds.length - 1) / 2;
+        const position = origin
+          .clone()
+          .addScaledVector(forward, 0.95)
+          .addScaledVector(right, centered * 0.42);
 
-    if (typeof this.scene.flushInventoryEvents === "function") {
-      this.scene.flushInventoryEvents();
-    }
+        return {
+          itemId,
+          position: new THREE.Vector3(position.x, 0, position.z),
+          fallbackOrigin: origin,
+        };
+      })
+    );
   }
 
   getRewardProgressFloor() {
@@ -788,6 +825,8 @@ export class ChestManager {
     if (this.scene.itemDropManager) {
       this.scene.itemDropManager.clear();
     }
+
+    this.epicChestRewards.cancel();
 
     this.chests = [];
   }

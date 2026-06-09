@@ -5,8 +5,8 @@ export const RUN_STATUSES = Object.freeze({
 });
 
 export const RUN_FLOOR_TYPES = Object.freeze({
-  TESTER: "tester",
   NORMAL: "normal",
+  COMBAT: "combat",
   SHOP: "shop",
   BOSS: "boss",
   COMPLETE: "complete",
@@ -19,11 +19,15 @@ export function createRunSeed() {
 
 export class RunState {
   constructor({
-    mode = "tester",
+    mode = "run",
     runSeed = createRunSeed(),
     currentFloorIndex = 1,
     currentFloorSeed = null,
-    floorType = RUN_FLOOR_TYPES.TESTER,
+    floorType = RUN_FLOOR_TYPES.COMBAT,
+    stageId = null,
+    stageName = null,
+    stageType = floorType,
+    shopTier = null,
     difficultyTier = "easy",
     cycleIndex = 0,
     cycleFloorIndex = currentFloorIndex,
@@ -36,6 +40,10 @@ export class RunState {
     this.currentFloorSeed =
       currentFloorSeed ?? this.createFloorSeed(currentFloorIndex);
     this.floorType = floorType;
+    this.stageId = stageId;
+    this.stageName = stageName;
+    this.stageType = stageType;
+    this.shopTier = shopTier;
     this.difficultyTier = difficultyTier;
     this.cycleIndex = cycleIndex;
     this.cycleFloorIndex = cycleFloorIndex;
@@ -56,6 +64,10 @@ export class RunState {
     floorIndex,
     floorSeed = null,
     floorType = RUN_FLOOR_TYPES.NORMAL,
+    stageId = null,
+    stageName = null,
+    stageType = floorType,
+    shopTier = null,
     difficultyTier = "easy",
     cycleIndex = 0,
     cycleFloorIndex = floorIndex,
@@ -63,6 +75,10 @@ export class RunState {
   }) {
     this.currentFloorIndex = floorIndex;
     this.floorType = floorType;
+    this.stageId = stageId;
+    this.stageName = stageName;
+    this.stageType = stageType;
+    this.shopTier = shopTier;
     this.difficultyTier = difficultyTier;
     this.cycleIndex = cycleIndex;
     this.cycleFloorIndex = cycleFloorIndex;
@@ -93,6 +109,10 @@ export class RunState {
       currentFloorIndex: this.currentFloorIndex,
       currentFloorSeed: this.currentFloorSeed,
       floorType: this.floorType,
+      stageId: this.stageId,
+      stageName: this.stageName,
+      stageType: this.stageType,
+      shopTier: this.shopTier,
       difficultyTier: this.difficultyTier,
       cycleIndex: this.cycleIndex,
       cycleFloorIndex: this.cycleFloorIndex,

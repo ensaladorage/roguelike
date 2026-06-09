@@ -6,10 +6,13 @@ export const SHOP_EVENTS = Object.freeze({
   PURCHASE_SUCCEEDED: "shopPurchaseSucceeded",
   PURCHASE_FAILED: "shopPurchaseFailed",
   OFFER_ALREADY_PURCHASED: "shopOfferAlreadyPurchased",
+  FOUNTAIN_USED: "shopFountainUsed",
+  FOUNTAIN_FAILED: "shopFountainFailed",
 });
 
 export const SHOP_DEFINITION = Object.freeze({
   offerCount: 3,
+  priceMultiplier: 1,
 
   standVisual: Object.freeze({
     altarModelId: DEFAULT_SHOP_ALTAR_MODEL_ID,

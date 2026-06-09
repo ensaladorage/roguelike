@@ -1,4 +1,5 @@
 import {
+  getItemDescription,
   getItemDefinitionByUseSlot,
   getItemMaxStack,
 } from "../CharacterData/itemDefinitions.js";
@@ -15,7 +16,11 @@ export class HUD {
     this.itemText = document.querySelector("#itemText");
     this.logElement = document.querySelector("#log");
     this.quickUseElement = document.querySelector("#quickUseBar");
+    this.itemTooltip = document.querySelector("#itemTooltip");
+    this.epicRewardOverlay = document.querySelector("#epicRewardOverlay");
+    this.epicRewardOptions = document.querySelector("#epicRewardOptions");
     this.defeatOverlay = document.querySelector("#defeatOverlay");
+    this.victoryOverlay = document.querySelector("#victoryOverlay");
     this.bossOverlay = document.querySelector("#bossHealth");
     this.bossNameText = document.querySelector("#bossName");
     this.bossHpText = document.querySelector("#bossHpText");
@@ -24,8 +29,10 @@ export class HUD {
     this.onUseConsumableSlot = null;
     this.logEntries = [];
     this.statHighlightTimers = new Map();
+    this.onEpicRewardSelect = null;
 
     this.setupQuickUseButtons();
+    this.setupEpicRewardOverlay();
   }
 
   setConsumableUseHandler(handler) {
@@ -42,6 +49,91 @@ export class HUD {
     if (!this.defeatOverlay) return;
 
     this.defeatOverlay.hidden = true;
+  }
+
+  showVictoryOverlay() {
+    if (!this.victoryOverlay) return;
+
+    this.victoryOverlay.hidden = false;
+  }
+
+  hideVictoryOverlay() {
+    if (!this.victoryOverlay) return;
+
+    this.victoryOverlay.hidden = true;
+  }
+
+  showItemTooltip(item, position = {}) {
+    if (!this.itemTooltip || !item) return;
+
+    this.itemTooltip.innerHTML = "";
+
+    const name = document.createElement("strong");
+    name.textContent = item.name;
+
+    const description = document.createElement("span");
+    description.textContent = getItemDescription(item);
+
+    this.itemTooltip.append(name, description);
+    this.itemTooltip.hidden = false;
+    this.moveItemTooltip(position);
+  }
+
+  moveItemTooltip(position = {}) {
+    if (!this.itemTooltip || this.itemTooltip.hidden) return;
+
+    const x = Number.isFinite(position.clientX) ? position.clientX : 0;
+    const y = Number.isFinite(position.clientY) ? position.clientY : 0;
+    this.itemTooltip.style.left = `${x + 18}px`;
+    this.itemTooltip.style.top = `${y + 18}px`;
+  }
+
+  hideItemTooltip() {
+    if (!this.itemTooltip) return;
+
+    this.itemTooltip.hidden = true;
+  }
+
+  showEpicChestRewards(options = [], onSelect = null) {
+    if (!this.epicRewardOverlay || !this.epicRewardOptions) return;
+
+    this.onEpicRewardSelect = onSelect;
+    this.epicRewardOptions.innerHTML = "";
+
+    for (const option of options) {
+      const button = document.createElement("button");
+      button.type = "button";
+      button.className = `epic-reward-card is-${option.rarity ?? "epic"}`;
+      button.dataset.rewardId = option.id;
+
+      const image = document.createElement("img");
+      image.src = option.item.imagePath;
+      image.alt = "";
+      image.setAttribute("aria-hidden", "true");
+
+      const name = document.createElement("strong");
+      name.textContent = option.item.name;
+
+      const description = document.createElement("span");
+      description.textContent = getItemDescription(option.item);
+
+      button.append(image, name, description);
+      button.addEventListener("click", () => {
+        this.onEpicRewardSelect?.(option);
+      });
+
+      this.epicRewardOptions.appendChild(button);
+    }
+
+    this.epicRewardOverlay.hidden = false;
+    this.epicRewardOptions.querySelector("button")?.focus();
+  }
+
+  hideEpicChestRewards() {
+    if (!this.epicRewardOverlay) return;
+
+    this.epicRewardOverlay.hidden = true;
+    this.onEpicRewardSelect = null;
   }
 
   updateBoss(boss) {
@@ -200,6 +292,16 @@ export class HUD {
     });
   }
 
+  setupEpicRewardOverlay() {
+    if (!this.epicRewardOverlay) return;
+
+    this.epicRewardOverlay.addEventListener("keydown", (event) => {
+      if (event.key !== "Escape") return;
+
+      event.preventDefault();
+    });
+  }
+
   updateQuickUseButtons(inventory) {
     for (const [useSlot, quickUse] of this.quickUseButtons.entries()) {
       const item = getItemDefinitionByUseSlot(useSlot);
@@ -247,6 +349,8 @@ export class HUD {
     }
 
     this.clearStatHighlights();
+    this.hideItemTooltip();
+    this.hideEpicChestRewards();
   }
 
   clearStatHighlights() {

@@ -4,6 +4,13 @@ import {
   MIMIC_COFFIN_CONFIG,
 } from "../Game/Chest.js";
 import {
+  DEFAULT_CHEST_MODEL_ID,
+  EPIC_CHEST_MODEL_ID,
+} from "../CharacterData/modelDefinitions.js";
+import {
+  ITEM_RARITIES,
+} from "../CharacterData/itemDefinitions.js";
+import {
   ENEMY_DIFFICULTY,
   getEnemyDefinition,
   pickEnemyDefinitionForDifficulty,
@@ -47,6 +54,7 @@ const EXIT_STAIRS_WOOD_STRUCTURE_Y = -0.85;
 const EXIT_STAIRS_WOOD_STRUCTURE_SIZE = { w: 1.2, d: 1.2, height: 1 };
 const MIMIC_COFFIN_ENTRY_ADJACENT_RADIUS = 1.25;
 const SHOP_OFFER_COLLISION_SIZE = { w: 0.78, d: 0.78 };
+const STAGE_LOCKED_CONNECTION_THICKNESS = 0.62;
 const ENTRY_STAIRS_ROTATION_TOWARD_WALL_BY_SIDE = {
   north: 0,
   south: Math.PI,
@@ -149,6 +157,9 @@ export class LevelBuilder {
       shopOfferSpawns: (levelDefinition.shopOfferSpawns ?? []).map((spawn) => ({
         ...spawn,
       })),
+      healingFountainSpawns: (levelDefinition.healingFountainSpawns ?? []).map((spawn) => ({
+        ...spawn,
+      })),
       enemies: (levelDefinition.enemies ?? []).map((enemy) => ({
         ...enemy,
         patrol: (enemy.patrol ?? []).map((point) => ({ ...point })),
@@ -200,6 +211,9 @@ export class LevelBuilder {
       shopOfferSpawns: (levelDefinition.shopOfferSpawns ?? []).map((spawn) => ({
         ...spawn,
       })),
+      healingFountainSpawns: (levelDefinition.healingFountainSpawns ?? []).map((spawn) => ({
+        ...spawn,
+      })),
       enemies: (levelDefinition.enemies ?? []).map((enemy) => ({
         ...enemy,
         patrol: (enemy.patrol ?? []).map((point) => ({ ...point })),
@@ -221,7 +235,11 @@ export class LevelBuilder {
     const walkableAreas = [];
     const collisionWalls = [];
     const chests = [];
+    const lockedConnectionBlockers = [];
     const shopOfferSpawns = [];
+    const healingFountainSpawns = (levelDefinition.healingFountainSpawns ?? []).map((spawn) => ({
+      ...spawn,
+    }));
     const enemies = [];
     let exit = levelDefinition.exit ? { ...levelDefinition.exit } : null;
     const rooms = (levelDefinition.rooms ?? []).map((roomPlacement) =>
@@ -253,11 +271,25 @@ export class LevelBuilder {
         roomConnectionEndpoints
       );
       const stairsDecorationModules = this.createRoomStairsDecorationModules(stairsModule);
+      const roomChestSpawns = this.resolveRoomChestSpawns({
+        room,
+        levelDefinition,
+        buildOptions,
+        connectionEndpoints: roomConnectionEndpoints,
+      });
       const generatedDecorativeModules = this.decorationBuilder.buildRoomDecorations({
         room,
         levelDefinition,
         buildOptions,
-        extraOccupiedModules: stairsDecorationModules,
+        extraOccupiedModules: [
+          ...stairsDecorationModules,
+          ...roomChestSpawns.map((spawn) => ({
+            x: spawn.x,
+            z: spawn.z,
+            w: spawn.collisionSize?.w ?? 1,
+            d: spawn.collisionSize?.d ?? 1,
+          })),
+        ],
       });
       const floorModules = stairsModule?.role === "exitStairs"
         ? this.hideFloorTileUnderModule(room.floorModules, stairsModule)
@@ -302,14 +334,7 @@ export class LevelBuilder {
           roomId: room.id,
         }))
       );
-      chests.push(
-        ...this.resolveRoomChestSpawns({
-          room,
-          levelDefinition,
-          buildOptions,
-          connectionEndpoints: roomConnectionEndpoints,
-        })
-      );
+      chests.push(...roomChestSpawns);
       shopOfferSpawns.push(
         ...(room.shopOfferSpawns ?? []).map((spawn, offerIndex) => ({
           ...spawn,
@@ -318,8 +343,11 @@ export class LevelBuilder {
           roomTemplateId: room.templateId,
         }))
       );
+      const roomEnemySpawns = room.type === "treasure" && levelDefinition.treasureReward?.enabled
+        ? []
+        : room.enemySpawns;
       enemies.push(
-        ...room.enemySpawns.map((spawn, spawnIndex) =>
+        ...roomEnemySpawns.map((spawn, spawnIndex) =>
           this.resolveEnemySpawn({
             spawn,
             spawnIndex,
@@ -355,8 +383,21 @@ export class LevelBuilder {
       collisionWalls.push(...connector.collisionWalls);
     }
 
+    lockedConnectionBlockers.push(
+      ...this.createStageLockedConnectionBlockers({
+        connections,
+        rooms,
+        levelDefinition,
+        connectorStyle,
+      })
+    );
+    collisionWalls.push(...lockedConnectionBlockers.map(cloneArea));
+
     collisionWalls.push(
       ...this.createShopOfferCollisionModules(shopOfferSpawns)
+    );
+    collisionWalls.push(
+      ...this.createShopOfferCollisionModules(healingFountainSpawns)
     );
 
     if (levelDefinition.outerBoundary) {
@@ -372,8 +413,10 @@ export class LevelBuilder {
       environment,
       walkableAreas,
       collisionWalls,
+      lockedConnectionBlockers,
       chests,
       shopOfferSpawns,
+      healingFountainSpawns,
       enemies,
       exit,
       connections,
@@ -922,11 +965,13 @@ export class LevelBuilder {
   }
 
   resolveEnemySpawn({ spawn, spawnIndex, room, levelDefinition, buildOptions }) {
-    const difficulty =
-      spawn.enemyDifficulty ??
-      room.enemyDifficulty ??
-      levelDefinition.enemyDifficulty ??
-      ENEMY_DIFFICULTY.EASY;
+    const difficulty = this.resolveEnemyDifficulty({
+      spawn,
+      spawnIndex,
+      room,
+      levelDefinition,
+      buildOptions,
+    });
     const explicitEnemyDefinition = spawn.enemyTypeId
       ? getEnemyDefinition(spawn.enemyTypeId)
       : null;
@@ -945,26 +990,41 @@ export class LevelBuilder {
         )
         : null
     );
-    const chaseConfig = enemyDefinition?.chase ?? spawn.chase;
+    const bossOverrides = enemyDefinition?.isBoss
+      ? {
+        ...(levelDefinition.bossEnemyOverrides ?? {}),
+        ...(buildOptions.bossEnemyOverrides ?? {}),
+      }
+      : {};
+    const chaseConfig = bossOverrides.chase ?? enemyDefinition?.chase ?? spawn.chase;
     const difficultyScale = Math.max(
       0,
       Number(buildOptions.difficultyScale ?? levelDefinition.difficultyScale ?? 1) || 1
     );
     const maxHp = this.scaleEnemyStat(
-      enemyDefinition?.maxHp ?? spawn.maxHp,
+      bossOverrides.maxHp ?? enemyDefinition?.maxHp ?? spawn.maxHp,
       difficultyScale,
       "ceil"
     );
     const hp = this.scaleEnemyStat(
-      enemyDefinition?.hp ?? spawn.hp,
+      bossOverrides.hp ?? enemyDefinition?.hp ?? spawn.hp,
       difficultyScale,
       "ceil"
     );
     const attackDamage = this.scaleEnemyStat(
-      enemyDefinition?.attackDamage ?? spawn.attackDamage,
+      bossOverrides.attackDamage ?? enemyDefinition?.attackDamage ?? spawn.attackDamage,
       difficultyScale,
       "round"
     );
+    const coinDrop = {
+      ...(levelDefinition.enemyCoinDrop ?? {}),
+      ...(spawn.coinDrop ?? {}),
+      ...(bossOverrides.coinDrop ?? {}),
+    };
+    const potionDrop = {
+      ...(spawn.potionDrop ?? {}),
+      ...(bossOverrides.potionDrop ?? {}),
+    };
 
     return {
       ...spawn,
@@ -977,24 +1037,75 @@ export class LevelBuilder {
       isBoss: enemyDefinition?.isBoss ?? spawn.isBoss,
       maxHp,
       hp,
-      speed: enemyDefinition?.speed ?? spawn.speed,
+      speed: bossOverrides.speed ?? enemyDefinition?.speed ?? spawn.speed,
       attackDamage,
-      attackRange: enemyDefinition?.attackRange ?? spawn.attackRange,
-      attackCooldown: enemyDefinition?.attackCooldown ?? spawn.attackCooldown,
-      collisionRadius: enemyDefinition?.collisionRadius ?? spawn.collisionRadius,
+      attackRange: bossOverrides.attackRange ?? enemyDefinition?.attackRange ?? spawn.attackRange,
+      attackCooldown: bossOverrides.attackCooldown ?? enemyDefinition?.attackCooldown ?? spawn.attackCooldown,
+      collisionRadius: bossOverrides.collisionRadius ?? enemyDefinition?.collisionRadius ?? spawn.collisionRadius,
       chase: chaseConfig ? { ...chaseConfig } : undefined,
-      boss: enemyDefinition?.boss ?? spawn.boss,
-      patrolStopRange: enemyDefinition?.patrolStopRange ?? spawn.patrolStopRange,
+      boss: bossOverrides.boss ?? enemyDefinition?.boss ?? spawn.boss,
+      coinDrop: Object.keys(coinDrop).length > 0 ? coinDrop : spawn.coinDrop,
+      potionDrop: Object.keys(potionDrop).length > 0 ? potionDrop : spawn.potionDrop,
+      patrolStopRange: bossOverrides.patrolStopRange ?? enemyDefinition?.patrolStopRange ?? spawn.patrolStopRange,
       patrolMoveDuration:
-        enemyDefinition?.patrolMoveDuration ?? spawn.patrolMoveDuration,
+        bossOverrides.patrolMoveDuration ?? enemyDefinition?.patrolMoveDuration ?? spawn.patrolMoveDuration,
       patrolPauseDurations:
-        enemyDefinition?.patrolPauseDurations ?? spawn.patrolPauseDurations,
+        bossOverrides.patrolPauseDurations ?? enemyDefinition?.patrolPauseDurations ?? spawn.patrolPauseDurations,
       patrol: (spawn.patrol ?? []).map((point) => ({ ...point })),
       patrolAreas: (spawn.patrolAreas?.length
         ? spawn.patrolAreas
         : room.walkableAreas
       ).map(cloneArea),
     };
+  }
+
+  resolveEnemyDifficulty({ spawn, spawnIndex, room, levelDefinition, buildOptions }) {
+    if (spawn.enemyDifficulty) return spawn.enemyDifficulty;
+    if (room.enemyDifficulty) return room.enemyDifficulty;
+
+    const poolWeights =
+      buildOptions.enemyPoolWeights ??
+      levelDefinition.enemyPoolWeights ??
+      null;
+
+    if (room.type === "combat" && poolWeights) {
+      return this.pickWeightedEnemyDifficulty(
+        poolWeights,
+        this.createSeededRandomValue([
+          buildOptions.runSeed ?? levelDefinition.decorationFill?.seed ?? "level",
+          levelDefinition.name ?? "unnamed-level",
+          room.id,
+          spawnIndex,
+          spawn.x,
+          spawn.z,
+          "difficulty",
+        ].join(":"))
+      );
+    }
+
+    return levelDefinition.enemyDifficulty ?? ENEMY_DIFFICULTY.EASY;
+  }
+
+  pickWeightedEnemyDifficulty(weights = {}, randomValue = 0) {
+    const entries = Object.entries(weights)
+      .map(([difficulty, weight]) => [
+        difficulty,
+        Math.max(0, Number.parseFloat(weight) || 0),
+      ])
+      .filter(([, weight]) => weight > 0);
+    const totalWeight = entries.reduce((sum, [, weight]) => sum + weight, 0);
+
+    if (totalWeight <= 0) return ENEMY_DIFFICULTY.EASY;
+
+    let cursor = 0;
+    const roll = Math.max(0, Math.min(0.999999, randomValue)) * totalWeight;
+
+    for (const [difficulty, weight] of entries) {
+      cursor += weight;
+      if (roll <= cursor) return difficulty;
+    }
+
+    return entries[0]?.[0] ?? ENEMY_DIFFICULTY.EASY;
   }
 
   scaleEnemyStat(value, difficultyScale = 1, rounding = "round") {
@@ -1013,11 +1124,24 @@ export class LevelBuilder {
     buildOptions,
     connectionEndpoints = [],
   }) {
+    if ((levelDefinition.suppressChestRoomTypes ?? []).includes(room.type)) {
+      return [];
+    }
+
+    if (room.type === "treasure" && levelDefinition.treasureReward?.enabled) {
+      return this.createGeneratedTreasureChestSpawns({
+        room,
+        levelDefinition,
+        buildOptions,
+      });
+    }
+
     const chestSpawns = (room.chestSpawns ?? []).map((spawn, chestIndex) =>
       this.createChestSpawn({
         spawn,
         spawnIndex: chestIndex,
         room,
+        levelDefinition,
       })
     );
     const coffinSpawns = this.resolveRoomMimicCoffinSpawns({
@@ -1046,12 +1170,220 @@ export class LevelBuilder {
     return [...remainingChestSpawns, ...coffinSpawns];
   }
 
-  createChestSpawn({ spawn, spawnIndex, room }) {
+  createChestSpawn({ spawn, spawnIndex, room, levelDefinition = {} }) {
+    const treasureReward = room.type === "treasure"
+      ? levelDefinition.treasureReward
+      : null;
+    const isEpicChest = spawn.chestType === CHEST_TYPES.EPIC;
+
     return {
       ...spawn,
       spawnIndex,
+      lockedUntilStageClear:
+        spawn.lockedUntilStageClear ??
+        Boolean(treasureReward?.lockedUntilStageClear),
+      coinDrop: {
+        ...(spawn.coinDrop ?? {}),
+        ...(isEpicChest
+          ? {}
+          : treasureReward?.normalChestCoinDrop ?? treasureReward?.chestCoinDrop ?? {}),
+      },
+      rewardOverrides: {
+        ...(spawn.rewardOverrides ?? {}),
+        ...(treasureReward?.rewardOverrides ?? {}),
+      },
       roomId: room.id,
       roomTemplateId: room.templateId,
+    };
+  }
+
+  createGeneratedTreasureChestSpawns({ room, levelDefinition = {}, buildOptions = {} }) {
+    const treasureReward = levelDefinition.treasureReward ?? {};
+    const roomCenter = this.getRoomCenter(room);
+    const normalChestCount = this.rollIntegerConfig(
+      treasureReward.normalChestCount ?? { min: 1, max: 2 },
+      this.createSeededRandomValue([
+        buildOptions.floorSeed ?? buildOptions.runSeed ?? levelDefinition.name ?? "level",
+        room.id,
+        "normalChestCount",
+      ].join(":"))
+    );
+    const normalPositions = this.getTreasureNormalChestPositions(room, normalChestCount);
+    const normalChests = normalPositions.map((position, index) => {
+      const itemCount = this.rollIntegerConfig(
+        treasureReward.normalItemCount ?? { min: 1, max: 2 },
+        this.createSeededRandomValue([
+          buildOptions.floorSeed ?? buildOptions.runSeed ?? levelDefinition.name ?? "level",
+          room.id,
+          index,
+          "normalItemCount",
+        ].join(":"))
+      );
+
+      return this.createChestSpawn({
+        spawn: {
+          x: position.x,
+          z: position.z,
+          rotationY: position.rotationY,
+          modelId: DEFAULT_CHEST_MODEL_ID,
+          chestType: CHEST_TYPES.STANDARD,
+          lockedUntilStageClear: Boolean(treasureReward.lockedUntilStageClear),
+          coinDrop: treasureReward.normalChestCoinDrop ?? treasureReward.chestCoinDrop,
+          rewardOverrides: this.createNormalTreasureRewardOverrides({
+            treasureReward,
+            itemCount,
+          }),
+        },
+        spawnIndex: index,
+        room,
+        levelDefinition,
+      });
+    });
+
+    const epicChest = treasureReward.epicChest?.enabled === false
+      ? null
+      : this.createChestSpawn({
+          spawn: {
+            x: roomCenter.x,
+            z: roomCenter.z,
+            rotationY: 0,
+            modelId: EPIC_CHEST_MODEL_ID,
+            chestType: CHEST_TYPES.EPIC,
+            lockedUntilStageClear: Boolean(treasureReward.lockedUntilStageClear),
+            coinDrop: { totalValueMin: 0, totalValueMax: 0 },
+            epicRewardConfig: treasureReward.epicChest ?? {},
+          },
+          spawnIndex: normalChests.length,
+          room,
+          levelDefinition,
+        });
+
+    return epicChest ? [...normalChests, epicChest] : normalChests;
+  }
+
+  createNormalTreasureRewardOverrides({ treasureReward = {}, itemCount = 1 }) {
+    const rarity = treasureReward.normalItemRarity ?? ITEM_RARITIES.COMMON;
+
+    return {
+      itemChancePercent: 100,
+      itemRollCount: itemCount,
+      rarityChancePercentByFloor: {
+        [ITEM_RARITIES.COMMON]: rarity === ITEM_RARITIES.COMMON
+          ? { floor1: 100, floor10: 100 }
+          : { floor1: 0, floor10: 0 },
+        [ITEM_RARITIES.RARE]: rarity === ITEM_RARITIES.RARE
+          ? { floor1: 100, floor10: 100 }
+          : { floor1: 0, floor10: 0 },
+        [ITEM_RARITIES.EPIC]: rarity === ITEM_RARITIES.EPIC
+          ? { floor1: 100, floor10: 100 }
+          : { floor1: 0, floor10: 0 },
+      },
+      itemPoolsByRarity: {
+        [rarity]: treasureReward.normalItemPool ?? [],
+      },
+    };
+  }
+
+  getTreasureNormalChestPositions(room, count) {
+    const center = this.getRoomCenter(room);
+    const halfW = Math.max(2, (room.dimensions?.w ?? 9) / 2);
+    const halfD = Math.max(2, (room.dimensions?.d ?? 9) / 2);
+    const xOffset = Math.max(1.6, Math.min(3.2, halfW - 2));
+    const zOffset = Math.max(1.4, Math.min(2.4, halfD - 2));
+    const candidates = [
+      {
+        x: center.x - xOffset,
+        z: center.z - zOffset,
+        rotationY: Math.PI / 2,
+      },
+      {
+        x: center.x + xOffset,
+        z: center.z - zOffset,
+        rotationY: -Math.PI / 2,
+      },
+    ];
+
+    return candidates.slice(0, Math.max(1, Math.min(2, count)));
+  }
+
+  getRoomCenter(room) {
+    const areas = room.walkableAreas?.length ? room.walkableAreas : room.floorModules ?? [];
+    if (areas.length === 0) return { x: 0, z: 0 };
+
+    const bounds = areas.reduce(
+      (acc, area) => ({
+        minX: Math.min(acc.minX, area.x - area.w / 2),
+        maxX: Math.max(acc.maxX, area.x + area.w / 2),
+        minZ: Math.min(acc.minZ, area.z - area.d / 2),
+        maxZ: Math.max(acc.maxZ, area.z + area.d / 2),
+      }),
+      {
+        minX: Infinity,
+        maxX: -Infinity,
+        minZ: Infinity,
+        maxZ: -Infinity,
+      }
+    );
+
+    return {
+      x: (bounds.minX + bounds.maxX) / 2,
+      z: (bounds.minZ + bounds.maxZ) / 2,
+    };
+  }
+
+  rollIntegerConfig(range, randomValue = Math.random()) {
+    const min = Number.parseInt(range?.min ?? range?.value ?? 1, 10);
+    const max = Number.parseInt(range?.max ?? min, 10);
+    const safeMin = Number.isFinite(min) ? min : 1;
+    const safeMax = Number.isFinite(max) ? max : safeMin;
+    const low = Math.min(safeMin, safeMax);
+    const high = Math.max(safeMin, safeMax);
+
+    return low + Math.floor(Math.max(0, Math.min(0.999999, randomValue)) * (high - low + 1));
+  }
+
+  createStageLockedConnectionBlockers({
+    connections = [],
+    rooms = [],
+    levelDefinition = {},
+    connectorStyle,
+  }) {
+    if (!levelDefinition.treasureReward?.lockedUntilStageClear) return [];
+
+    const roomsById = new Map(rooms.map((room) => [room.id, room]));
+
+    return connections
+      .filter((connection) => {
+        const roomA = roomsById.get(connection.a.roomId);
+        const roomB = roomsById.get(connection.b.roomId);
+        const types = new Set([roomA?.type, roomB?.type]);
+
+        return types.has("combat") && types.has("treasure");
+      })
+      .map((connection) => this.createStageLockedConnectionBlocker(
+        connection,
+        connectorStyle
+      ));
+  }
+
+  createStageLockedConnectionBlocker(connection, connectorStyle) {
+    const opening = connection.a.opening;
+    const isHorizontal = this.isHorizontalSide(opening.side);
+    const x = (connection.a.opening.x + connection.b.opening.x) / 2;
+    const z = (connection.a.opening.z + connection.b.opening.z) / 2;
+    const length = connectorStyle?.length ?? CONNECTOR_STYLES.openCorridor.length;
+
+    return {
+      x,
+      z,
+      w: isHorizontal ? length : STAGE_LOCKED_CONNECTION_THICKNESS,
+      d: isHorizontal ? STAGE_LOCKED_CONNECTION_THICKNESS : length,
+      role: "stageLockedConnection",
+      unlockOnStageClear: true,
+      generated: true,
+      invisible: true,
+      connectionId: connection.id,
+      roomIds: [connection.a.roomId, connection.b.roomId],
     };
   }
 

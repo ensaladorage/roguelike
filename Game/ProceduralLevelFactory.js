@@ -95,6 +95,10 @@ function createConnectedProceduralFloor(options = {}) {
 }
 
 function tryCreateProceduralLevelOne(rng, options, attempt) {
+  if (options.stageProfile === "compactCombat") {
+    return tryCreateCompactCombatLevel(rng, options, attempt);
+  }
+
   const treasureCount = randomInt(
     rng,
     TREASURE_ROOM_COUNT.min,
@@ -196,6 +200,172 @@ function tryCreateProceduralLevelOne(rng, options, attempt) {
       roomCount: rooms.length,
       treasureCount,
       combatCount,
+      roomTagFilters: options.roomTagFilters ?? options.roomTags ?? null,
+    },
+    rooms: placements,
+  };
+}
+
+function tryCreateCompactCombatLevel(rng, options, attempt) {
+  const enterTemplates = filterRoomsByTags(ENTER_ROOM_TEMPLATES, "enter", options);
+  const combatTemplates = filterRoomsByTags(COMBAT_ROOM_TEMPLATES, "combat", {
+    ...options,
+    roomTagFilters: {
+      ...(options.roomTagFilters ?? {}),
+      combat: {
+        ...(options.roomTagFilters?.combat ?? {}),
+        exclude: [
+          ...(
+            options.roomTagFilters?.combat?.exclude ??
+            []
+          ),
+          "dead_end",
+        ],
+      },
+    },
+  });
+  const exitTemplates = filterRoomsByTags(EXIT_ROOM_TEMPLATES, "exit", options);
+
+  if (
+    enterTemplates.length === 0 ||
+    combatTemplates.length === 0 ||
+    exitTemplates.length === 0
+  ) {
+    return null;
+  }
+
+  const requiresTreasureRoom = Boolean(options.treasureReward?.enabled);
+  const minCombatOpenings = requiresTreasureRoom ? 2 : 2;
+  const enterTemplate = pickOne(rng, enterTemplates);
+  const enterPlacement = createRoomPlacement({
+    id: "EnterRoom",
+    template: enterTemplate,
+    position: { x: 0, z: 0 },
+  });
+  const usedOpenings = new Set();
+  const combatCandidate = getCompatibleRoomCandidates({
+    rng,
+    rooms: [enterPlacement],
+    sourceRooms: [enterPlacement],
+    usedOpenings,
+    type: "combat",
+    templates: combatTemplates.filter((template) =>
+      (template.doorOpenings?.length ?? 0) >= minCombatOpenings &&
+      (template.enemySpawns?.length ?? 0) > 0
+    ),
+    continuesMainPath: true,
+  })[0];
+
+  if (!combatCandidate) return null;
+
+  usedOpenings.add(getOpeningUseKey(combatCandidate.sourceRoom.id, combatCandidate.targetOpening));
+  usedOpenings.add(getOpeningUseKey(combatCandidate.room.id, combatCandidate.incomingOpening));
+
+  const rooms = [enterPlacement, combatCandidate.room];
+
+  let treasureRoom = null;
+  if (requiresTreasureRoom) {
+    const treasureTemplates = filterRoomsByTags(TREASURE_ROOM_TEMPLATES, "treasure", options)
+      .filter((template) => (template.doorOpenings?.length ?? 0) >= 2);
+    const treasureCandidate = getCompatibleRoomCandidates({
+      rng,
+      rooms,
+      sourceRooms: [combatCandidate.room],
+      usedOpenings,
+      type: "treasure",
+      templates: treasureTemplates,
+      continuesMainPath: false,
+    })[0];
+
+    if (!treasureCandidate) return null;
+
+    treasureRoom = treasureCandidate.room;
+    rooms.push(treasureRoom);
+    usedOpenings.add(getOpeningUseKey(treasureCandidate.sourceRoom.id, treasureCandidate.targetOpening));
+    usedOpenings.add(getOpeningUseKey(treasureCandidate.room.id, treasureCandidate.incomingOpening));
+  }
+
+  const exitCandidate = getCompatibleRoomCandidates({
+    rng,
+    rooms,
+    sourceRooms: [treasureRoom ?? combatCandidate.room],
+    usedOpenings,
+    type: "exit",
+    templates: exitTemplates,
+    continuesMainPath: true,
+  })[0];
+
+  if (!exitCandidate) return null;
+
+  usedOpenings.add(getOpeningUseKey(exitCandidate.sourceRoom.id, exitCandidate.targetOpening));
+  usedOpenings.add(getOpeningUseKey(exitCandidate.room.id, exitCandidate.incomingOpening));
+  rooms.push(exitCandidate.room);
+
+  const placements = rooms.map((room) => ({
+    id: room.id,
+    templateId: room.templateId,
+    position: { ...room.position },
+    rotationY: room.rotationY,
+  }));
+  const playerStart = getPlayerStartFromEnterRoom(rooms[0], rooms[1]);
+  const bounds = getRoomBounds(rooms);
+  const floorCenter = {
+    x: (bounds.minX + bounds.maxX) / 2,
+    z: (bounds.minZ + bounds.maxZ) / 2,
+  };
+  const floorSize = Math.ceil(
+    Math.max(bounds.maxX - bounds.minX, bounds.maxZ - bounds.minZ) + 8
+  );
+  const floorIndex = getFloorIndex(options);
+  const floorSeed = options.floorSeed ?? `${options.runSeed ?? "run"}:floor:${floorIndex}`;
+  const difficultyTier = options.difficultyTier ?? ENEMY_DIFFICULTY.EASY;
+  const cycleIndex = options.cycleIndex ?? 0;
+  const cycleFloorIndex = options.cycleFloorIndex ?? floorIndex;
+  const difficultyScale = options.difficultyScale ?? 1;
+  const roomSummary = rooms
+    .map((room) => room.templateId.replace(/_room/g, ""))
+    .join(" -> ");
+
+  return {
+    kind: "assembled",
+    tileSetId: "scenarioDefault",
+    name: options.stage?.name ?? `Combat Stage ${floorIndex} (${roomSummary})`,
+    connectorStyleId: "openCorridor",
+    floorIndex,
+    floorType: options.floorType ?? "combat",
+    stage: options.stage ?? null,
+    enemyDifficulty: difficultyTier,
+    enemyPoolWeights: options.enemyPoolWeights ?? null,
+    enemyCoinDrop: options.enemyCoinDrop ?? null,
+    treasureReward: options.treasureReward ?? null,
+    suppressChestRoomTypes: ["combat", "exit"],
+    cycleIndex,
+    cycleFloorIndex,
+    difficultyScale,
+    roomTagFilters: options.roomTagFilters ?? options.roomTags ?? null,
+    decorationFill: PROCEDURAL_DECORATION_FILL,
+    playerStart,
+    floorSize,
+    floorCenter,
+    procedural: {
+      floor: floorIndex,
+      floorSeed,
+      floorType: options.floorType ?? "combat",
+      difficultyTier,
+      cycleIndex,
+      cycleFloorIndex,
+      difficultyScale,
+      attempt,
+      roomCount: rooms.length,
+      treasureCount: rooms.some((room) => room.type === "treasure") ? 1 : 0,
+      combatCount: 1,
+      combatRooms: [
+        {
+          combatRoomId: combatCandidate.room.id,
+          treasureRoomId: treasureRoom?.id ?? null,
+          exitRoomId: exitCandidate.room.id,
+        },
+      ],
       roomTagFilters: options.roomTagFilters ?? options.roomTags ?? null,
     },
     rooms: placements,

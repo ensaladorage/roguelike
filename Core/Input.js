@@ -71,6 +71,7 @@ export function setupInput(
     pointerState.inside = false;
     resetCursorAssistOffset(pointerState);
     hideCursorOverlay(renderer.domElement, cursorOverlay);
+    options.onInteractableHover?.(null);
   });
 
   renderer.domElement.addEventListener("pointerdown", (event) => {
@@ -150,10 +151,21 @@ export function setupInput(
       getEnemyTargets,
       getInteractableTargets
     );
-    const directHoverIntent = getHoverIntent(
-      raycaster,
-      getEnemyTargets,
-      getInteractableTargets
+    const directEnemyHit = getPointedEnemyHit(raycaster, getEnemyTargets);
+    const directInteractableHit = directEnemyHit
+      ? null
+      : getPointedInteractableHit(raycaster, getInteractableTargets);
+    const directHoverIntent = directEnemyHit
+      ? "attack"
+      : directInteractableHit
+        ? "interactable"
+        : null;
+    options.onInteractableHover?.(
+      directInteractableHit?.interactable ?? null,
+      {
+        clientX: pointerState.clientX,
+        clientY: pointerState.clientY,
+      }
     );
     updateCursorOverlay(
       pointerState,
@@ -566,22 +578,6 @@ function isAttackCooldownVisible(attackFeedback) {
   );
 }
 
-function getHoverIntent(
-  raycaster,
-  getEnemyTargets,
-  getInteractableTargets
-) {
-  if (getPointedEnemy(raycaster, getEnemyTargets)) {
-    return "attack";
-  }
-
-  if (getPointedInteractable(raycaster, getInteractableTargets)) {
-    return "interactable";
-  }
-
-  return null;
-}
-
 function updatePointer(event, renderer, camera, raycaster, pointer) {
   updatePointerFromClientPosition(
     event.clientX,
@@ -634,10 +630,6 @@ function updatePointerFromClientPosition(
   raycaster.setFromCamera(pointer, camera);
 }
 
-function getPointedEnemy(raycaster, getEnemyTargets) {
-  return getPointedEnemyHit(raycaster, getEnemyTargets)?.enemy ?? null;
-}
-
 function getPointedEnemyHit(raycaster, getEnemyTargets) {
   const enemyTargets =
     typeof getEnemyTargets === "function" ? getEnemyTargets() : [];
@@ -655,10 +647,6 @@ function getPointedEnemyHit(raycaster, getEnemyTargets) {
   }
 
   return null;
-}
-
-function getPointedInteractable(raycaster, getInteractableTargets) {
-  return Boolean(getPointedInteractableHit(raycaster, getInteractableTargets));
 }
 
 function getPointedInteractableHit(raycaster, getInteractableTargets) {
@@ -752,7 +740,7 @@ function getEnemyAimAssistCandidates(getEnemyTargets) {
 function getInteractableAimAssistCandidates(getInteractableTargets) {
   const interactableTargets =
     typeof getInteractableTargets === "function" ? getInteractableTargets() : [];
-  const assistedTypes = new Set(["chest", "shop"]);
+  const assistedTypes = new Set(["chest", "shop", "shopFountain", "itemDrop"]);
 
   return interactableTargets
     .map((object) => ({

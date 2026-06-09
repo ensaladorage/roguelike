@@ -124,6 +124,7 @@ export class GameScene {
     this.isPaused = false;
     this.bossExitBlockedNotified = false;
     this.bossHudDiscovered = false;
+    this.stageLockedConnectionBlockers = [];
 
     this.hud = new HUD();
     this.debugCheatState = {
@@ -194,6 +195,8 @@ export class GameScene {
       (payload) => this.handleWorldClick(payload),
       {
         onKeyboardMovementStart: () => this.handleKeyboardMovementStart(),
+        onInteractableHover: (interactable, pointer) =>
+          this.handleInteractableHover(interactable, pointer),
       }
     );
 
@@ -453,6 +456,9 @@ export class GameScene {
       floorSeed: floorLoad.currentFloorSeed,
       floorIndex: floorLoad.currentFloorIndex,
       floorType: floorLoad.floorType,
+      stagePlan: floorLoad.stagePlan,
+      stageType: floorLoad.stageType,
+      shopTier: floorLoad.shopTier,
       cycleIndex: floorLoad.cycleIndex,
       cycleFloorIndex: floorLoad.cycleFloorIndex,
       difficultyScale: floorLoad.difficultyScale,
@@ -493,9 +499,14 @@ export class GameScene {
         (level.floorIndex ?? floorLoad.currentFloorIndex ?? 1) - 1
       ),
       floorType: level.floorType ?? floorLoad.floorType,
+      stagePlan: floorLoad.stagePlan,
+      stageType: floorLoad.stageType,
+      shopTier: floorLoad.shopTier,
+      shopTierDefinition: level.shopTier ?? null,
       mode: floorLoad.mode,
     });
     this.addLevelEnemies(level);
+    this.gameManager.registerStageClearTargets(level, this.enemies);
     this.placePlayer(level.playerStart);
     this.restoreProgressSnapshot(progressSnapshot);
     this.roomVisibilityManager.load(level, {
@@ -503,6 +514,7 @@ export class GameScene {
       enemies: this.enemies,
       chests: this.chestManager.chests,
       shopStands: this.shopManager.stands,
+      shopFountains: this.shopManager.fountains,
     });
     this.syncDebugCheatEffects();
 
@@ -533,6 +545,9 @@ export class GameScene {
       floorSeed: floorLoad.currentFloorSeed,
       floorType: floorLoad.floorType,
       difficultyTier: floorLoad.difficultyTier,
+      stageName: floorLoad.stageName,
+      stageType: floorLoad.stageType,
+      shopTier: floorLoad.shopTier,
       cycleIndex: floorLoad.cycleIndex,
       cycleFloorIndex: floorLoad.cycleFloorIndex,
       difficultyScale: floorLoad.difficultyScale,
@@ -611,9 +626,13 @@ export class GameScene {
     if (this.shopManager) this.shopManager.clearFloor();
     if (this.roomVisibilityManager) this.roomVisibilityManager.clear();
     this.hud?.hideBoss?.();
+    this.hud?.hideVictoryOverlay?.();
     this.playerControlLocks.clear();
     this.bossExitBlockedNotified = false;
     this.bossHudDiscovered = false;
+    this.stageLockedConnectionBlockers = [];
+    this.hud?.hideItemTooltip?.();
+    this.hud?.hideEpicChestRewards?.();
 
     this.levelGroup.clear();
     this.currentLevel = null;
@@ -921,6 +940,9 @@ export class GameScene {
   addLevelGeometry(level) {
     this.walkableAreas = (level.walkableAreas ?? []).map((area) => ({ ...area }));
     this.collisionWalls = (level.collisionWalls ?? []).map((wall) => ({ ...wall }));
+    this.stageLockedConnectionBlockers = this.collisionWalls.filter(
+      (wall) => wall.role === "stageLockedConnection"
+    );
     this.navBounds = this.calculateNavBounds(this.walkableAreas);
 
     const environmentBuild = this.modularTileBuilder.buildLevel(level.environment);
@@ -1111,6 +1133,26 @@ export class GameScene {
     return this.isBossFloor() && this.hasLivingBoss();
   }
 
+  onStageCleared() {
+    this.bossExitBlockedNotified = false;
+    this.chestManager?.unlockStageClearRewards?.();
+    this.unlockStageLockedConnections();
+  }
+
+  unlockStageLockedConnections() {
+    if (this.stageLockedConnectionBlockers.length === 0) return;
+
+    const lockedConnectionIds = new Set(
+      this.stageLockedConnectionBlockers.map((wall) => wall.connectionId)
+    );
+    this.collisionWalls = this.collisionWalls.filter(
+      (wall) =>
+        wall.role !== "stageLockedConnection" ||
+        !lockedConnectionIds.has(wall.connectionId)
+    );
+    this.stageLockedConnectionBlockers = [];
+  }
+
   syncBossHud() {
     if (!this.hud?.updateBoss) return;
 
@@ -1156,11 +1198,15 @@ export class GameScene {
     const shopStands = (this.shopManager?.stands ?? [])
       .filter((stand) => stand.model?.visible !== false)
       .map((stand) => stand.model);
+    const shopFountains = (this.shopManager?.fountains ?? [])
+      .filter((fountain) => fountain.model?.visible !== false)
+      .map((fountain) => fountain.model);
+    const itemDrops = this.itemDropManager?.getInteractableTargets?.() ?? [];
     const exitStairs = (this.exitInteractableTargets ?? []).filter(
       (target) => target.visible !== false
     );
 
-    return [...chests, ...shopStands, ...exitStairs];
+    return [...chests, ...shopStands, ...shopFountains, ...itemDrops, ...exitStairs];
   }
 
   handleWorldClick(payload) {
@@ -1180,6 +1226,24 @@ export class GameScene {
     if (shopStand) {
       this.cancelStoredActionIntents();
       this.handleShopStandClick(shopStand, payload, {
+        keyboardMovementActive,
+      });
+      return;
+    }
+
+    const shopFountain = this.getShopFountainFromInteractable(payload?.interactable);
+    if (shopFountain) {
+      this.cancelStoredActionIntents();
+      this.handleShopFountainClick(shopFountain, payload, {
+        keyboardMovementActive,
+      });
+      return;
+    }
+
+    const itemDrop = this.getItemDropFromInteractable(payload?.interactable);
+    if (itemDrop) {
+      this.cancelStoredActionIntents();
+      this.handleItemDropClick(itemDrop, payload, {
         keyboardMovementActive,
       });
       return;
@@ -1240,6 +1304,9 @@ export class GameScene {
     // Add future delayed interactables here so manual movement/clicks clear stale actions.
     this.chestManager?.cancelPendingChestOpen?.();
     this.shopManager?.cancelPendingStandInteraction?.();
+    this.shopManager?.cancelPendingFountainInteraction?.();
+    this.itemDropManager?.cancelPendingItemPickup?.();
+    this.hud?.hideItemTooltip?.();
   }
 
   getChestFromInteractable(interactable) {
@@ -1252,6 +1319,26 @@ export class GameScene {
     if (interactable?.type !== "shop") return null;
 
     return this.shopManager?.findStand?.(interactable.offerId) ?? null;
+  }
+
+  getShopFountainFromInteractable(interactable) {
+    if (interactable?.type !== "shopFountain") return null;
+
+    return this.shopManager?.findFountain?.(interactable.fountainId) ?? null;
+  }
+
+  getItemDropFromInteractable(interactable) {
+    return this.itemDropManager?.findDropFromInteractable?.(interactable) ?? null;
+  }
+
+  handleInteractableHover(interactable, pointer = {}) {
+    const itemDrop = this.getItemDropFromInteractable(interactable);
+    if (!itemDrop?.item) {
+      this.hud?.hideItemTooltip?.();
+      return;
+    }
+
+    this.hud?.showItemTooltip?.(itemDrop.item, pointer);
   }
 
   isEnemyInPlayerAttackRange(enemy) {
@@ -1276,6 +1363,11 @@ export class GameScene {
 
   handleChestClick(chest, payload = {}, options = {}) {
     this.chestManager?.cancelPendingChestOpen?.();
+
+    if (chest?.lockedUntilStageClear && !chest.stageUnlocked) {
+      this.addLog("Clear the room before opening this chest.");
+      return;
+    }
 
     if (!this.chestManager?.isChestInteractable?.(chest)) return;
 
@@ -1314,6 +1406,26 @@ export class GameScene {
     ) <= SHOP_INTERACTION_RANGE;
   }
 
+  isShopFountainInPlayerInteractionRange(fountain) {
+    if (!fountain?.model?.position || !this.player?.model?.position) return false;
+
+    return flatDistance(
+      this.player.model.position,
+      fountain.model.position
+    ) <= SHOP_INTERACTION_RANGE;
+  }
+
+  isItemDropInPlayerInteractionRange(itemDrop) {
+    if (!itemDrop?.model?.position || !this.player?.model?.position) return false;
+
+    const pickupRange = this.itemDropManager?.getPickupRange?.(itemDrop) ?? 0.8;
+
+    return flatDistance(
+      this.player.model.position,
+      itemDrop.model.position
+    ) <= pickupRange;
+  }
+
   handleShopStandClick(stand, payload = {}, options = {}) {
     if (options.keyboardMovementActive) {
       if (!this.isShopStandInPlayerInteractionRange(stand)) return;
@@ -1336,6 +1448,58 @@ export class GameScene {
       result.reason === "movingToInteraction" &&
       navigation.path.length > 0
     ) {
+      this.player.setPath(navigation.path);
+    }
+  }
+
+  handleShopFountainClick(fountain, payload = {}, options = {}) {
+    if (options.keyboardMovementActive) {
+      if (!this.isShopFountainInPlayerInteractionRange(fountain)) return;
+
+      this.shopManager?.requestFountainInteraction?.(fountain);
+      return;
+    }
+
+    const navigation = this.getShopStandInteractionNavigation(
+      fountain,
+      payload.point
+    );
+    if (!navigation) return;
+
+    const result = this.shopManager?.requestFountainInteraction?.(fountain);
+    if (!result) return;
+    if (result.reason === "interactionUnavailable") return;
+
+    if (
+      result.reason === "movingToInteraction" &&
+      navigation.path.length > 0
+    ) {
+      this.player.setPath(navigation.path);
+    }
+  }
+
+  handleItemDropClick(itemDrop, payload = {}, options = {}) {
+    if (!this.itemDropManager?.isItemDropInteractable?.(itemDrop)) return;
+
+    if (options.keyboardMovementActive) {
+      if (!this.isItemDropInPlayerInteractionRange(itemDrop)) return;
+
+      this.itemDropManager.requestItemPickup(itemDrop);
+      return;
+    }
+
+    const navigation = this.getItemDropInteractionNavigation(
+      itemDrop,
+      payload.point
+    );
+    if (!navigation) return;
+
+    this.itemDropManager.requestItemPickup(itemDrop);
+    this.createClickFeedback(payload.point ?? navigation.target, {
+      color: INTERACTION_CLICK_FEEDBACK_COLOR,
+    });
+
+    if (navigation.path.length > 0) {
       this.player.setPath(navigation.path);
     }
   }
@@ -1810,6 +1974,99 @@ export class GameScene {
       (a, b) =>
         a.distanceToSquared(chestPosition) -
         b.distanceToSquared(chestPosition)
+    );
+
+    return candidates;
+  }
+
+  getItemDropInteractionNavigation(itemDrop, clickPoint = null) {
+    if (!itemDrop?.model?.position || !this.player) return null;
+
+    const playerPosition = this.player.model.position;
+    const dropPosition = itemDrop.model.position;
+    const pickupRange = this.itemDropManager?.getPickupRange?.(itemDrop) ?? 0.8;
+
+    if (flatDistance(playerPosition, dropPosition) <= pickupRange) {
+      return {
+        target: clickPoint?.clone?.() ?? dropPosition.clone(),
+        path: [],
+      };
+    }
+
+    const candidates = this.getItemDropInteractionTargetCandidates(
+      itemDrop,
+      clickPoint
+    );
+
+    for (const target of candidates) {
+      const path = this.findNavigationPath(
+        playerPosition,
+        target,
+        PLAYER_COLLISION_RADIUS
+      );
+
+      if (path.length > 0) {
+        return { target, path };
+      }
+    }
+
+    return null;
+  }
+
+  getItemDropInteractionTargetCandidates(itemDrop, clickPoint = null) {
+    const dropPosition = itemDrop.model.position;
+    const pickupRange = this.itemDropManager?.getPickupRange?.(itemDrop) ?? 0.8;
+    const approachDistance = Math.max(
+      PLAYER_COLLISION_RADIUS * 2,
+      Math.min(pickupRange - 0.05, pickupRange * 0.88)
+    );
+    const candidates = [];
+    const seen = new Set();
+
+    const addCandidate = (point) => {
+      const target = point.clone();
+      target.y = PLAYER_GROUND_Y;
+      const key = `${target.x.toFixed(3)},${target.z.toFixed(3)}`;
+
+      if (seen.has(key)) return;
+      if (!this.isWalkablePosition(target, PLAYER_COLLISION_RADIUS)) return;
+
+      seen.add(key);
+      candidates.push(target);
+    };
+
+    if (clickPoint) {
+      this.getWalkableTargetCandidates(
+        clickPoint,
+        PLAYER_COLLISION_RADIUS
+      ).forEach(addCandidate);
+    }
+
+    const towardPlayer = this.player.model.position.clone().sub(dropPosition);
+    towardPlayer.y = 0;
+
+    if (towardPlayer.lengthSq() > 0.0001) {
+      towardPlayer.normalize();
+      addCandidate(
+        dropPosition.clone().addScaledVector(towardPlayer, approachDistance)
+      );
+    }
+
+    for (let i = 0; i < 12; i += 1) {
+      const angle = (i / 12) * Math.PI * 2;
+      addCandidate(
+        new THREE.Vector3(
+          dropPosition.x + Math.cos(angle) * approachDistance,
+          PLAYER_GROUND_Y,
+          dropPosition.z + Math.sin(angle) * approachDistance
+        )
+      );
+    }
+
+    candidates.sort(
+      (a, b) =>
+        a.distanceToSquared(dropPosition) -
+        b.distanceToSquared(dropPosition)
     );
 
     return candidates;
@@ -2790,9 +3047,9 @@ export class GameScene {
 
     if (distance > 0.6) return;
 
-    if (this.isBossExitLocked()) {
+    if (this.gameManager.isStageExitLocked()) {
       if (!this.bossExitBlockedNotified) {
-        this.addLog("The stairs are sealed until The Hollow Warden falls.");
+        this.addLog(this.gameManager.getStageExitLockedMessage());
         this.bossExitBlockedNotified = true;
       }
       return;
@@ -2900,7 +3157,6 @@ export class GameScene {
 
         case "enemyDefeated":
           if (event.enemy?.isBoss) {
-            this.addLog(`${event.enemy.enemyName} defeated. The stairs are open.`);
             this.bossExitBlockedNotified = false;
             this.syncBossHud();
           } else {
@@ -2988,6 +3244,18 @@ export class GameScene {
 
         case "shopOfferAlreadyPurchased":
           this.addLog("Already purchased.");
+          break;
+
+        case "shopFountainUsed":
+          this.addLog(`Fountain restored ${event.healAmount} HP.`);
+          this.vfx?.playModelFlash?.(this.player.model, 0x5fc7ff, 0.22, {
+            emissiveIntensity: 1.1,
+          });
+          this.updateHud();
+          break;
+
+        case "shopFountainFailed":
+          this.addLog(this.getShopFountainFailedMessage(event));
           break;
 
         case "playerDefeated":
@@ -3156,6 +3424,23 @@ export class GameScene {
 
       default:
         return "Could not buy that shop offer.";
+    }
+  }
+
+  getShopFountainFailedMessage(event) {
+    switch (event.reason) {
+      case "fullHp":
+        return "You do not need healing right now.";
+
+      case "depleted":
+        return "The fountain is dry.";
+
+      case "fountainMissing":
+      case "shopUnavailable":
+        return "The fountain is not available right now.";
+
+      default:
+        return "Could not use the fountain.";
     }
   }
 

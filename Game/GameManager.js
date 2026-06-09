@@ -1,10 +1,16 @@
 import { GAME_CONFIG, GAME_MODES } from "./GameConfig.js";
-import { ROOM_TESTER_LEVELS, getRoomTesterLevel } from "./RoomTester.js";
 import { createProceduralFloor } from "./ProceduralLevelFactory.js";
 import { createShopFloor } from "./ShopFloorFactory.js";
 import { createBossFloor } from "./BossFloorFactory.js";
 import { RUN_FLOOR_TYPES, RunState, createRunSeed } from "./RunState.js";
 import { ENEMY_DIFFICULTY } from "../CharacterData/enemyDefinitions.js";
+import {
+  RUN_PLAN,
+  RUN_STAGE_TYPES,
+  getRunStage,
+  getRunStageCount,
+  getShopTierDefinition,
+} from "./RunPlan.js";
 
 export { GAME_MODES } from "./GameConfig.js";
 
@@ -29,6 +35,8 @@ export class GameManager {
       mode: this.config.mode,
       runSeed: this.config.run?.runSeed ?? options.runSeed ?? createRunSeed(),
     });
+    this.runPlan = options.runPlan ?? this.config.run?.runPlan ?? RUN_PLAN;
+    this.stageClearState = this.createEmptyStageClearState();
     this.isGameOver = false;
     this.isResetting = false;
     this.resetTimer = null;
@@ -38,37 +46,26 @@ export class GameManager {
 
   resolveConfig(config, options = {}) {
     const params = new URLSearchParams(globalThis.window?.location?.search ?? "");
-    const requestedMode = params.get("mode");
-    const requestedFloorIndex = Number.parseInt(
-      params.get("floor") ?? params.get("startFloorIndex") ?? "",
+    const requestedStageIndex = Number.parseInt(
+      params.get("stage") ??
+        params.get("floor") ??
+        params.get("startStageIndex") ??
+        params.get("startFloorIndex") ??
+        "",
       10
     );
-    const requestedTesterLevelIndex = Number.parseInt(
-      params.get("testerLevel") ?? params.get("level") ?? "",
-      10
-    );
-    const mode = options.mode ?? (
-      Object.values(GAME_MODES).includes(requestedMode)
-        ? requestedMode
-        : config.mode
-    );
-    const startFloorIndex = Number.isInteger(requestedFloorIndex) && requestedFloorIndex > 0
-      ? requestedFloorIndex
-      : config.run?.startFloorIndex;
-    const testerLevelIndex = Number.isInteger(requestedTesterLevelIndex) && requestedTesterLevelIndex >= 0
-      ? requestedTesterLevelIndex
-      : config.tester?.levelIndex;
+    const mode = GAME_MODES.RUN;
+    const startStageIndex = Number.isInteger(requestedStageIndex) && requestedStageIndex > 0
+      ? requestedStageIndex
+      : config.run?.startStageIndex ?? config.run?.startFloorIndex ?? 1;
 
     return {
       ...config,
       mode,
-      tester: {
-        ...(config.tester ?? {}),
-        levelIndex: testerLevelIndex,
-      },
       run: {
         ...(config.run ?? {}),
-        startFloorIndex,
+        startStageIndex,
+        startFloorIndex: startStageIndex,
       },
     };
   }
@@ -80,6 +77,10 @@ export class GameManager {
   handleEvent(event) {
     if (event.type === "playerDefeated") {
       this.handlePlayerDeath();
+    }
+
+    if (event.type === "enemyDefeated") {
+      this.handleEnemyDefeated(event.enemy);
     }
 
     if (event.type === "levelExitReached") {
@@ -108,16 +109,10 @@ export class GameManager {
     this.clearResetTimer();
 
     try {
-      if (this.isTesterMode()) {
-        this.startTester({
-          levelIndex: this.config.tester?.levelIndex ?? 0,
-        });
-      } else {
-        this.startRun({
-          runSeed: this.getRestartRunSeed(),
-          floorIndex: this.config.run?.startFloorIndex ?? 1,
-        });
-      }
+      this.startRun({
+        runSeed: this.getRestartRunSeed(),
+        floorIndex: this.config.run?.startStageIndex ?? this.config.run?.startFloorIndex ?? 1,
+      });
 
       this.scene.resetGameplayProgress();
       this.scene.loadLevel();
@@ -125,6 +120,7 @@ export class GameManager {
       this.isGameOver = false;
       this.isResetting = false;
       this.scene.hud?.hideDefeatedOverlay?.();
+      this.scene.hud?.hideVictoryOverlay?.();
       this.scene.updateHud();
     }
   }
@@ -132,19 +128,30 @@ export class GameManager {
   onLevelExitReached() {
     if (this.isGameOver) return;
 
-    if (this.isTesterMode()) {
-      this.scene.addLog("Stairs reached. Rebuilding tester floor...");
-      this.scene.reloadCurrentLevel({ preserveProgress: true });
+    if (this.runState.status === "won") return;
+
+    const currentPlan = this.getRunFloorPlan(this.runState.currentFloorIndex);
+    if (currentPlan.isFinalStage) {
+      this.handleRunVictory();
       return;
     }
 
     const nextFloorIndex = this.runState.currentFloorIndex + 1;
     const floorPlan = this.getRunFloorPlan(nextFloorIndex);
 
+    if (!floorPlan.implemented) {
+      this.handleRunVictory();
+      return;
+    }
+
     this.runState.setCurrentFloor({
       floorIndex: nextFloorIndex,
       floorSeed: this.createFloorSeed(nextFloorIndex),
       floorType: floorPlan.floorType,
+      stageId: floorPlan.stageId,
+      stageName: floorPlan.stageName,
+      stageType: floorPlan.stageType,
+      shopTier: floorPlan.shopTier,
       difficultyTier: floorPlan.difficultyTier,
       cycleIndex: floorPlan.cycleIndex,
       cycleFloorIndex: floorPlan.cycleFloorIndex,
@@ -157,35 +164,29 @@ export class GameManager {
       return;
     }
 
-    this.scene.addLog(`Stairs reached. Loading floor ${nextFloorIndex}...`);
+    this.scene.addLog(`Stairs reached. Loading stage ${nextFloorIndex}...`);
     this.scene.loadLevel({ preserveProgress: true });
   }
 
-  initializeModeState() {
-    if (this.config.mode === GAME_MODES.RUN) {
-      this.startRun({
-        runSeed: this.config.run?.runSeed ?? createRunSeed(),
-        floorIndex: this.config.run?.startFloorIndex ?? 1,
-      });
-      return;
-    }
+  handleRunVictory() {
+    if (this.isGameOver || this.runState.status === "won") return;
 
-    this.startTester({
-      levelIndex: this.config.tester?.levelIndex ?? 0,
-    });
+    this.isGameOver = true;
+    this.runState.markWon();
+    this.clearResetTimer();
+    this.scene.hud?.showVictoryOverlay?.();
+    this.scene.addLog("Completed! Restarting...");
+    console.log("runWon", this.runState.createSnapshot());
+
+    this.resetTimer = window.setTimeout(() => {
+      this.restartCurrentMode();
+    }, DEFEATED_RESET_DELAY_MS);
   }
 
-  startTester({ levelIndex = 0 } = {}) {
-    this.runState.setMode(GAME_MODES.TESTER);
-    this.runState.markActive();
-    this.runState.setCurrentFloor({
-      floorIndex: levelIndex + 1,
-      floorSeed: `tester:${levelIndex}:${this.runState.runSeed}`,
-      floorType: RUN_FLOOR_TYPES.TESTER,
-      difficultyTier: ENEMY_DIFFICULTY.EASY,
-      cycleIndex: 0,
-      cycleFloorIndex: levelIndex + 1,
-      difficultyScale: 1,
+  initializeModeState() {
+    this.startRun({
+      runSeed: this.config.run?.runSeed ?? createRunSeed(),
+      floorIndex: this.config.run?.startStageIndex ?? this.config.run?.startFloorIndex ?? 1,
     });
   }
 
@@ -199,6 +200,10 @@ export class GameManager {
       floorIndex,
       floorSeed: this.createFloorSeed(floorIndex),
       floorType: floorPlan.floorType,
+      stageId: floorPlan.stageId,
+      stageName: floorPlan.stageName,
+      stageType: floorPlan.stageType,
+      shopTier: floorPlan.shopTier,
       difficultyTier: floorPlan.difficultyTier,
       cycleIndex: floorPlan.cycleIndex,
       cycleFloorIndex: floorPlan.cycleFloorIndex,
@@ -207,29 +212,11 @@ export class GameManager {
   }
 
   getPreloadTileSetIds() {
-    if (this.isTesterMode()) {
-      return [
-        ...new Set(
-          ROOM_TESTER_LEVELS.map((level) => level.tileSetId ?? "scenarioDefault")
-        ),
-      ];
-    }
-
     return ["scenarioDefault"];
   }
 
   resolveFloor() {
     const snapshot = this.runState.createSnapshot();
-
-    if (this.isTesterMode()) {
-      const levelIndex = Math.max(0, snapshot.currentFloorIndex - 1);
-
-      return {
-        ...snapshot,
-        levelIndex,
-        definition: getRoomTesterLevel(levelIndex),
-      };
-    }
 
     const floorPlan = this.getRunFloorPlan(snapshot.currentFloorIndex);
 
@@ -237,6 +224,8 @@ export class GameManager {
       return {
         ...snapshot,
         definition: null,
+        stagePlan: floorPlan.stage,
+        shopTierDefinition: floorPlan.shopTierDefinition,
       };
     }
 
@@ -246,6 +235,8 @@ export class GameManager {
       ...snapshot,
       levelIndex: snapshot.currentFloorIndex,
       definition,
+      stagePlan: floorPlan.stage,
+      shopTierDefinition: floorPlan.shopTierDefinition,
     };
   }
 
@@ -255,6 +246,8 @@ export class GameManager {
         runSeed: snapshot.runSeed,
         floorSeed: snapshot.currentFloorSeed,
         floorIndex: snapshot.currentFloorIndex,
+        stage: floorPlan.stage,
+        shopTier: floorPlan.shopTierDefinition,
       });
     }
 
@@ -263,6 +256,7 @@ export class GameManager {
         runSeed: snapshot.runSeed,
         floorSeed: snapshot.currentFloorSeed,
         floorIndex: snapshot.currentFloorIndex,
+        stage: floorPlan.stage,
         cycleIndex: snapshot.cycleIndex,
         difficultyScale: snapshot.difficultyScale,
       });
@@ -273,6 +267,11 @@ export class GameManager {
       floorSeed: snapshot.currentFloorSeed,
       floorIndex: snapshot.currentFloorIndex,
       floorType: snapshot.floorType,
+      stage: floorPlan.stage,
+      stageProfile: floorPlan.stage?.compact ? "compactCombat" : "procedural",
+      enemyPoolWeights: floorPlan.stage?.enemyPoolWeights,
+      enemyCoinDrop: floorPlan.stage?.enemyCoinDrop,
+      treasureReward: floorPlan.stage?.treasureReward,
       difficultyTier: snapshot.difficultyTier,
       cycleIndex: snapshot.cycleIndex,
       cycleFloorIndex: snapshot.cycleFloorIndex,
@@ -281,29 +280,42 @@ export class GameManager {
   }
 
   getRunFloorPlan(floorIndex) {
-    const normalFloorCount = this.config.run?.normalFloorCount ?? 10;
-    const shopFloorIndex = this.config.run?.shopFloorIndex ?? normalFloorCount + 1;
-    const bossFloorIndex = this.config.run?.bossFloorIndex ?? shopFloorIndex + 1;
-    const cycleLength = bossFloorIndex;
-    const cycleIndex = Math.floor((floorIndex - 1) / cycleLength);
-    const cycleFloorIndex = ((floorIndex - 1) % cycleLength) + 1;
-    const difficultyScale = 1 + cycleIndex * 0.15;
+    const stage = getRunStage(floorIndex, this.runPlan);
+    const stageCount = getRunStageCount(this.runPlan);
     const basePlan = {
-      cycleIndex,
-      cycleFloorIndex,
-      difficultyScale,
-      implemented: true,
+      cycleIndex: 0,
+      cycleFloorIndex: floorIndex,
+      difficultyScale: stage?.difficultyScale ?? 1,
+      implemented: Boolean(stage),
+      stage,
+      stageId: stage?.stageIndex ?? null,
+      stageName: stage?.name ?? null,
+      stageType: stage?.type ?? RUN_FLOOR_TYPES.COMPLETE,
+      shopTier: stage?.shopTier ?? null,
+      shopTierDefinition: stage?.shopTier
+        ? getShopTierDefinition(stage.shopTier)
+        : null,
+      isFinalStage: Boolean(stage && stage.stageIndex === stageCount),
     };
 
-    if (cycleFloorIndex <= normalFloorCount) {
+    if (!stage) {
       return {
         ...basePlan,
-        floorType: RUN_FLOOR_TYPES.NORMAL,
-        difficultyTier: this.getDifficultyTierForFloor(cycleFloorIndex),
+        floorType: RUN_FLOOR_TYPES.COMPLETE,
+        difficultyTier: ENEMY_DIFFICULTY.HARD,
+        implemented: false,
       };
     }
 
-    if (cycleFloorIndex === shopFloorIndex) {
+    if (stage.type === RUN_STAGE_TYPES.COMBAT) {
+      return {
+        ...basePlan,
+        floorType: RUN_FLOOR_TYPES.COMBAT,
+        difficultyTier: this.getPrimaryDifficultyTier(stage.enemyPoolWeights),
+      };
+    }
+
+    if (stage.type === RUN_STAGE_TYPES.SHOP) {
       return {
         ...basePlan,
         floorType: RUN_FLOOR_TYPES.SHOP,
@@ -311,26 +323,127 @@ export class GameManager {
       };
     }
 
-    if (cycleFloorIndex === bossFloorIndex) {
-      return {
-        ...basePlan,
-        floorType: RUN_FLOOR_TYPES.BOSS,
-        difficultyTier: ENEMY_DIFFICULTY.HARD,
-      };
-    }
-
     return {
       ...basePlan,
-      floorType: RUN_FLOOR_TYPES.COMPLETE,
+      floorType: RUN_FLOOR_TYPES.BOSS,
       difficultyTier: ENEMY_DIFFICULTY.HARD,
-      implemented: false,
     };
   }
 
-  getDifficultyTierForFloor(floorIndex) {
-    if (floorIndex >= 8) return ENEMY_DIFFICULTY.HARD;
-    if (floorIndex >= 4) return ENEMY_DIFFICULTY.MEDIUM;
-    return ENEMY_DIFFICULTY.EASY;
+  getPrimaryDifficultyTier(enemyPoolWeights = {}) {
+    let bestDifficulty = ENEMY_DIFFICULTY.EASY;
+    let bestWeight = Number.NEGATIVE_INFINITY;
+
+    for (const [difficulty, weight] of Object.entries(enemyPoolWeights)) {
+      const numericWeight = Number.parseFloat(weight);
+      if (!Number.isFinite(numericWeight) || numericWeight <= bestWeight) continue;
+
+      bestDifficulty = difficulty;
+      bestWeight = numericWeight;
+    }
+
+    return bestDifficulty;
+  }
+
+  registerStageClearTargets(level, enemies = []) {
+    const floorPlan = this.getRunFloorPlan(this.runState.currentFloorIndex);
+    const stage = floorPlan?.stage;
+
+    this.stageClearState = this.createEmptyStageClearState({
+      stageIndex: this.runState.currentFloorIndex,
+      stageType: stage?.type ?? this.runState.floorType,
+    });
+
+    if (!stage || !this.stageRequiresClear(stage)) {
+      this.stageClearState.cleared = true;
+      return;
+    }
+
+    const roomTypesById = new Map(
+      (level.roomTags ?? []).map((room) => [room.id, room.type])
+    );
+    const requiredRoomTypes = stage.type === RUN_STAGE_TYPES.BOSS
+      ? new Set(["boss"])
+      : new Set(["combat"]);
+
+    for (const enemy of enemies) {
+      const roomType = roomTypesById.get(enemy.roomId);
+      if (!requiredRoomTypes.has(roomType)) continue;
+
+      this.stageClearState.requiredEnemies.add(enemy);
+    }
+
+    this.stageClearState.totalRequiredEnemies =
+      this.stageClearState.requiredEnemies.size;
+    this.stageClearState.remainingRequiredEnemies =
+      this.stageClearState.requiredEnemies.size;
+    this.stageClearState.cleared =
+      this.stageClearState.remainingRequiredEnemies === 0;
+  }
+
+  handleEnemyDefeated(enemy) {
+    const state = this.stageClearState;
+    if (!state?.requiredEnemies?.has(enemy)) return;
+
+    state.requiredEnemies.delete(enemy);
+    state.remainingRequiredEnemies = state.requiredEnemies.size;
+
+    if (state.remainingRequiredEnemies > 0 || state.cleared) return;
+
+    state.cleared = true;
+
+    if (state.stageType === RUN_STAGE_TYPES.BOSS) {
+      this.scene.addLog("Boss defeated.");
+      this.scene.onStageCleared?.({
+        stageIndex: state.stageIndex,
+        stageType: state.stageType,
+      });
+      this.handleRunVictory();
+      return;
+    }
+
+    this.scene.addLog("Room cleared!");
+    this.scene.onStageCleared?.({
+      stageIndex: state.stageIndex,
+      stageType: state.stageType,
+    });
+  }
+
+  stageRequiresClear(stage) {
+    return (
+      stage.type === RUN_STAGE_TYPES.COMBAT ||
+      stage.type === RUN_STAGE_TYPES.BOSS
+    );
+  }
+
+  isStageExitLocked() {
+    if (!this.stageClearState.requiresClear) return false;
+
+    return !this.stageClearState.cleared;
+  }
+
+  getStageExitLockedMessage() {
+    if (this.stageClearState.stageType === RUN_STAGE_TYPES.BOSS) {
+      return "Defeat the boss before leaving.";
+    }
+
+    return "Defeat all enemies before leaving.";
+  }
+
+  createEmptyStageClearState(overrides = {}) {
+    return {
+      stageIndex: null,
+      stageType: null,
+      requiresClear: false,
+      cleared: false,
+      requiredEnemies: new Set(),
+      totalRequiredEnemies: 0,
+      remainingRequiredEnemies: 0,
+      ...overrides,
+      requiresClear: this.stageRequiresClear({
+        type: overrides.stageType,
+      }),
+    };
   }
 
   getRestartRunSeed() {
@@ -342,7 +455,7 @@ export class GameManager {
   }
 
   createFloorSeed(floorIndex) {
-    return `${this.runState.runSeed}:floor:${String(floorIndex).padStart(2, "0")}`;
+    return `${this.runState.runSeed}:stage:${String(floorIndex).padStart(2, "0")}`;
   }
 
   clearResetTimer() {
@@ -351,11 +464,6 @@ export class GameManager {
     window.clearTimeout(this.resetTimer);
     this.resetTimer = null;
   }
-
-  isTesterMode() {
-    return this.runState.mode === GAME_MODES.TESTER;
-  }
-
   capitalize(value) {
     const text = String(value ?? "");
     return text.charAt(0).toUpperCase() + text.slice(1);
