@@ -1,6 +1,6 @@
 # AGENTS.md
 
-Responder siempre en espanol.
+Responder siempre en español.
 
 ## Project
 
@@ -68,7 +68,7 @@ Movement:
 
 * WASD is the only free movement control.
 * Empty-world clicks must never move the player.
-* Interactable clicks may use existing pathfinding only to reach that interactable.
+* Interactable clicks should only interact when the player is in valid range. If out of range, show feedback and require the player to move closer with WASD.
 
 Mouse priority:
 
@@ -191,4 +191,6 @@ Validation rules:
 
 * Keep useful development console logs.
 * Do not run `node --check`; it is blocked in this environment.
-* Do not run browser smoke tests unless explicitly requested.
+* Do not use Playwright, Puppeteer, npm install, or browser automation unless explicitly requested.
+* Do not reintroduce tester mode, click-to-move, or click-target enemy attacks unless explicitly requested.
+
