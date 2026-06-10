@@ -17,6 +17,7 @@ import { ChestManager } from "../Game/Chest.js";
 import { CoinManager } from "../Game/Coin.js";
 import { SHOP_INTERACTION_RANGE, ShopManager } from "../Game/ShopManager.js";
 import { ItemDropManager } from "../World/ItemDrop.js";
+import { getItemDisplayName } from "../Game/ItemInstanceFactory.js";
 import { Environment } from "../World/Environment.js";
 import { ROOM_TEMPLATES } from "../RoomData/roomTemplates.js";
 import {
@@ -47,6 +48,7 @@ const DEBUG_EXTERMINATOR_DAMAGE = 999999;
 const DEBUG_GOLD_AMOUNT = 999;
 const MAX_RENDER_PIXEL_RATIO = 1.75;
 const PAUSE_LOCK_REASON = "pauseMenu";
+const ITEM_SWAP_LOCK_REASON = "itemSwapConfirmation";
 const INTERACTION_CLICK_FEEDBACK_COLOR = 0xffd84a;
 const FRONT_DIRECTION_BY_SIDE = {
   north: { x: 0, z: 1 },
@@ -196,6 +198,8 @@ export class GameScene {
 
     setupInventoryInput((slotIndex) => {
       this.useInventorySlot(slotIndex);
+    }, {
+      onToggleInventory: () => this.toggleInventoryPanel(),
     });
 
     this.hud.setConsumableUseHandler((slotIndex) => {
@@ -627,6 +631,8 @@ export class GameScene {
     this.stageLockedConnectionBlockers = [];
     this.hud?.hideItemTooltip?.();
     this.hud?.hideEpicChestRewards?.();
+    this.hud?.hideInventoryPanel?.();
+    this.hud?.hideItemSwapConfirmation?.();
 
     this.levelGroup.clear();
     this.currentLevel = null;
@@ -748,6 +754,43 @@ export class GameScene {
   setPaused(paused) {
     this.isPaused = Boolean(paused);
     this.setPlayerControlLocked(this.isPaused, PAUSE_LOCK_REASON);
+
+    if (this.isPaused) {
+      this.hud?.hideInventoryPanel?.();
+      this.hud?.hideItemSwapConfirmation?.({ cancelled: true });
+    }
+  }
+
+  toggleInventoryPanel() {
+    if (this.pauseMenu?.isOpen) return;
+    if (!this.inventory) return;
+
+    this.hud?.toggleInventoryPanel?.(this.inventory);
+  }
+
+  requestItemSwapConfirmation({
+    currentItem,
+    newItem,
+    onConfirm,
+    onCancel,
+  } = {}) {
+    if (this.pauseMenu?.isOpen) return false;
+    if (!currentItem || !newItem) return false;
+
+    this.setPlayerControlLocked(true, ITEM_SWAP_LOCK_REASON);
+    this.hud?.showItemSwapConfirmation?.({
+      currentItem,
+      newItem,
+      onConfirm: () => {
+        this.setPlayerControlLocked(false, ITEM_SWAP_LOCK_REASON);
+        onConfirm?.();
+      },
+      onCancel: () => {
+        this.setPlayerControlLocked(false, ITEM_SWAP_LOCK_REASON);
+        onCancel?.();
+      },
+    });
+    return true;
   }
 
   updatePausedFrame() {
@@ -2714,7 +2757,7 @@ export class GameScene {
     ];
 
     return Object.fromEntries(
-      entries.map((entry) => [entry.item.id, entry.count])
+      entries.map((entry) => [entry.item.baseItemId ?? entry.item.id, entry.count])
     );
   }
 
@@ -2994,17 +3037,17 @@ export class GameScene {
           break;
 
         case "itemPickedUp":
-          this.addLog(`Item picked up: ${event.item.name}.`);
+          this.addLog(`Item picked up: ${getItemDisplayName(event.item)}.`);
           this.updateHud();
           break;
 
         case "itemRemoved":
-          this.addLog(`Item removed: ${event.item.name}.`);
+          this.addLog(`Item removed: ${getItemDisplayName(event.item)}.`);
           this.updateHud();
           break;
 
         case "passiveItemApplied":
-          this.addLog(`Passive applied: ${event.item.name}.`);
+          this.addLog(`Passive applied: ${getItemDisplayName(event.item)}.`);
           this.updateDebugCheatBaselinesForStatChange(event.result);
           this.syncDebugCheatEffects();
           this.highlightItemStat(event.result);
@@ -3012,7 +3055,17 @@ export class GameScene {
           break;
 
         case "passiveItemRemoved":
-          this.addLog(`Passive removed: ${event.item.name}.`);
+          this.addLog(`Passive removed: ${getItemDisplayName(event.item)}.`);
+          this.updateDebugCheatBaselinesForStatChange(event.result);
+          this.syncDebugCheatEffects();
+          this.highlightItemStat(event.result);
+          this.updateHud();
+          break;
+
+        case "itemReplaced":
+          this.addLog(
+            `Equipped ${getItemDisplayName(event.item)}. Dropped ${getItemDisplayName(event.previousItem)}.`
+          );
           this.updateDebugCheatBaselinesForStatChange(event.result);
           this.syncDebugCheatEffects();
           this.highlightItemStat(event.result);
@@ -3020,7 +3073,7 @@ export class GameScene {
           break;
 
         case "itemUsed":
-          this.addLog(`Item used: ${event.item.name}.`);
+          this.addLog(`Item used: ${getItemDisplayName(event.item)}.`);
           this.playItemUseFeedback(event);
           this.highlightItemStat(event.result);
           this.updateHud();
@@ -3040,12 +3093,12 @@ export class GameScene {
 
         case "shopOfferCreated":
           this.addLog(
-            `Shop offer: ${event.item.name} (${event.rarity}) - ${event.price} gold.`
+            `Shop offer: ${getItemDisplayName(event.item)} (${event.rarity}) - ${event.price} Gold.`
           );
           break;
 
         case "shopPurchaseSucceeded":
-          this.addLog(`Bought ${event.item.name} for ${event.price} gold.`);
+          this.addLog(`Bought ${getItemDisplayName(event.item)} for ${event.price} Gold.`);
           this.updateHud();
           break;
 
@@ -3202,7 +3255,13 @@ export class GameScene {
   getItemPickupBlockedMessage(event) {
     switch (event.reason) {
       case "inventoryFull":
-        return `Inventory full: you cannot pick up ${event.item.name}.`;
+        return `Inventory full: you cannot pick up ${getItemDisplayName(event.item)}.`;
+
+      case "slotOccupied":
+        return `Slot occupied: you already have a ${event.foodCategory ?? event.itemInstance?.foodCategory ?? "matching"} item equipped.`;
+
+      case "invalidEquipmentCategory":
+        return `Could not equip ${getItemDisplayName(event.item)}.`;
 
       default:
         return "Could not pick up that item.";
@@ -3212,20 +3271,23 @@ export class GameScene {
   getItemRemoveFailedMessage(event) {
     switch (event.reason) {
       case "missingItem":
-        return `You do not have ${event.item.name}.`;
+        return `You do not have ${getItemDisplayName(event.item)}.`;
 
       default:
-        return `Could not remove ${event.item.name}.`;
+        return `Could not remove ${getItemDisplayName(event.item)}.`;
     }
   }
 
   getShopPurchaseFailedMessage(event) {
     switch (event.reason) {
       case "insufficientGold":
-        return "Not enough gold.";
+        return "Not enough Gold.";
 
       case "inventoryFull":
         return "Inventory full.";
+
+      case "slotOccupied":
+        return `Slot occupied: you already have a ${event.offer?.itemInstance?.foodCategory ?? "matching"} item equipped.`;
 
       case "offerMissing":
         return "That shop offer is no longer available.";

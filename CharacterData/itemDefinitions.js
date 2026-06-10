@@ -1,6 +1,14 @@
 export const ITEM_TYPES = {
-  PASSIVE: "passive",
+  EQUIPPABLE: "equippable",
+  PASSIVE: "equippable",
   CONSUMABLE: "consumable",
+};
+
+export const ITEM_FOOD_CATEGORIES = {
+  PROTEIN: "protein",
+  SPICY: "spicy",
+  HEARTY: "hearty",
+  ABILITY: "ability",
 };
 
 export const ITEM_RARITIES = {
@@ -22,50 +30,79 @@ export const ITEM_DEFINITIONS = {
   steak: {
     id: "steak",
     name: "Steak",
-    description: "Increases attack damage.",
-    type: ITEM_TYPES.PASSIVE,
+    descriptionTemplate: "+{attackDamage} attack damage",
+    type: ITEM_TYPES.EQUIPPABLE,
     rarity: ITEM_RARITIES.COMMON,
+    foodCategory: ITEM_FOOD_CATEGORIES.PROTEIN,
     hudSlot: 4,
     imagePath: "Assets/Images/Steak.png",
     effect: ITEM_EFFECTS.DAMAGE_UP,
-    statsByRarity: {
-      [ITEM_RARITIES.COMMON]: {
-        attackDamage: 5,
+    effects: [
+      {
+        stat: "attackDamage",
+        op: "add",
+        range: { min: 2, max: 10, step: 1 },
       },
+    ],
+    modifiers: {
+      positive: ["attackDamage"],
+      negative: [],
     },
+    shop: { basePrice: 100 },
   },
 
   chili: {
     id: "chili",
     name: "Chili",
-    description: "Increases attack speed.",
-    type: ITEM_TYPES.PASSIVE,
+    descriptionTemplate: "+{attackSpeed} attack speed",
+    type: ITEM_TYPES.EQUIPPABLE,
     rarity: ITEM_RARITIES.COMMON,
+    foodCategory: ITEM_FOOD_CATEGORIES.SPICY,
     hudSlot: 5,
     imagePath: "Assets/Images/Chili.png",
     effect: ITEM_EFFECTS.ATTACK_SPEED_UP,
-    statsByRarity: {
-      [ITEM_RARITIES.COMMON]: {
-        attackSpeed: 0.2,
-        maxAttackSpeed: 4,
+    effects: [
+      {
+        stat: "attackSpeed",
+        op: "add",
+        range: { min: 0.12, max: 0.35, step: 0.01 },
       },
+      {
+        stat: "maxAttackSpeed",
+        op: "set",
+        value: 4,
+        display: false,
+      },
+    ],
+    modifiers: {
+      positive: ["attackSpeed"],
+      negative: [],
     },
+    shop: { basePrice: 100 },
   },
 
   ramen: {
     id: "ramen",
     name: "Ramen",
-    description: "Increases maximum HP.",
-    type: ITEM_TYPES.PASSIVE,
+    descriptionTemplate: "+{maxHp} max HP",
+    type: ITEM_TYPES.EQUIPPABLE,
     rarity: ITEM_RARITIES.COMMON,
+    foodCategory: ITEM_FOOD_CATEGORIES.HEARTY,
     hudSlot: 3,
     imagePath: "Assets/Images/Ramen.png",
     effect: ITEM_EFFECTS.MAX_HP_UP,
-    statsByRarity: {
-      [ITEM_RARITIES.COMMON]: {
-        maxHp: 25,
+    effects: [
+      {
+        stat: "maxHp",
+        op: "add",
+        range: { min: 15, max: 35, step: 1 },
       },
+    ],
+    modifiers: {
+      positive: ["maxHp"],
+      negative: [],
     },
+    shop: { basePrice: 120 },
   },
 
   energyDrink: {
@@ -81,11 +118,18 @@ export const ITEM_DEFINITIONS = {
     inventory: {
       maxStack: 3,
     },
-    statsByRarity: {
-      [ITEM_RARITIES.COMMON]: {
-        heal: 30,
+    effects: [
+      {
+        stat: "heal",
+        op: "add",
+        value: 30,
       },
+    ],
+    modifiers: {
+      positive: ["heal"],
+      negative: [],
     },
+    shop: { basePrice: 80 },
   },
 
   purpleShroom: {
@@ -101,16 +145,57 @@ export const ITEM_DEFINITIONS = {
     inventory: {
       maxStack: 3,
     },
-    statsByRarity: {
-      [ITEM_RARITIES.COMMON]: {
-        radius: 2,
-        vfxRadius: 1.5,
-        stunDuration: 3,
-        poisonDamagePerSecond: 5,
-        poisonDuration: 3,
-        poisonTickInterval: 0.5,
+    effects: [
+      { stat: "radius", op: "add", value: 2, display: false },
+      { stat: "vfxRadius", op: "add", value: 1.5, display: false },
+      {
+        stat: "stunDuration",
+        op: "add",
+        value: 3,
       },
+      {
+        stat: "poisonDamagePerSecond",
+        op: "add",
+        value: 5,
+      },
+      { stat: "poisonDuration", op: "add", value: 3, display: false },
+      { stat: "poisonTickInterval", op: "add", value: 0.5, display: false },
+    ],
+    modifiers: {
+      positive: ["stunDuration", "poisonDamagePerSecond"],
+      negative: [],
     },
+    shop: { basePrice: 100 },
+  },
+
+  fish: {
+    id: "fish",
+    name: "Fish",
+    descriptionTemplate: "+{attackDamage} attack damage, {moveSpeed} move speed",
+    type: ITEM_TYPES.EQUIPPABLE,
+    rarity: ITEM_RARITIES.RARE,
+    foodCategory: ITEM_FOOD_CATEGORIES.PROTEIN,
+    hudSlot: 6,
+    imagePath: "Assets/Images/Steak.png",
+    effect: ITEM_EFFECTS.DAMAGE_UP,
+    disabled: true,
+    effects: [
+      {
+        stat: "attackDamage",
+        op: "add",
+        range: { min: 4, max: 12, step: 1 },
+      },
+      {
+        stat: "moveSpeed",
+        op: "add",
+        range: { min: -0.35, max: -0.1, step: 0.01 },
+      },
+    ],
+    modifiers: {
+      positive: ["attackDamage"],
+      negative: ["moveSpeed"],
+    },
+    shop: { basePrice: 180 },
   },
 };
 
@@ -123,6 +208,10 @@ export function getItemMaxStack(itemId) {
 }
 
 export function getItemStats(itemOrDefinition) {
+  if (itemOrDefinition?.rolledStats) {
+    return { ...itemOrDefinition.rolledStats };
+  }
+
   const definition =
     typeof itemOrDefinition === "string"
       ? getItemDefinition(itemOrDefinition)
@@ -133,13 +222,28 @@ export function getItemStats(itemOrDefinition) {
   const commonStats = definition.statsByRarity?.[ITEM_RARITIES.COMMON] ?? {};
   const rarityStats = definition.statsByRarity?.[rarity] ?? {};
 
-  return {
+  const legacyStats = {
     ...commonStats,
     ...rarityStats,
   };
+
+  if (Object.keys(legacyStats).length > 0) return legacyStats;
+
+  return Object.fromEntries(
+    (definition.effects ?? [])
+      .filter((effect) => effect?.stat)
+      .map((effect) => [
+        effect.stat,
+        effect.value ?? effect.range?.max ?? effect.range?.min ?? 0,
+      ])
+  );
 }
 
 export function getItemDescription(itemOrDefinition) {
+  if (itemOrDefinition?.display?.description) {
+    return itemOrDefinition.display.description;
+  }
+
   const definition =
     typeof itemOrDefinition === "string"
       ? getItemDefinition(itemOrDefinition)
@@ -149,6 +253,10 @@ export function getItemDescription(itemOrDefinition) {
   if (definition.description) return definition.description;
 
   const stats = getItemStats(definition);
+  if (definition.descriptionTemplate) {
+    return fillItemDescriptionTemplate(definition.descriptionTemplate, stats);
+  }
+
   const parts = [];
 
   if (stats.attackDamage) parts.push(`+${stats.attackDamage} attack damage`);
@@ -174,10 +282,28 @@ export function getItemDefinitionsByType(type) {
 
 export function getItemDefinitionsByRarity(rarity) {
   return Object.values(ITEM_DEFINITIONS).filter(
-    (definition) => definition.rarity === rarity
+    (definition) => definition.rarity === rarity && !definition.disabled
   );
 }
 
 export function getItemIdsByRarity(rarity) {
   return getItemDefinitionsByRarity(rarity).map((definition) => definition.id);
+}
+
+function fillItemDescriptionTemplate(template, stats = {}) {
+  return String(template).replace(/\{([a-zA-Z0-9_]+)\}/g, (_, statName) => {
+    const value = stats[statName];
+    if (value === undefined || value === null) return "0";
+
+    return formatItemStatValue(value);
+  });
+}
+
+function formatItemStatValue(value) {
+  const numericValue = Number.parseFloat(value);
+  if (!Number.isFinite(numericValue)) return String(value);
+
+  return Number.isInteger(numericValue)
+    ? String(numericValue)
+    : numericValue.toFixed(2).replace(/0+$/, "").replace(/\.$/, "");
 }

@@ -6,8 +6,8 @@ import {
 } from "../CharacterData/itemDefinitions.js";
 
 export class ItemEffects {
-  apply(itemId, context = {}) {
-    const definition = getItemDefinition(itemId);
+  apply(itemOrId, context = {}) {
+    const definition = this.getDefinition(itemOrId);
     if (!definition) {
       return {
         applied: false,
@@ -18,20 +18,20 @@ export class ItemEffects {
 
     switch (definition.effect) {
       case ITEM_EFFECTS.DAMAGE_UP:
-        return this.applyDamageUp(definition, context);
+        return this.applyDamageUp(itemOrId, context);
 
       case ITEM_EFFECTS.ATTACK_SPEED_UP:
-        return this.applyAttackSpeedUp(definition, context);
+        return this.applyAttackSpeedUp(itemOrId, context);
 
       case ITEM_EFFECTS.MAX_HP_UP:
-        return this.applyMaxHpUp(definition, context);
+        return this.applyMaxHpUp(itemOrId, context);
 
       case ITEM_EFFECTS.HEAL:
-        return this.applyHeal(definition, context);
+        return this.applyHeal(itemOrId, context);
 
       case ITEM_EFFECTS.STUN_ENEMY:
       case ITEM_EFFECTS.AREA_STUN_POISON:
-        return this.applyAreaStunPoison(definition, context);
+        return this.applyAreaStunPoison(itemOrId, context);
 
       default:
         return {
@@ -42,8 +42,8 @@ export class ItemEffects {
     }
   }
 
-  revert(itemId, context = {}) {
-    const definition = getItemDefinition(itemId);
+  revert(itemOrId, context = {}) {
+    const definition = this.getDefinition(itemOrId);
     if (!definition) {
       return {
         applied: false,
@@ -54,13 +54,13 @@ export class ItemEffects {
 
     switch (definition.effect) {
       case ITEM_EFFECTS.DAMAGE_UP:
-        return this.revertDamageUp(definition, context);
+        return this.revertDamageUp(itemOrId, context);
 
       case ITEM_EFFECTS.ATTACK_SPEED_UP:
-        return this.revertAttackSpeedUp(definition, context);
+        return this.revertAttackSpeedUp(itemOrId, context);
 
       case ITEM_EFFECTS.MAX_HP_UP:
-        return this.revertMaxHpUp(definition, context);
+        return this.revertMaxHpUp(itemOrId, context);
 
       default:
         return {
@@ -71,10 +71,76 @@ export class ItemEffects {
     }
   }
 
-  applyDamageUp(definition, { player } = {}) {
+  applyEquipmentTotals({ player, previousTotals = {}, nextTotals = {} } = {}) {
     if (!player) return this.missingPlayerResult();
 
-    const stats = getItemStats(definition);
+    const allStats = new Set([
+      ...Object.keys(previousTotals),
+      ...Object.keys(nextTotals),
+    ]);
+    const changedStats = [];
+    let firstAmount = 0;
+
+    for (const stat of allStats) {
+      const previous = previousTotals[stat] ?? 0;
+      const next = nextTotals[stat] ?? 0;
+      const delta = next - previous;
+      if (delta === 0) continue;
+
+      this.applyStatDelta(player, stat, delta);
+      if (changedStats.length === 0) {
+        firstAmount = delta;
+      }
+      changedStats.push(stat);
+    }
+
+    if (player.hp > player.maxHp) {
+      player.hp = player.maxHp;
+    }
+
+    return {
+      applied: true,
+      consumed: true,
+      stat: changedStats[0] ?? null,
+      stats: changedStats,
+      amount: firstAmount,
+      value: changedStats[0] ? player[changedStats[0]] : undefined,
+      totals: { ...nextTotals },
+    };
+  }
+
+  applyStatDelta(player, stat, delta) {
+    switch (stat) {
+      case "attackDamage":
+        player.attackDamage = Math.max(0, (player.attackDamage ?? 0) + delta);
+        break;
+
+      case "attackSpeed": {
+        const nextSpeed = (player.attackSpeed ?? 0) + delta;
+        if (typeof player.setAttackSpeed === "function") {
+          player.setAttackSpeed(nextSpeed);
+        } else {
+          player.attackSpeed = Math.max(0.1, nextSpeed);
+          player.attackCooldown = 1 / player.attackSpeed;
+        }
+        break;
+      }
+
+      case "maxHp":
+        player.maxHp = Math.max(1, (player.maxHp ?? 1) + delta);
+        break;
+
+      case "moveSpeed":
+      case "speed":
+        player.speed = Math.max(0.1, (player.speed ?? 0) + delta);
+        break;
+    }
+  }
+
+  applyDamageUp(itemOrDefinition, { player } = {}) {
+    if (!player) return this.missingPlayerResult();
+
+    const stats = getItemStats(itemOrDefinition);
     const amount = stats.attackDamage ?? 0;
     player.attackDamage += amount;
 
@@ -87,10 +153,10 @@ export class ItemEffects {
     };
   }
 
-  applyAttackSpeedUp(definition, { player } = {}) {
+  applyAttackSpeedUp(itemOrDefinition, { player } = {}) {
     if (!player) return this.missingPlayerResult();
 
-    const stats = getItemStats(definition);
+    const stats = getItemStats(itemOrDefinition);
     const amount = stats.attackSpeed ?? 0;
     const maxAttackSpeed = stats.maxAttackSpeed ?? Infinity;
     const previousValue =
@@ -114,10 +180,10 @@ export class ItemEffects {
     };
   }
 
-  applyMaxHpUp(definition, { player } = {}) {
+  applyMaxHpUp(itemOrDefinition, { player } = {}) {
     if (!player) return this.missingPlayerResult();
 
-    const stats = getItemStats(definition);
+    const stats = getItemStats(itemOrDefinition);
     const maxHpIncrease = stats.maxHp ?? 0;
     const heal = stats.heal ?? 0;
 
@@ -134,10 +200,10 @@ export class ItemEffects {
     };
   }
 
-  revertDamageUp(definition, { player } = {}) {
+  revertDamageUp(itemOrDefinition, { player } = {}) {
     if (!player) return this.missingPlayerResult();
 
-    const stats = getItemStats(definition);
+    const stats = getItemStats(itemOrDefinition);
     const amount = stats.attackDamage ?? 0;
     player.attackDamage = Math.max(0, player.attackDamage - amount);
 
@@ -150,10 +216,10 @@ export class ItemEffects {
     };
   }
 
-  revertAttackSpeedUp(definition, { player } = {}) {
+  revertAttackSpeedUp(itemOrDefinition, { player } = {}) {
     if (!player) return this.missingPlayerResult();
 
-    const stats = getItemStats(definition);
+    const stats = getItemStats(itemOrDefinition);
     const amount = stats.attackSpeed ?? 0;
     const previousValue =
       player.attackSpeed ?? (player.attackCooldown > 0 ? 1 / player.attackCooldown : 1);
@@ -176,10 +242,10 @@ export class ItemEffects {
     };
   }
 
-  revertMaxHpUp(definition, { player } = {}) {
+  revertMaxHpUp(itemOrDefinition, { player } = {}) {
     if (!player) return this.missingPlayerResult();
 
-    const stats = getItemStats(definition);
+    const stats = getItemStats(itemOrDefinition);
     const maxHpDecrease = stats.maxHp ?? 0;
     player.maxHp = Math.max(1, player.maxHp - maxHpDecrease);
     player.hp = Math.min(player.hp, player.maxHp);
@@ -194,7 +260,7 @@ export class ItemEffects {
     };
   }
 
-  applyHeal(definition, { player } = {}) {
+  applyHeal(itemOrDefinition, { player } = {}) {
     if (!player) return this.missingPlayerResult();
     if (player.hp >= player.maxHp) {
       return {
@@ -204,7 +270,7 @@ export class ItemEffects {
       };
     }
 
-    const stats = getItemStats(definition);
+    const stats = getItemStats(itemOrDefinition);
     const heal = stats.heal ?? 0;
     const previousHp = player.hp;
     player.hp = Math.min(player.maxHp, player.hp + heal);
@@ -219,10 +285,11 @@ export class ItemEffects {
     };
   }
 
-  applyAreaStunPoison(definition, { player, enemies = [] } = {}) {
+  applyAreaStunPoison(itemOrDefinition, { player, enemies = [] } = {}) {
     if (!player) return this.missingPlayerResult();
 
-    const stats = getItemStats(definition);
+    const definition = this.getDefinition(itemOrDefinition);
+    const stats = getItemStats(itemOrDefinition);
     const radius = stats.radius ?? 3;
     const vfxRadius = stats.vfxRadius ?? radius;
     const stunDuration = stats.stunDuration ?? 3;
@@ -251,7 +318,7 @@ export class ItemEffects {
           duration: poisonDuration,
           tickInterval: poisonTickInterval,
           source: player,
-          itemId: definition.id,
+          itemId: definition?.id,
         });
       }
     }
@@ -307,5 +374,11 @@ export class ItemEffects {
       consumed: false,
       reason: "missingPlayer",
     };
+  }
+
+  getDefinition(itemOrId) {
+    if (typeof itemOrId === "string") return getItemDefinition(itemOrId);
+
+    return getItemDefinition(itemOrId?.baseItemId ?? itemOrId?.itemId ?? itemOrId?.id);
   }
 }

@@ -44,9 +44,9 @@ export class DebugCheats {
     this.getState = getState ?? (() => ({}));
     this.getItemState = getItemState ?? (() => ({}));
     this.cheats = DEBUG_CHEATS;
-    this.itemCheats = Object.values(ITEM_DEFINITIONS).sort(
-      (a, b) => (a.hudSlot ?? 999) - (b.hudSlot ?? 999)
-    );
+    this.itemCheats = Object.values(ITEM_DEFINITIONS)
+      .filter((item) => !item.disabled)
+      .sort((a, b) => (a.hudSlot ?? 999) - (b.hudSlot ?? 999));
     this.selectedIndex = 0;
     this.isOpen = false;
 

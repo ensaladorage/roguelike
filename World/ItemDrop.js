@@ -1,6 +1,10 @@
 import * as THREE from "three";
 import { flatDistance } from "../Game/Utils.js";
 import { getItemDefinition } from "../CharacterData/itemDefinitions.js";
+import {
+  getItemBaseId,
+  normalizeItemInstance,
+} from "../Game/ItemInstanceFactory.js";
 
 const ITEM_DROP_LAUNCH_DURATION = 0.9;
 const ITEM_DROP_LAUNCH_HEIGHT = 2.2;
@@ -11,6 +15,29 @@ const ITEM_DROP_LANDING_MAX_DISTANCE = 1.35;
 const ITEM_DROP_LANDING_ANGLE_SPREAD = Math.PI * 0.95;
 const ITEM_DROP_PICKUP_RANGE = 0.8;
 const ITEM_DROP_BLOCKED_RETRY_DELAY = 1;
+const ITEM_DROP_CUBE_SIZE = 0.36;
+const ITEM_DROP_CUBE_Y = 0.24;
+const ITEM_DROP_HITBOX_RADIUS = 0.48;
+const ITEM_DROP_HITBOX_HEIGHT = 0.78;
+const ITEM_DROP_POTION_ID = "energyDrink";
+
+const ITEM_DROP_CATEGORY_STYLES = {
+  protein: { color: 0xb44b3f, emissive: 0x2c0c08 },
+  spicy: { color: 0xe4572e, emissive: 0x3a1005 },
+  hearty: { color: 0x59b86f, emissive: 0x0f2a15 },
+  ability: { color: 0x6b7cff, emissive: 0x111d4c },
+};
+
+const ITEM_DROP_ID_STYLES = {
+  purpleShroom: { color: 0x8c55d8, emissive: 0x22103d },
+  fish: { color: 0x5ab9d6, emissive: 0x0d2c36 },
+};
+
+function getItemDropVisualStyle(definition) {
+  return ITEM_DROP_ID_STYLES[definition.id] ??
+    ITEM_DROP_CATEGORY_STYLES[definition.foodCategory] ??
+    { color: 0xd5b069, emissive: 0x2d210c };
+}
 
 export class ItemDropManager {
   constructor(scene) {
@@ -24,7 +51,15 @@ export class ItemDropManager {
 
     for (let index = 0; index < count; index += 1) {
       const itemDrop = items[index];
-      const definition = getItemDefinition(itemDrop.itemId);
+      const itemInstance = normalizeItemInstance(
+        itemDrop.itemInstance ?? itemDrop.itemId,
+        {
+          ...itemDrop.instanceContext,
+          source: itemDrop.source ?? "groundDrop",
+          rollIndex: itemDrop.rollIndex ?? index,
+        }
+      );
+      const definition = getItemDefinition(getItemBaseId(itemInstance ?? itemDrop.itemId));
       if (!definition) continue;
 
       const model = this.createItemModel(definition);
@@ -47,7 +82,8 @@ export class ItemDropManager {
 
       this.itemDrops.push({
         itemId: definition.id,
-        item: definition,
+        item: itemInstance ?? definition,
+        itemInstance,
         model,
         collected: false,
         collectable: false,
@@ -67,7 +103,30 @@ export class ItemDropManager {
   createItemModel(definition) {
     const group = new THREE.Group();
     group.name = `${definition.id}Drop`;
+    const interactable = {
+      type: "itemDrop",
+      itemDrop: null,
+    };
 
+    if (definition.id === ITEM_DROP_POTION_ID) {
+      this.addPotionVisual(group);
+    } else {
+      this.addCubeVisual(group, definition);
+    }
+
+    this.addInteractionHitbox(group, interactable);
+    group.userData.pulse = {
+      baseScale: 1,
+      t: Math.random() * Math.PI * 2,
+      speed: 2,
+      amplitude: 0.07,
+    };
+    group.userData.interactable = interactable;
+
+    return group;
+  }
+
+  addPotionVisual(group) {
     const bottle = new THREE.Mesh(
       new THREE.CylinderGeometry(0.14, 0.18, 0.36, 18),
       new THREE.MeshStandardMaterial({
@@ -92,19 +151,63 @@ export class ItemDropManager {
     cap.position.y = 0.42;
     cap.castShadow = true;
     group.add(cap);
+  }
 
-    group.userData.pulse = {
-      baseScale: 1,
-      t: Math.random() * Math.PI * 2,
-      speed: 2,
-      amplitude: 0.07,
-    };
-    group.userData.interactable = {
-      type: "itemDrop",
-      itemDrop: null,
-    };
+  addCubeVisual(group, definition) {
+    const style = getItemDropVisualStyle(definition);
+    const cube = new THREE.Mesh(
+      new THREE.BoxGeometry(
+        ITEM_DROP_CUBE_SIZE,
+        ITEM_DROP_CUBE_SIZE,
+        ITEM_DROP_CUBE_SIZE
+      ),
+      new THREE.MeshStandardMaterial({
+        color: style.color,
+        emissive: style.emissive,
+        roughness: 0.48,
+        metalness: 0.04,
+      })
+    );
+    cube.name = `${definition.id}DropVisual`;
+    cube.position.y = ITEM_DROP_CUBE_Y;
+    cube.rotation.set(0.18, 0.42, 0.12);
+    cube.castShadow = true;
+    cube.receiveShadow = true;
+    group.add(cube);
 
-    return group;
+    const base = new THREE.Mesh(
+      new THREE.CylinderGeometry(0.25, 0.3, 0.045, 24),
+      new THREE.MeshStandardMaterial({
+        color: 0x15181f,
+        roughness: 0.7,
+        metalness: 0,
+      })
+    );
+    base.name = `${definition.id}DropBase`;
+    base.position.y = 0.025;
+    base.receiveShadow = true;
+    group.add(base);
+  }
+
+  addInteractionHitbox(group, interactable) {
+    const hitbox = new THREE.Mesh(
+      new THREE.BoxGeometry(
+        ITEM_DROP_HITBOX_RADIUS * 2,
+        ITEM_DROP_HITBOX_HEIGHT,
+        ITEM_DROP_HITBOX_RADIUS * 2
+      ),
+      new THREE.MeshBasicMaterial({
+        transparent: true,
+        opacity: 0,
+        depthWrite: false,
+        colorWrite: false,
+      })
+    );
+    hitbox.name = `${group.name}InteractionHitbox`;
+    hitbox.position.y = ITEM_DROP_HITBOX_HEIGHT / 2;
+    hitbox.userData.interactable = interactable;
+    hitbox.userData.isInteractionHitbox = true;
+    group.add(hitbox);
   }
 
   update(delta) {
@@ -216,12 +319,20 @@ export class ItemDropManager {
   }
 
   collectItemDrop(itemDrop) {
-    if (!this.scene.inventory.canPickupItem(itemDrop.itemId)) {
+    const inventoryItem = itemDrop.itemInstance ?? itemDrop.itemId;
+    const pickupBlockReason = this.scene.inventory.getPickupBlockReason?.(inventoryItem);
+
+    if (pickupBlockReason === "slotOccupied") {
+      this.requestItemSwap(itemDrop, inventoryItem);
+      return;
+    }
+
+    if (pickupBlockReason) {
       this.emitBlockedPickup(itemDrop);
       return;
     }
 
-    const collected = this.scene.inventory.pickupItem(itemDrop.itemId, {
+    const collected = this.scene.inventory.pickupItem(inventoryItem, {
       source: "groundDrop",
       itemDrop,
       enemies: this.scene.enemies,
@@ -232,6 +343,68 @@ export class ItemDropManager {
       return;
     }
 
+    this.completeItemDropCollection(itemDrop);
+    this.scene.sfx.play("chest");
+  }
+
+  requestItemSwap(itemDrop, inventoryItem) {
+    const candidate = this.scene.inventory.getReplacementCandidate?.(inventoryItem);
+    if (!candidate?.previousItem || !candidate?.itemInstance) {
+      this.emitBlockedPickup(itemDrop);
+      return;
+    }
+
+    const opened = this.scene.requestItemSwapConfirmation?.({
+      currentItem: candidate.previousItem,
+      newItem: candidate.itemInstance,
+      onConfirm: () => {
+        this.replaceItemDrop(itemDrop, candidate.itemInstance);
+      },
+      onCancel: () => {
+        itemDrop.blockedPickupTimer = 0;
+      },
+    });
+
+    if (!opened) {
+      this.emitBlockedPickup(itemDrop);
+    }
+  }
+
+  replaceItemDrop(itemDrop, itemInstance) {
+    if (!this.isItemDropInteractable(itemDrop)) return;
+
+    const result = this.scene.inventory.replaceEquippedItem(itemInstance, {
+      source: "groundDropSwap",
+      itemDrop,
+      enemies: this.scene.enemies,
+    });
+
+    if (!result.success) {
+      this.emitBlockedPickup(itemDrop);
+      return;
+    }
+
+    const dropOrigin = this.scene.player?.model?.position?.clone?.() ??
+      itemDrop.model.position.clone();
+    const previousDropPosition = itemDrop.model.position.clone();
+    this.completeItemDropCollection(itemDrop);
+    this.addItemDrops([
+      {
+        itemId: result.previousItem.baseItemId,
+        itemInstance: result.previousItem,
+        position: new THREE.Vector3(previousDropPosition.x, 0, previousDropPosition.z),
+        fallbackOrigin: dropOrigin,
+        source: "equipmentSwap",
+      },
+    ]);
+    this.scene.sfx.play("chest");
+  }
+
+  completeItemDropCollection(itemDrop) {
+    if (this.pendingItemDrop === itemDrop) {
+      this.pendingItemDrop = null;
+    }
+
     itemDrop.collected = true;
     itemDrop.model.visible = false;
     itemDrop.model.removeFromParent();
@@ -239,7 +412,6 @@ export class ItemDropManager {
       this.scene.flushInventoryEvents();
     }
     this.scene.updateHud();
-    this.scene.sfx.play("chest");
   }
 
   emitBlockedPickup(itemDrop) {
@@ -251,7 +423,10 @@ export class ItemDropManager {
         type: "itemPickupBlocked",
         itemId: itemDrop.itemId,
         item: itemDrop.item,
-        reason: "inventoryFull",
+        itemInstance: itemDrop.itemInstance,
+        reason: this.scene.inventory?.getPickupBlockReason?.(
+          itemDrop.itemInstance ?? itemDrop.itemId
+        ) ?? "inventoryFull",
       },
     ]);
   }

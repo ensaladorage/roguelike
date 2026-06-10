@@ -1,45 +1,83 @@
 import {
+  ITEM_FOOD_CATEGORIES,
   ITEM_TYPES,
-  getItemDefinitionByUseSlot,
   getItemDefinition,
+  getItemDefinitionByUseSlot,
   getItemMaxStack,
 } from "../CharacterData/itemDefinitions.js";
+import {
+  getItemBaseId,
+  getItemDefinitionForInstance,
+  normalizeItemInstance,
+} from "../Game/ItemInstanceFactory.js";
+
+const EQUIPMENT_STATS = new Set([
+  "attackDamage",
+  "attackSpeed",
+  "maxHp",
+  "moveSpeed",
+  "speed",
+]);
 
 export class Inventory {
   constructor({ player, itemEffects }) {
     this.player = player;
     this.itemEffects = itemEffects;
-    this.passives = new Map();
+    this.equippedByCategory = this.createEmptyEquipmentSlots();
+    this.appliedEquipmentTotals = {};
     this.consumables = new Map();
     this.knownConsumables = new Set();
     this.events = [];
   }
 
-  pickupItem(itemId, context = {}) {
-    const definition = getItemDefinition(itemId);
+  pickupItem(itemOrId, context = {}) {
+    const baseItemId = getItemBaseId(itemOrId);
+    const definition = getItemDefinition(baseItemId);
     if (!definition) return false;
 
-    this.addItemCount(this.passives, definition.id, 0);
-    this.addItemCount(this.consumables, definition.id, 0);
+    if (definition.type === ITEM_TYPES.EQUIPPABLE) {
+      const itemInstance = normalizeItemInstance(itemOrId, context);
+      if (!itemInstance) return false;
 
-    if (definition.type === ITEM_TYPES.PASSIVE) {
-      const result = this.itemEffects.apply(definition.id, {
-        ...context,
-        player: this.player,
-      });
+      const category = itemInstance.foodCategory;
+      if (!category || !this.equippedByCategory.has(category)) {
+        this.emit({
+          type: "itemPickupBlocked",
+          itemId: definition.id,
+          item: itemInstance,
+          itemInstance,
+          reason: "invalidEquipmentCategory",
+        });
+        return false;
+      }
 
-      if (!result.applied) return false;
+      const occupiedItem = this.equippedByCategory.get(category);
+      if (occupiedItem) {
+        this.emit({
+          type: "itemPickupBlocked",
+          itemId: definition.id,
+          item: itemInstance,
+          itemInstance,
+          reason: "slotOccupied",
+          foodCategory: category,
+          occupiedItem,
+        });
+        return false;
+      }
 
-      this.addItemCount(this.passives, definition.id, 1);
+      this.equippedByCategory.set(category, itemInstance);
+      const result = this.recalculateEquipmentEffects();
       this.emit({
         type: "itemPickedUp",
         itemId: definition.id,
-        item: definition,
+        item: itemInstance,
+        itemInstance,
       });
       this.emit({
         type: "passiveItemApplied",
         itemId: definition.id,
-        item: definition,
+        item: itemInstance,
+        itemInstance,
         result,
       });
       return true;
@@ -70,13 +108,14 @@ export class Inventory {
     return false;
   }
 
-  removeItem(itemId, context = {}) {
-    const definition = getItemDefinition(itemId);
+  removeItem(itemOrId, context = {}) {
+    const baseItemId = getItemBaseId(itemOrId);
+    const definition = getItemDefinition(baseItemId);
     if (!definition) return false;
 
-    if (definition.type === ITEM_TYPES.PASSIVE) {
-      const count = this.passives.get(definition.id) ?? 0;
-      if (count <= 0) {
+    if (definition.type === ITEM_TYPES.EQUIPPABLE) {
+      const entry = this.findEquippedEntry(itemOrId);
+      if (!entry) {
         this.emit({
           type: "itemRemoveFailed",
           itemId: definition.id,
@@ -86,31 +125,19 @@ export class Inventory {
         return false;
       }
 
-      const result = this.itemEffects.revert(definition.id, {
-        ...context,
-        player: this.player,
-      });
-
-      if (!result.applied) {
-        this.emit({
-          type: "itemRemoveFailed",
-          itemId: definition.id,
-          item: definition,
-          reason: result.reason,
-        });
-        return false;
-      }
-
-      this.setItemCount(this.passives, definition.id, count - 1);
+      this.equippedByCategory.set(entry.category, null);
+      const result = this.recalculateEquipmentEffects(context);
       this.emit({
         type: "itemRemoved",
         itemId: definition.id,
-        item: definition,
+        item: entry.item,
+        itemInstance: entry.item,
       });
       this.emit({
         type: "passiveItemRemoved",
         itemId: definition.id,
-        item: definition,
+        item: entry.item,
+        itemInstance: entry.item,
         result,
       });
       return true;
@@ -140,6 +167,102 @@ export class Inventory {
     }
 
     return false;
+  }
+
+  getEquippedItemForCategory(category) {
+    if (!category || !this.equippedByCategory.has(category)) return null;
+
+    return this.equippedByCategory.get(category) ?? null;
+  }
+
+  getReplacementCandidate(itemOrId, context = {}) {
+    const itemInstance = normalizeItemInstance(itemOrId, context);
+    if (!itemInstance) {
+      return {
+        canReplace: false,
+        reason: "unknownItem",
+        itemInstance: null,
+        previousItem: null,
+        foodCategory: null,
+      };
+    }
+
+    const definition = getItemDefinition(itemInstance.baseItemId);
+    if (!definition || definition.type !== ITEM_TYPES.EQUIPPABLE) {
+      return {
+        canReplace: false,
+        reason: "unsupportedItemType",
+        itemInstance,
+        previousItem: null,
+        foodCategory: itemInstance.foodCategory ?? null,
+      };
+    }
+
+    const category = itemInstance.foodCategory;
+    if (!category || !this.equippedByCategory.has(category)) {
+      return {
+        canReplace: false,
+        reason: "invalidEquipmentCategory",
+        itemInstance,
+        previousItem: null,
+        foodCategory: category ?? null,
+      };
+    }
+
+    const previousItem = this.getEquippedItemForCategory(category);
+
+    return {
+      canReplace: Boolean(previousItem),
+      reason: previousItem ? null : "emptySlot",
+      itemInstance,
+      previousItem,
+      foodCategory: category,
+    };
+  }
+
+  replaceEquippedItem(itemOrId, context = {}) {
+    const candidate = this.getReplacementCandidate(itemOrId, context);
+    if (!candidate.itemInstance || !candidate.foodCategory) {
+      return {
+        success: false,
+        reason: candidate.reason,
+        previousItem: null,
+        equippedItem: null,
+        result: null,
+      };
+    }
+
+    if (!candidate.previousItem) {
+      const pickedUp = this.pickupItem(candidate.itemInstance, context);
+
+      return {
+        success: pickedUp,
+        reason: pickedUp ? null : this.getPickupBlockReason(candidate.itemInstance),
+        previousItem: null,
+        equippedItem: pickedUp ? candidate.itemInstance : null,
+        result: null,
+      };
+    }
+
+    this.equippedByCategory.set(candidate.foodCategory, candidate.itemInstance);
+    const result = this.recalculateEquipmentEffects(context);
+    this.emit({
+      type: "itemReplaced",
+      itemId: candidate.itemInstance.baseItemId,
+      item: candidate.itemInstance,
+      itemInstance: candidate.itemInstance,
+      previousItem: candidate.previousItem,
+      foodCategory: candidate.foodCategory,
+      result,
+    });
+
+    return {
+      success: true,
+      reason: null,
+      previousItem: candidate.previousItem,
+      equippedItem: candidate.itemInstance,
+      result,
+    };
   }
 
   useConsumable(itemId, context = {}) {
@@ -190,6 +313,34 @@ export class Inventory {
     return this.useConsumable(definition.id, context);
   }
 
+  recalculateEquipmentEffects() {
+    const nextTotals = this.calculateEquipmentTotals();
+    const result = this.itemEffects.applyEquipmentTotals({
+      player: this.player,
+      previousTotals: this.appliedEquipmentTotals,
+      nextTotals,
+    });
+
+    this.appliedEquipmentTotals = { ...nextTotals };
+    return result;
+  }
+
+  calculateEquipmentTotals() {
+    const totals = {};
+
+    for (const itemInstance of this.equippedByCategory.values()) {
+      if (!itemInstance?.rolledStats) continue;
+
+      for (const [stat, value] of Object.entries(itemInstance.rolledStats)) {
+        if (!EQUIPMENT_STATS.has(stat)) continue;
+
+        totals[stat] = (totals[stat] ?? 0) + (Number.parseFloat(value) || 0);
+      }
+    }
+
+    return totals;
+  }
+
   getConsumableEntries() {
     const itemIds = new Set([
       ...this.knownConsumables,
@@ -197,14 +348,15 @@ export class Inventory {
     ]);
 
     return [...itemIds]
-      .map((itemId) => this.createEntry(itemId, this.getConsumableCount(itemId)))
+      .map((itemId) => this.createConsumableEntry(itemId, this.getConsumableCount(itemId)))
       .filter((entry) => entry.item)
       .sort(this.sortEntriesByHudSlot);
   }
 
   createProgressSnapshot() {
     return {
-      passives: [...this.passives.entries()],
+      equippedByCategory: Object.fromEntries(this.equippedByCategory.entries()),
+      appliedEquipmentTotals: { ...this.appliedEquipmentTotals },
       consumables: [...this.consumables.entries()],
       knownConsumables: [...this.knownConsumables],
     };
@@ -213,24 +365,57 @@ export class Inventory {
   restoreProgressSnapshot(snapshot) {
     if (!snapshot) return;
 
-    this.passives = new Map(snapshot.passives ?? []);
+    this.equippedByCategory = this.createEmptyEquipmentSlots();
+
+    if (snapshot.equippedByCategory) {
+      for (const [category, itemInstance] of Object.entries(snapshot.equippedByCategory)) {
+        if (!this.equippedByCategory.has(category)) continue;
+
+        this.equippedByCategory.set(category, normalizeItemInstance(itemInstance));
+      }
+    } else {
+      this.restoreLegacyPassives(snapshot.passives);
+    }
+
+    this.appliedEquipmentTotals = { ...(snapshot.appliedEquipmentTotals ?? {}) };
     this.consumables = new Map(snapshot.consumables ?? []);
     this.knownConsumables = new Set(snapshot.knownConsumables ?? []);
+    this.recalculateEquipmentEffects();
+  }
+
+  restoreLegacyPassives(passives = []) {
+    for (const [itemId, count] of passives) {
+      if (count <= 0) continue;
+
+      const itemInstance = normalizeItemInstance(itemId, {
+        source: "legacySnapshot",
+      });
+      const category = itemInstance?.foodCategory;
+      if (!category || this.equippedByCategory.get(category)) continue;
+
+      this.equippedByCategory.set(category, itemInstance);
+    }
   }
 
   reset() {
-    this.passives.clear();
+    this.equippedByCategory = this.createEmptyEquipmentSlots();
+    this.appliedEquipmentTotals = {};
     this.consumables.clear();
     this.knownConsumables.clear();
     this.events = [];
   }
 
   getPassiveEntries() {
-    return this.getEntries(this.passives).sort(this.sortEntriesByHudSlot);
+    return [...this.equippedByCategory.values()]
+      .filter(Boolean)
+      .map((itemInstance) => this.createEquipmentEntry(itemInstance))
+      .sort(this.sortEntriesByHudSlot);
   }
 
   getPassiveCount(itemId) {
-    return this.passives.get(itemId) ?? 0;
+    return this.getPassiveEntries()
+      .filter((entry) => entry.item?.baseItemId === itemId)
+      .length;
   }
 
   getConsumableCount(itemId) {
@@ -245,23 +430,48 @@ export class Inventory {
       this.getConsumableCount(definition.id) > 0;
   }
 
-  canPickupItem(itemId) {
-    const definition = getItemDefinition(itemId);
-    if (!definition) return false;
-
-    if (definition.type !== ITEM_TYPES.CONSUMABLE) return true;
-
-    return this.getConsumableCount(itemId) < getItemMaxStack(itemId);
+  canPickupItem(itemOrId) {
+    return this.getPickupBlockReason(itemOrId) === null;
   }
 
-  getEntries(source) {
-    return [...source.entries()]
-      .filter(([, count]) => count > 0)
-      .map(([itemId, count]) => this.createEntry(itemId, count))
-      .filter((entry) => entry.item);
+  getPickupBlockReason(itemOrId) {
+    const baseItemId = getItemBaseId(itemOrId);
+    const definition = getItemDefinition(baseItemId);
+    if (!definition) return "unknownItem";
+
+    if (definition.type === ITEM_TYPES.CONSUMABLE) {
+      return this.getConsumableCount(definition.id) < getItemMaxStack(definition.id)
+        ? null
+        : "inventoryFull";
+    }
+
+    if (definition.type === ITEM_TYPES.EQUIPPABLE) {
+      const category = itemOrId?.foodCategory ?? definition.foodCategory;
+      if (!category || !this.equippedByCategory.has(category)) {
+        return "invalidEquipmentCategory";
+      }
+
+      return this.equippedByCategory.get(category) ? "slotOccupied" : null;
+    }
+
+    return "unsupportedItemType";
   }
 
-  createEntry(itemId, count) {
+  createEquipmentEntry(itemInstance) {
+    const definition = getItemDefinitionForInstance(itemInstance);
+
+    return {
+      item: itemInstance,
+      itemInstance,
+      definition,
+      count: 1,
+      maxStack: 1,
+      isMax: true,
+      foodCategory: itemInstance.foodCategory,
+    };
+  }
+
+  createConsumableEntry(itemId, count) {
     const maxStack = getItemMaxStack(itemId);
 
     return {
@@ -270,6 +480,19 @@ export class Inventory {
       maxStack,
       isMax: Number.isFinite(maxStack) && count >= maxStack,
     };
+  }
+
+  findEquippedEntry(itemOrId) {
+    const baseItemId = getItemBaseId(itemOrId);
+    const instanceId = itemOrId?.instanceId ?? null;
+
+    for (const [category, item] of this.equippedByCategory.entries()) {
+      if (!item) continue;
+      if (instanceId && item.instanceId === instanceId) return { category, item };
+      if (!instanceId && item.baseItemId === baseItemId) return { category, item };
+    }
+
+    return null;
   }
 
   sortEntriesByHudSlot(a, b) {
@@ -287,6 +510,12 @@ export class Inventory {
     }
 
     source.set(itemId, count);
+  }
+
+  createEmptyEquipmentSlots() {
+    return new Map(
+      Object.values(ITEM_FOOD_CATEGORIES).map((category) => [category, null])
+    );
   }
 
   emit(event) {

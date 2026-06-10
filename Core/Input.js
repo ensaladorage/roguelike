@@ -842,13 +842,32 @@ function findInteractableFromObject(object) {
   return null;
 }
 
-export function setupInventoryInput(onUseSlot) {
+export function setupInventoryInput(onUseSlot, options = {}) {
   window.addEventListener("keydown", (event) => {
     if (event.repeat) return;
+    if (isEditableInputTarget(event.target)) return;
+
+    if (event.key?.toLowerCase() === "c") {
+      event.preventDefault();
+      options.onToggleInventory?.();
+      return;
+    }
 
     const slotIndex = Number(event.key) - 1;
     if (!Number.isInteger(slotIndex) || slotIndex < 0 || slotIndex > 8) return;
 
     onUseSlot(slotIndex);
   });
+}
+
+function isEditableInputTarget(target) {
+  if (!target) return false;
+
+  const tagName = target.tagName?.toLowerCase();
+  return (
+    target.isContentEditable ||
+    tagName === "input" ||
+    tagName === "textarea" ||
+    tagName === "select"
+  );
 }

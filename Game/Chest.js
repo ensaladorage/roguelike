@@ -1,5 +1,5 @@
 import * as THREE from "three";
-import { flatDistance } from "./Utils.js";
+import { createSeededRandom, flatDistance } from "./Utils.js";
 import {
   COFFIN_CHEST_MODEL_ID,
   DEFAULT_CHEST_MODEL_ID,
@@ -10,6 +10,7 @@ import {
   ITEM_RARITIES,
   getItemIdsByRarity,
 } from "../CharacterData/itemDefinitions.js";
+import { createItemInstance } from "./ItemInstanceFactory.js";
 import { splitCoinValueIntoTypes } from "./Coin.js";
 
 export const CHEST_REWARD = {
@@ -89,28 +90,29 @@ export function getChestReward(overrides = {}, context = {}) {
       overrides.rarityChancePercentByFloor ?? overrides.rarityWeightsByFloor
     ),
   };
-  const itemIds = rollChestItems(rewardConfig, context);
+  const random = context.rng ?? createSeededRandom(createChestRewardSeed(context));
+  const itemIds = rollChestItems(rewardConfig, context, random);
 
   return {
     itemIds,
   };
 }
 
-function rollChestItems(rewardConfig, context = {}) {
+function rollChestItems(rewardConfig, context = {}, random = Math.random) {
   const progressFloor = getRewardProgressFloor(rewardConfig, context);
   const rollCount = Math.max(0, Math.floor(rewardConfig.itemRollCount ?? 0));
   const itemIds = [];
 
   for (let rollIndex = 0; rollIndex < rollCount; rollIndex += 1) {
-    const itemDropRoll = rollPercentChance(rewardConfig.itemChancePercent);
+    const itemDropRoll = rollPercentChance(rewardConfig.itemChancePercent, random);
     const rarityRoll = itemDropRoll.success
-      ? rollChestRarity(rewardConfig, progressFloor)
+      ? rollChestRarity(rewardConfig, progressFloor, random)
       : null;
     const itemPool = rarityRoll
       ? getChestItemPoolForRarity(rewardConfig, rarityRoll.rarity)
       : [];
     const itemId = itemPool.length > 0
-      ? itemPool[Math.floor(Math.random() * itemPool.length)]
+      ? itemPool[Math.floor(random() * itemPool.length)]
       : null;
 
     console.log("chestItemDropRoll", {
@@ -143,7 +145,7 @@ function getRewardProgressFloor(rewardConfig, context = {}) {
   return Math.max(minFloor, Math.min(maxFloor, numericFloor));
 }
 
-function rollChestRarity(rewardConfig, progressFloor) {
+function rollChestRarity(rewardConfig, progressFloor, random = Math.random) {
   const chances = getChestRarityChances(rewardConfig, progressFloor);
   const totalChance = Object.values(chances).reduce(
     (sum, chance) => sum + chance,
@@ -158,7 +160,7 @@ function rollChestRarity(rewardConfig, progressFloor) {
     };
   }
 
-  const roll = Math.random() * totalChance;
+  const roll = random() * totalChance;
   let cursor = 0;
 
   for (const rarity of Object.values(ITEM_RARITIES)) {
@@ -227,14 +229,25 @@ function mergeRarityChanceConfig(defaultConfig, overrideConfig = {}) {
   );
 }
 
-function rollPercentChance(chancePercent) {
+function rollPercentChance(chancePercent, random = Math.random) {
   const safeChancePercent = normalizePercentChance(chancePercent);
-  const value = Math.random() * 100;
+  const value = random() * 100;
 
   return {
     value: Number(value.toFixed(2)),
     success: value < safeChancePercent,
   };
+}
+
+function createChestRewardSeed(context = {}) {
+  return [
+    context.runSeed ?? "run",
+    context.floorSeed ?? context.currentFloorSeed ?? "floor",
+    context.floorIndex ?? context.currentFloorIndex ?? "x",
+    context.sourceKind ?? "chest",
+    context.sourceId ?? context.chestId ?? context.roomId ?? "reward",
+    "items",
+  ].join(":");
 }
 
 function normalizePercentChance(chancePercent) {
@@ -281,6 +294,7 @@ export class ChestManager {
         rewardOverrides: data.rewardOverrides,
         epicRewardConfig: data.epicRewardConfig,
         coinDropConfig: data.coinDrop,
+        spawnIndex: data.spawnIndex,
         lockedUntilStageClear: Boolean(data.lockedUntilStageClear),
         stageUnlocked: !data.lockedUntilStageClear,
         collected: false,
@@ -621,33 +635,63 @@ export class ChestManager {
     if (!this.scene.itemDropManager) return;
 
     const reward = getChestReward(chest.rewardOverrides, {
+      runSeed: this.scene.currentFloorLoad?.runSeed,
+      floorSeed: this.scene.currentFloorLoad?.currentFloorSeed,
       floorIndex: this.getRewardProgressFloor(),
+      sourceKind: "chest",
+      sourceId: this.getChestSourceId(chest),
+      roomId: chest.roomId,
     });
     const itemIds = reward.itemIds ?? [];
+    const itemInstances = itemIds
+      .map((itemId, index) => createItemInstance(itemId, {
+        runSeed: this.scene.currentFloorLoad?.runSeed,
+        floorSeed: this.scene.currentFloorLoad?.currentFloorSeed,
+        floorIndex: this.getRewardProgressFloor(),
+        sourceKind: "chest",
+        sourceId: this.getChestSourceId(chest),
+        roomId: chest.roomId,
+        rollIndex: index,
+      }))
+      .filter(Boolean);
 
     console.log("chestItemsGranted", {
-      count: itemIds.length,
-      itemIds,
+      count: itemInstances.length,
+      itemIds: itemInstances.map((item) => item.baseItemId),
+      instances: itemInstances.map((item) => ({
+        instanceId: item.instanceId,
+        baseItemId: item.baseItemId,
+        rolledStats: item.rolledStats,
+      })),
     });
 
     this.scene.itemDropManager.addItemDrops(
-      itemIds.map((itemId, index) => {
+      itemInstances.map((itemInstance, index) => {
         const origin = chest.model.position.clone();
         const forward = this.getChestForward(chest);
         const right = new THREE.Vector3(forward.z, 0, -forward.x);
-        const centered = index - (itemIds.length - 1) / 2;
+        const centered = index - (itemInstances.length - 1) / 2;
         const position = origin
           .clone()
           .addScaledVector(forward, 0.95)
           .addScaledVector(right, centered * 0.42);
 
         return {
-          itemId,
+          itemId: itemInstance.baseItemId,
+          itemInstance,
           position: new THREE.Vector3(position.x, 0, position.z),
           fallbackOrigin: origin,
         };
       })
     );
+  }
+
+  getChestSourceId(chest) {
+    return [
+      chest.roomId ?? "room",
+      chest.spawnIndex ?? "x",
+      chest.chestType ?? CHEST_TYPES.STANDARD,
+    ].join(":");
   }
 
   getRewardProgressFloor() {

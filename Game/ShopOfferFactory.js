@@ -2,6 +2,7 @@ import {
   ITEM_RARITIES,
   getItemDefinition,
 } from "../CharacterData/itemDefinitions.js";
+import { createItemInstance } from "./ItemInstanceFactory.js";
 import { createSeededRandom } from "./Utils.js";
 import { SHOP_DEFINITION } from "./shopDefinitions.js";
 
@@ -24,10 +25,17 @@ export function createShopOffers({
     if (!item) break;
 
     usedItemIds.add(item.id);
+    const itemInstance = createItemInstance(item.id, {
+      ...context,
+      sourceKind: "shop",
+      sourceId: createOfferId(context, offerIndex, item.id),
+      offerIndex,
+    });
     offers.push(createShopOffer({
       offerIndex,
       item,
-      price: getShopItemPrice(effectiveConfig, item),
+      itemInstance,
+      price: getShopItemPrice(effectiveConfig, item, itemInstance),
       context,
     }));
   }
@@ -35,14 +43,15 @@ export function createShopOffers({
   return offers;
 }
 
-export function createShopOffer({ offerIndex, item, price, context = {} }) {
+export function createShopOffer({ offerIndex, item, itemInstance = null, price, context = {} }) {
   return {
     id: createOfferId(context, offerIndex, item.id),
     offerIndex,
     itemId: item.id,
     itemDefinition: item,
-    item,
-    rarity: item.rarity,
+    item: itemInstance ?? item,
+    itemInstance,
+    rarity: itemInstance?.rarity ?? item.rarity,
     price,
     purchased: false,
   };
@@ -100,18 +109,29 @@ export function getShopProgressContext(context = {}) {
   };
 }
 
-export function getShopItemPrice(config = SHOP_DEFINITION, item) {
+export function getShopItemPrice(config = SHOP_DEFINITION, item, itemInstance = null) {
   const overridePrice = config.itemPriceOverrides?.[item.id];
-  const itemPrice = item.shop?.price ?? item.price;
-  const fallbackPrice = config.fallbackPriceByRarity?.[item.rarity];
+  const itemPrice = item.shop?.basePrice ?? item.shop?.price ?? item.price;
+  const rarity = itemInstance?.rarity ?? item.rarity;
+  const fallbackPrice = config.fallbackPriceByRarity?.[rarity];
   const price = overridePrice ?? itemPrice ?? fallbackPrice ?? 0;
   const numericPrice = Number.parseInt(price, 10);
   const multiplier = Number.parseFloat(config.priceMultiplier ?? 1);
   const safeMultiplier = Number.isFinite(multiplier) ? Math.max(0, multiplier) : 1;
+  const qualityMultiplier = getRollQualityPriceMultiplier(config, itemInstance);
 
   return Number.isFinite(numericPrice)
-    ? Math.max(0, Math.round(numericPrice * safeMultiplier))
+    ? Math.max(0, Math.round(numericPrice * safeMultiplier * qualityMultiplier))
     : 0;
+}
+
+function getRollQualityPriceMultiplier(config, itemInstance) {
+  if (!itemInstance?.rollQuality) return 1;
+
+  const priceSpread = Number.parseFloat(config.rollQualityPriceSpread ?? 0.25);
+  const safeSpread = Number.isFinite(priceSpread) ? Math.max(0, priceSpread) : 0.25;
+
+  return 1 + itemInstance.rollQuality * safeSpread;
 }
 
 function createEffectiveShopConfig(config = SHOP_DEFINITION, context = {}) {

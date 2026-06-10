@@ -30,6 +30,7 @@ const BASE_PLAYER_STATS = {
   hp: 100,
   gold: 0,
   attackDamage: 10,
+  speed: 3.5,
   attackRange: 1.65,
   attackSpeed: 1.2,
   attackArcDegrees: PLAYER_COMBAT_CONFIG.attackArcDegrees,
@@ -47,7 +48,7 @@ export class Player {
     this.target = null;
     this.path = [];
 
-    this.speed = 3.5;
+    this.speed = BASE_PLAYER_STATS.speed;
 
     this.maxHp = BASE_PLAYER_STATS.maxHp;
     this.hp = BASE_PLAYER_STATS.hp;
@@ -112,6 +113,7 @@ export class Player {
       hp: this.hp,
       gold: this.gold,
       attackDamage: this.attackDamage,
+      speed: this.speed,
       attackRange: this.attackRange,
       attackSpeed: this.attackSpeed,
       attackArcDegrees: this.attackArcDegrees,
@@ -127,6 +129,7 @@ export class Player {
     this.hp = Math.min(snapshot.hp ?? this.hp, this.maxHp);
     this.gold = snapshot.gold ?? this.gold;
     this.attackDamage = snapshot.attackDamage ?? this.attackDamage;
+    this.speed = snapshot.speed ?? this.speed;
     this.attackRange = snapshot.attackRange ?? this.attackRange;
     this.attackArcDegrees = snapshot.attackArcDegrees ?? this.attackArcDegrees;
 
@@ -146,6 +149,7 @@ export class Player {
     this.hp = BASE_PLAYER_STATS.hp;
     this.gold = BASE_PLAYER_STATS.gold;
     this.attackDamage = BASE_PLAYER_STATS.attackDamage;
+    this.speed = BASE_PLAYER_STATS.speed;
     this.attackRange = BASE_PLAYER_STATS.attackRange;
     this.attackArcDegrees = BASE_PLAYER_STATS.attackArcDegrees;
     this.setAttackSpeed(BASE_PLAYER_STATS.attackSpeed);

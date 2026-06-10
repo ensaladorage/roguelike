@@ -1,10 +1,29 @@
 import {
-  getItemDescription,
+  ITEM_FOOD_CATEGORIES,
   getItemDefinitionByUseSlot,
   getItemMaxStack,
 } from "../CharacterData/itemDefinitions.js";
+import {
+  getItemDisplayDescription,
+  getItemDisplayName,
+} from "../Game/ItemInstanceFactory.js";
 
 const QUICK_USE_SLOTS = [1, 2];
+const INVENTORY_STYLE_ID = "inventory-panel-style";
+const MAX_LOG_ENTRIES = 90;
+const VISIBLE_LOG_ENTRIES = 5;
+const EQUIPMENT_SLOT_ORDER = [
+  ITEM_FOOD_CATEGORIES.PROTEIN,
+  ITEM_FOOD_CATEGORIES.SPICY,
+  ITEM_FOOD_CATEGORIES.HEARTY,
+  ITEM_FOOD_CATEGORIES.ABILITY,
+];
+const EQUIPMENT_SLOT_LABELS = {
+  [ITEM_FOOD_CATEGORIES.PROTEIN]: "Protein",
+  [ITEM_FOOD_CATEGORIES.SPICY]: "Spicy",
+  [ITEM_FOOD_CATEGORIES.HEARTY]: "Hearty",
+  [ITEM_FOOD_CATEGORIES.ABILITY]: "Ability",
+};
 
 export class HUD {
   constructor() {
@@ -13,8 +32,12 @@ export class HUD {
     this.goldText = document.querySelector("#goldText");
     this.damageText = document.querySelector("#damageText");
     this.attackSpeedText = document.querySelector("#attackSpeedText");
-    this.itemText = document.querySelector("#itemText");
+    this.maxHpText = null;
+    this.speedText = null;
+    this.attackRangeText = null;
+    this.inventoryGoldText = null;
     this.logElement = document.querySelector("#log");
+    this.logSlider = document.querySelector("#logSlider");
     this.quickUseElement = document.querySelector("#quickUseBar");
     this.itemTooltip = document.querySelector("#itemTooltip");
     this.epicRewardOverlay = document.querySelector("#epicRewardOverlay");
@@ -28,11 +51,24 @@ export class HUD {
     this.quickUseButtons = new Map();
     this.onUseConsumableSlot = null;
     this.logEntries = [];
+    this.logOffset = 0;
     this.statHighlightTimers = new Map();
     this.onEpicRewardSelect = null;
+    this.inventoryPanelOpen = false;
+    this.inventoryHint = null;
+    this.inventoryPanel = null;
+    this.inventorySlotList = null;
+    this.currentPlayer = null;
+    this.currentInventory = null;
+    this.swapConfirmationOverlay = null;
+    this.swapConfirmation = null;
 
+    this.ensureInventoryStyles();
     this.setupQuickUseButtons();
     this.setupEpicRewardOverlay();
+    this.setupInventoryPanel();
+    this.setupSwapConfirmation();
+    this.setupLogSlider();
   }
 
   setConsumableUseHandler(handler) {
@@ -69,10 +105,10 @@ export class HUD {
     this.itemTooltip.innerHTML = "";
 
     const name = document.createElement("strong");
-    name.textContent = item.name;
+    name.textContent = getItemDisplayName(item);
 
     const description = document.createElement("span");
-    description.textContent = getItemDescription(item);
+    description.textContent = getItemDisplayDescription(item);
 
     this.itemTooltip.append(name, description);
     this.itemTooltip.hidden = false;
@@ -94,6 +130,89 @@ export class HUD {
     this.itemTooltip.hidden = true;
   }
 
+  toggleInventoryPanel(inventory) {
+    if (this.inventoryPanelOpen) {
+      this.hideInventoryPanel();
+      return false;
+    }
+
+    this.showInventoryPanel(inventory);
+    return true;
+  }
+
+  showInventoryPanel(inventory) {
+    if (!this.inventoryPanel) return;
+
+    this.inventoryPanelOpen = true;
+    this.inventoryPanel.hidden = false;
+    this.inventoryPanel.setAttribute("aria-hidden", "false");
+    if (this.inventoryHint) {
+      this.inventoryHint.hidden = true;
+    }
+    this.updateInventoryPanel(inventory);
+  }
+
+  hideInventoryPanel() {
+    if (!this.inventoryPanel) return;
+
+    this.inventoryPanelOpen = false;
+    this.inventoryPanel.hidden = true;
+    this.inventoryPanel.setAttribute("aria-hidden", "true");
+    if (this.inventoryHint) {
+      this.inventoryHint.hidden = false;
+    }
+    this.hideItemTooltip();
+  }
+
+  updateInventoryPanel(inventory) {
+    this.currentInventory = inventory ?? this.currentInventory;
+    if (!this.inventorySlotList || !inventory) return;
+
+    this.inventorySlotList.innerHTML = "";
+
+    for (const category of EQUIPMENT_SLOT_ORDER) {
+      const equippedItem = inventory.getEquippedItemForCategory?.(category) ?? null;
+      const slot = this.createInventorySlot(category, equippedItem);
+      this.inventorySlotList.appendChild(slot);
+    }
+
+    this.updateInventoryStats();
+  }
+
+  showItemSwapConfirmation({
+    currentItem,
+    newItem,
+    onConfirm = null,
+    onCancel = null,
+  } = {}) {
+    if (!this.swapConfirmationOverlay || !currentItem || !newItem) return;
+
+    this.hideItemTooltip();
+    this.swapConfirmation = {
+      currentItem,
+      newItem,
+      onConfirm,
+      onCancel,
+    };
+    this.renderSwapConfirmation();
+    this.swapConfirmationOverlay.hidden = false;
+    this.swapConfirmationOverlay.setAttribute("aria-hidden", "false");
+    this.swapConfirmationOverlay.querySelector("[data-swap-confirm='replace']")?.focus();
+  }
+
+  hideItemSwapConfirmation({ cancelled = false } = {}) {
+    if (!this.swapConfirmationOverlay) return;
+
+    const confirmation = this.swapConfirmation;
+    this.swapConfirmation = null;
+    this.swapConfirmationOverlay.hidden = true;
+    this.swapConfirmationOverlay.setAttribute("aria-hidden", "true");
+
+    if (cancelled) {
+      confirmation?.onCancel?.();
+    }
+  }
+
   showEpicChestRewards(options = [], onSelect = null) {
     if (!this.epicRewardOverlay || !this.epicRewardOptions) return;
 
@@ -112,10 +231,10 @@ export class HUD {
       image.setAttribute("aria-hidden", "true");
 
       const name = document.createElement("strong");
-      name.textContent = option.item.name;
+      name.textContent = getItemDisplayName(option.item);
 
       const description = document.createElement("span");
-      description.textContent = getItemDescription(option.item);
+      description.textContent = getItemDisplayDescription(option.item);
 
       button.append(image, name, description);
       button.addEventListener("click", () => {
@@ -169,6 +288,8 @@ export class HUD {
   }
 
   updatePlayer(player) {
+    this.currentPlayer = player;
+
     if (this.hpText) {
       this.hpText.textContent =
         `${player.hp} / ${player.maxHp} HP`;
@@ -184,6 +305,10 @@ export class HUD {
       this.goldText.textContent = player.gold.toString();
     }
 
+    if (this.inventoryGoldText) {
+      this.inventoryGoldText.textContent = player.gold.toString();
+    }
+
     if (this.damageText) {
       this.damageText.textContent = player.attackDamage.toString();
     }
@@ -197,53 +322,30 @@ export class HUD {
 
       this.attackSpeedText.textContent = `${attacksPerSecond.toFixed(2)}/s`;
     }
+
+    if (this.maxHpText) {
+      this.maxHpText.textContent = player.maxHp.toString();
+    }
+
+    if (this.speedText) {
+      this.speedText.textContent = Number.isFinite(player.speed)
+        ? player.speed.toFixed(2)
+        : "0";
+    }
+
+    if (this.attackRangeText) {
+      this.attackRangeText.textContent = Number.isFinite(player.attackRange)
+        ? player.attackRange.toFixed(2)
+        : "0";
+    }
   }
 
   updateInventory(inventory) {
+    this.currentInventory = inventory;
     this.updateQuickUseButtons(inventory);
-
-    if (!this.itemText) return;
-
-    const consumables = inventory.getConsumableEntries();
-    const entries = [
-      ...consumables,
-      ...inventory.getPassiveEntries(),
-    ];
-
-    this.itemText.innerHTML = "";
-
-    if (entries.length === 0) {
-      this.itemText.textContent = "Empty";
-      return;
+    if (this.inventoryPanelOpen) {
+      this.updateInventoryPanel(inventory);
     }
-
-    const list = document.createElement("span");
-    list.className = "inventory-items";
-
-    entries.forEach((entry, index) => {
-      const item = document.createElement("span");
-      item.className = "inventory-item";
-      item.title = entry.item.useSlot
-        ? `${entry.item.useSlot}: ${entry.item.name}`
-        : `${entry.item.hudSlot}: ${entry.item.name}`;
-
-      const image = document.createElement("img");
-      image.src = entry.item.imagePath;
-      image.alt = entry.item.name;
-
-      const count = document.createElement("span");
-      count.className = "inventory-count";
-      if (entry.isMax) {
-        count.classList.add("is-max");
-      }
-      count.textContent = entry.isMax ? "Max." : `x${entry.count}`;
-
-      item.appendChild(image);
-      item.appendChild(count);
-      list.appendChild(item);
-    });
-
-    this.itemText.appendChild(list);
   }
 
   setupQuickUseButtons() {
@@ -261,29 +363,44 @@ export class HUD {
       button.dataset.slotIndex = String(useSlot - 1);
       button.title = `Use ${item.name}`;
       button.setAttribute("aria-label", `Use ${item.name}`);
-      button.disabled = true;
-      button.hidden = true;
-      button.style.display = "none";
+      button.disabled = false;
+      button.setAttribute("aria-disabled", "true");
       button.classList.add("is-empty");
 
       const image = document.createElement("img");
       image.src = item.imagePath;
       image.alt = "";
       image.setAttribute("aria-hidden", "true");
+      image.hidden = true;
 
       const count = document.createElement("span");
       count.className = "quick-use-count";
       count.textContent = "x0";
+      count.hidden = true;
 
-      button.appendChild(image);
+      const key = document.createElement("span");
+      key.className = "quick-use-key";
+      key.textContent = String(useSlot);
+
+      button.append(key, image);
       button.appendChild(count);
       this.quickUseElement.appendChild(button);
-      this.quickUseButtons.set(useSlot, { button, count, item });
+      this.quickUseButtons.set(useSlot, { button, count, image, item });
+
+      button.addEventListener("mouseenter", (event) => {
+        this.showItemTooltip(item, event);
+      });
+      button.addEventListener("mousemove", (event) => {
+        this.moveItemTooltip(event);
+      });
+      button.addEventListener("mouseleave", () => {
+        this.hideItemTooltip();
+      });
     }
 
     this.quickUseElement.addEventListener("click", (event) => {
       const button = event.target.closest("[data-slot-index]");
-      if (!button || button.disabled) return;
+      if (!button || button.classList.contains("is-empty")) return;
 
       const slotIndex = Number(button.dataset.slotIndex);
       if (!Number.isInteger(slotIndex)) return;
@@ -302,22 +419,317 @@ export class HUD {
     });
   }
 
+  setupInventoryPanel() {
+    const closedHint = document.createElement("div");
+    closedHint.className = "inventory-hint";
+    closedHint.setAttribute("role", "status");
+    closedHint.innerHTML = `<span class="inventory-hint__key">C</span><span>Inventory</span>`;
+    closedHint.addEventListener("pointerdown", (event) => {
+      event.stopPropagation();
+    });
+    closedHint.addEventListener("click", (event) => {
+      event.stopPropagation();
+    });
+    document.body.appendChild(closedHint);
+
+    const panel = document.createElement("section");
+    panel.className = "inventory-panel";
+    panel.setAttribute("role", "dialog");
+    panel.setAttribute("aria-modal", "false");
+    panel.setAttribute("aria-labelledby", "inventoryPanelTitle");
+    panel.setAttribute("aria-hidden", "true");
+    panel.hidden = true;
+
+    const header = document.createElement("div");
+    header.className = "inventory-panel__header";
+
+    const title = document.createElement("h2");
+    title.id = "inventoryPanelTitle";
+    title.textContent = "Inventory";
+
+    const headerHint = document.createElement("span");
+    headerHint.textContent = "C";
+
+    header.append(title, headerHint);
+
+    const slots = document.createElement("div");
+    slots.className = "inventory-panel__slots";
+
+    const stats = this.createInventoryStatsSection();
+
+    panel.append(header, slots, stats);
+    document.body.appendChild(panel);
+
+    panel.addEventListener("pointerdown", (event) => event.stopPropagation());
+    panel.addEventListener("click", (event) => event.stopPropagation());
+
+    this.inventoryHint = closedHint;
+    this.inventoryPanel = panel;
+    this.inventorySlotList = slots;
+  }
+
+  setupLogSlider() {
+    if (!this.logSlider) return;
+
+    this.logSlider.addEventListener("input", () => {
+      this.logOffset = Number.parseInt(this.logSlider.value, 10) || 0;
+      this.renderLog();
+    });
+  }
+
+  setupSwapConfirmation() {
+    const overlay = document.createElement("section");
+    overlay.className = "item-swap-overlay";
+    overlay.setAttribute("role", "dialog");
+    overlay.setAttribute("aria-modal", "true");
+    overlay.setAttribute("aria-labelledby", "itemSwapTitle");
+    overlay.setAttribute("aria-hidden", "true");
+    overlay.hidden = true;
+
+    overlay.addEventListener("pointerdown", (event) => event.stopPropagation());
+    overlay.addEventListener("click", (event) => {
+      event.stopPropagation();
+      const action = event.target?.dataset?.swapConfirm;
+      if (!action) return;
+
+      if (action === "replace") {
+        const confirmation = this.swapConfirmation;
+        this.hideItemSwapConfirmation();
+        confirmation?.onConfirm?.();
+        return;
+      }
+
+      this.hideItemSwapConfirmation({ cancelled: true });
+    });
+
+    overlay.addEventListener("keydown", (event) => {
+      if (event.key === "Escape") {
+        event.preventDefault();
+        event.stopPropagation();
+        this.hideItemSwapConfirmation({ cancelled: true });
+      }
+    });
+
+    document.body.appendChild(overlay);
+    this.swapConfirmationOverlay = overlay;
+  }
+
+  createInventorySlot(category, item) {
+    const slot = document.createElement("div");
+    slot.className = "inventory-panel__slot";
+    slot.classList.toggle("is-empty", !item);
+
+    const icon = document.createElement("div");
+    icon.className = "inventory-panel__icon";
+
+    if (item?.imagePath) {
+      const image = document.createElement("img");
+      image.src = item.imagePath;
+      image.alt = "";
+      image.setAttribute("aria-hidden", "true");
+      icon.appendChild(image);
+    } else {
+      icon.textContent = EQUIPMENT_SLOT_LABELS[category]?.charAt(0) ?? "?";
+    }
+
+    const copy = document.createElement("div");
+    copy.className = "inventory-panel__copy";
+
+    const label = document.createElement("span");
+    label.className = "inventory-panel__category";
+    label.textContent = EQUIPMENT_SLOT_LABELS[category] ?? category;
+
+    const name = document.createElement("strong");
+    name.textContent = item ? getItemDisplayName(item) : "Empty slot";
+
+    const stats = document.createElement("span");
+    stats.className = "inventory-panel__stats";
+    stats.textContent = item ? getItemDisplayDescription(item) : "No item equipped.";
+
+    copy.append(label, name, stats);
+    slot.append(icon, copy);
+
+    if (item) {
+      slot.addEventListener("mouseenter", (event) => {
+        this.showItemTooltip(item, event);
+      });
+      slot.addEventListener("mousemove", (event) => {
+        this.moveItemTooltip(event);
+      });
+      slot.addEventListener("mouseleave", () => {
+        this.hideItemTooltip();
+      });
+    }
+
+    return slot;
+  }
+
+  renderSwapConfirmation() {
+    if (!this.swapConfirmationOverlay || !this.swapConfirmation) return;
+
+    const { currentItem, newItem } = this.swapConfirmation;
+    this.swapConfirmationOverlay.innerHTML = "";
+
+    const dialog = document.createElement("div");
+    dialog.className = "item-swap-dialog";
+
+    const title = document.createElement("h2");
+    title.id = "itemSwapTitle";
+    title.textContent = "Replace equipped item?";
+
+    const comparison = document.createElement("div");
+    comparison.className = "item-swap-comparison";
+    comparison.append(
+      this.createSwapCard("Equipped", currentItem),
+      this.createSwapCard("New", newItem)
+    );
+
+    const actions = document.createElement("div");
+    actions.className = "item-swap-actions";
+
+    const keepButton = document.createElement("button");
+    keepButton.type = "button";
+    keepButton.dataset.swapConfirm = "keep";
+    keepButton.textContent = "Keep Current";
+
+    const replaceButton = document.createElement("button");
+    replaceButton.type = "button";
+    replaceButton.dataset.swapConfirm = "replace";
+    replaceButton.textContent = "Replace";
+
+    actions.append(keepButton, replaceButton);
+    dialog.append(title, comparison, actions);
+    this.swapConfirmationOverlay.appendChild(dialog);
+  }
+
+  createSwapCard(labelText, item) {
+    const card = document.createElement("article");
+    card.className = "item-swap-card";
+
+    const label = document.createElement("span");
+    label.className = "item-swap-card__label";
+    label.textContent = labelText;
+
+    const image = document.createElement("img");
+    image.src = item.imagePath;
+    image.alt = "";
+    image.setAttribute("aria-hidden", "true");
+
+    const name = document.createElement("strong");
+    name.textContent = getItemDisplayName(item);
+
+    const category = document.createElement("span");
+    category.className = "item-swap-card__category";
+    category.textContent = EQUIPMENT_SLOT_LABELS[item.foodCategory] ?? item.foodCategory ?? "Item";
+
+    const description = document.createElement("span");
+    description.className = "item-swap-card__stats";
+    description.textContent = getItemDisplayDescription(item);
+
+    card.append(label, image, name, category, description);
+    return card;
+  }
+
   updateQuickUseButtons(inventory) {
     for (const [useSlot, quickUse] of this.quickUseButtons.entries()) {
       const item = getItemDefinitionByUseSlot(useSlot);
       if (!item) continue;
 
       const count = inventory.getConsumableCount(item.id);
-      const isKnown = inventory.isConsumableKnown?.(item.id) ?? count > 0;
       const maxStack = getItemMaxStack(item.id);
       const isMax = Number.isFinite(maxStack) && count >= maxStack;
+      const isEmpty = count <= 0;
 
-      quickUse.button.hidden = !isKnown;
-      quickUse.button.style.display = isKnown ? "" : "none";
       quickUse.count.textContent = isMax ? "Max." : `x${count}`;
+      quickUse.count.hidden = isEmpty;
       quickUse.count.classList.toggle("is-max", isMax);
-      quickUse.button.disabled = count <= 0;
-      quickUse.button.classList.toggle("is-empty", count <= 0);
+      quickUse.image.hidden = isEmpty;
+      quickUse.button.disabled = false;
+      quickUse.button.setAttribute("aria-disabled", isEmpty ? "true" : "false");
+      quickUse.button.classList.toggle("is-empty", isEmpty);
+      quickUse.button.setAttribute(
+        "aria-label",
+        `${useSlot}: ${getItemDisplayName(item)} (${count})`
+      );
+    }
+  }
+
+  createInventoryStatsSection() {
+    const section = document.createElement("section");
+    section.className = "inventory-panel__stats-block";
+    section.setAttribute("aria-label", "Player stats");
+
+    const title = document.createElement("h3");
+    title.textContent = "Player Stats";
+
+    const list = document.createElement("div");
+    list.className = "inventory-panel__stat-list";
+
+    const damage = this.createInventoryStatRow("Damage", "10");
+    const attackSpeed = this.createInventoryStatRow("Attack Speed", "1.20/s");
+    const maxHp = this.createInventoryStatRow("Max HP", "100");
+    const speed = this.createInventoryStatRow("Move Speed", "3.50");
+    const range = this.createInventoryStatRow("Attack Range", "1.65");
+    const gold = this.createInventoryGoldRow();
+
+    this.damageText = damage.value;
+    this.attackSpeedText = attackSpeed.value;
+    this.maxHpText = maxHp.value;
+    this.speedText = speed.value;
+    this.attackRangeText = range.value;
+    this.inventoryGoldText = gold.value;
+
+    list.append(
+      damage.row,
+      attackSpeed.row,
+      maxHp.row,
+      speed.row,
+      range.row,
+      gold.row
+    );
+    section.append(title, list);
+    return section;
+  }
+
+  createInventoryStatRow(labelText, initialValue) {
+    const row = document.createElement("div");
+    row.className = "inventory-panel__stat-row";
+
+    const label = document.createElement("span");
+    label.textContent = labelText;
+
+    const value = document.createElement("strong");
+    value.textContent = initialValue;
+
+    row.append(label, value);
+    return { row, value };
+  }
+
+  createInventoryGoldRow() {
+    const row = document.createElement("div");
+    row.className = "inventory-panel__stat-row inventory-panel__gold-row";
+
+    const label = document.createElement("span");
+    label.textContent = "Gold:";
+
+    const valueWrap = document.createElement("strong");
+    valueWrap.className = "inventory-panel__gold-value";
+
+    const icon = document.createElement("span");
+    icon.className = "coin-icon";
+    icon.setAttribute("aria-hidden", "true");
+
+    const value = document.createElement("span");
+    value.textContent = "0";
+
+    valueWrap.append(icon, value);
+    row.append(label, valueWrap);
+    return { row, value };
+  }
+
+  updateInventoryStats() {
+    if (this.currentPlayer) {
+      this.updatePlayer(this.currentPlayer);
     }
   }
 
@@ -343,14 +755,18 @@ export class HUD {
 
   clearLog() {
     this.logEntries = [];
+    this.logOffset = 0;
 
     if (this.logElement) {
       this.logElement.innerHTML = "";
     }
+    this.updateLogSlider();
 
     this.clearStatHighlights();
     this.hideItemTooltip();
     this.hideEpicChestRewards();
+    this.hideInventoryPanel();
+    this.hideItemSwapConfirmation();
   }
 
   clearStatHighlights() {
@@ -387,14 +803,400 @@ export class HUD {
     if (!this.logElement) return;
 
     this.logEntries.unshift(message);
-    this.logEntries = this.logEntries.slice(0, 5);
+    this.logEntries = this.logEntries.slice(0, MAX_LOG_ENTRIES);
+    this.logOffset = 0;
+    this.renderLog();
+  }
 
+  renderLog() {
+    if (!this.logElement) return;
+
+    this.updateLogSlider();
     this.logElement.innerHTML = "";
 
-    for (const entry of this.logEntries) {
+    const entries = this.logEntries.slice(
+      this.logOffset,
+      this.logOffset + VISIBLE_LOG_ENTRIES
+    );
+
+    for (const entry of entries) {
       const p = document.createElement("p");
       p.textContent = entry;
       this.logElement.appendChild(p);
     }
+  }
+
+  updateLogSlider() {
+    if (!this.logSlider) return;
+
+    const maxOffset = Math.max(0, this.logEntries.length - VISIBLE_LOG_ENTRIES);
+    this.logOffset = Math.max(0, Math.min(maxOffset, this.logOffset));
+    this.logSlider.max = String(maxOffset);
+    this.logSlider.value = String(this.logOffset);
+    this.logSlider.hidden = maxOffset <= 0;
+  }
+
+  ensureInventoryStyles() {
+    if (document.getElementById(INVENTORY_STYLE_ID)) return;
+
+    const style = document.createElement("style");
+    style.id = INVENTORY_STYLE_ID;
+    style.textContent = `
+      .inventory-panel {
+        position: fixed;
+        top: 156px;
+        left: 16px;
+        z-index: 32;
+        width: min(340px, calc(100vw - 32px));
+        max-height: calc(100dvh - 178px);
+        overflow: auto;
+        padding: 14px;
+        border: 1px solid rgba(244, 241, 232, 0.2);
+        border-radius: 8px;
+        background: linear-gradient(180deg, rgba(31, 35, 42, 0.96), rgba(15, 17, 22, 0.96));
+        box-shadow: 0 22px 46px rgba(0, 0, 0, 0.42);
+        backdrop-filter: blur(12px);
+        color: #f4f1e8;
+        pointer-events: auto;
+      }
+
+      .inventory-hint {
+        position: fixed;
+        left: 16px;
+        top: 156px;
+        z-index: 8;
+        display: inline-flex;
+        align-items: center;
+        gap: 8px;
+        min-height: 36px;
+        padding: 7px 10px 7px 7px;
+        border: 1px solid rgba(244, 241, 232, 0.18);
+        border-radius: 8px;
+        background: rgba(17, 19, 23, 0.72);
+        box-shadow: 0 12px 26px rgba(0, 0, 0, 0.26);
+        backdrop-filter: blur(10px);
+        color: rgba(244, 241, 232, 0.82);
+        font: inherit;
+        font-size: 13px;
+        font-weight: 800;c
+        cursor: inherit;
+        pointer-events: auto;
+      }
+
+      .inventory-hint__key {
+        display: grid;
+        place-items: center;
+        min-width: 24px;
+        height: 24px;
+        border: 1px solid rgba(244, 241, 232, 0.28);
+        border-radius: 6px;
+        background: rgba(244, 241, 232, 0.1);
+        color: #f8e9b4;
+        font-size: 13px;
+        font-weight: 900;
+        text-transform: uppercase;
+      }
+
+      .item-tooltip {
+        z-index: 36;
+      }
+
+      .inventory-panel[hidden],
+      .inventory-hint[hidden],
+      .item-swap-overlay[hidden] {
+        display: none;
+      }
+
+      .inventory-panel__header {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: 12px;
+        margin-bottom: 12px;
+      }
+
+      .inventory-panel__header h2 {
+        margin: 0;
+        font-size: 18px;
+        line-height: 1.2;
+        letter-spacing: 0;
+      }
+
+      .inventory-panel__header span {
+        min-width: 28px;
+        padding: 3px 7px;
+        border: 1px solid rgba(244, 241, 232, 0.18);
+        border-radius: 6px;
+        background: rgba(244, 241, 232, 0.1);
+        color: rgba(244, 241, 232, 0.78);
+        font-size: 12px;
+        font-weight: 900;
+        text-align: center;
+      }
+
+      .inventory-panel__slots {
+        display: grid;
+        gap: 8px;
+      }
+
+      .inventory-panel__slot {
+        display: grid;
+        grid-template-columns: 52px minmax(0, 1fr);
+        gap: 10px;
+        align-items: center;
+        min-height: 72px;
+        padding: 9px;
+        border: 1px solid rgba(244, 241, 232, 0.16);
+        border-radius: 8px;
+        background: rgba(244, 241, 232, 0.08);
+      }
+
+      .inventory-panel__slot.is-empty {
+        opacity: 0.72;
+      }
+
+      .inventory-panel__icon {
+        display: grid;
+        place-items: center;
+        width: 52px;
+        height: 52px;
+        border: 1px solid rgba(244, 241, 232, 0.15);
+        border-radius: 8px;
+        background: rgba(0, 0, 0, 0.2);
+        color: rgba(244, 241, 232, 0.58);
+        font-size: 20px;
+        font-weight: 900;
+      }
+
+      .inventory-panel__icon img {
+        width: 42px;
+        height: 42px;
+        object-fit: contain;
+      }
+
+      .inventory-panel__copy {
+        display: grid;
+        gap: 3px;
+        min-width: 0;
+      }
+
+      .inventory-panel__category {
+        color: #f0b35a;
+        font-size: 11px;
+        font-weight: 900;
+        letter-spacing: 0;
+        text-transform: uppercase;
+      }
+
+      .inventory-panel__copy strong {
+        overflow: hidden;
+        font-size: 15px;
+        line-height: 1.15;
+        text-overflow: ellipsis;
+        white-space: nowrap;
+      }
+
+      .inventory-panel__stats {
+        color: rgba(244, 241, 232, 0.72);
+        font-size: 12px;
+        line-height: 1.25;
+      }
+
+      .inventory-panel__stats-block {
+        display: grid;
+        gap: 8px;
+        margin-top: 12px;
+        padding-top: 12px;
+        border-top: 1px solid rgba(244, 241, 232, 0.14);
+      }
+
+      .inventory-panel__stats-block h3 {
+        margin: 0;
+        color: rgba(244, 241, 232, 0.84);
+        font-size: 13px;
+        line-height: 1.2;
+        letter-spacing: 0;
+        text-transform: uppercase;
+      }
+
+      .inventory-panel__stat-list {
+        display: grid;
+        gap: 6px;
+      }
+
+      .inventory-panel__stat-row {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: 12px;
+        min-height: 28px;
+        padding: 5px 8px;
+        border: 1px solid rgba(244, 241, 232, 0.1);
+        border-radius: 7px;
+        background: rgba(244, 241, 232, 0.055);
+        color: rgba(244, 241, 232, 0.76);
+        font-size: 12px;
+      }
+
+      .inventory-panel__stat-row strong {
+        color: #f4f1e8;
+        font-size: 13px;
+      }
+
+      .inventory-panel__gold-row {
+        border-color: rgba(244, 201, 91, 0.22);
+        background: rgba(244, 201, 91, 0.075);
+      }
+
+      .inventory-panel__gold-value {
+        display: inline-flex;
+        align-items: center;
+        gap: 6px;
+      }
+
+      .inventory-panel__gold-value .coin-icon {
+        width: 14px;
+        height: 14px;
+      }
+
+      .item-swap-overlay {
+        position: fixed;
+        inset: 0;
+        z-index: 34;
+        display: grid;
+        place-items: center;
+        padding: 18px;
+        background: rgba(17, 19, 23, 0.6);
+        color: #f4f1e8;
+        pointer-events: auto;
+      }
+
+      .item-swap-dialog {
+        width: min(560px, calc(100vw - 36px));
+        padding: 18px;
+        border: 1px solid rgba(244, 241, 232, 0.22);
+        border-radius: 8px;
+        background: rgba(25, 28, 33, 0.97);
+        box-shadow: 0 24px 52px rgba(0, 0, 0, 0.46);
+      }
+
+      .item-swap-dialog h2 {
+        margin: 0 0 14px;
+        font-size: 20px;
+        line-height: 1.2;
+        letter-spacing: 0;
+        text-align: center;
+      }
+
+      .item-swap-comparison {
+        display: grid;
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+        gap: 12px;
+      }
+
+      .item-swap-card {
+        display: grid;
+        justify-items: center;
+        gap: 7px;
+        min-height: 176px;
+        padding: 12px;
+        border: 1px solid rgba(244, 241, 232, 0.16);
+        border-radius: 8px;
+        background: rgba(244, 241, 232, 0.08);
+        text-align: center;
+      }
+
+      .item-swap-card__label,
+      .item-swap-card__category {
+        color: #f0b35a;
+        font-size: 11px;
+        font-weight: 900;
+        text-transform: uppercase;
+      }
+
+      .item-swap-card img {
+        width: 50px;
+        height: 50px;
+        object-fit: contain;
+      }
+
+      .item-swap-card strong {
+        font-size: 15px;
+        line-height: 1.15;
+      }
+
+      .item-swap-card__stats {
+        color: rgba(244, 241, 232, 0.74);
+        font-size: 12px;
+        line-height: 1.3;
+      }
+
+      .item-swap-actions {
+        display: flex;
+        justify-content: center;
+        gap: 10px;
+        margin-top: 14px;
+      }
+
+      .item-swap-actions button {
+        min-width: 118px;
+        min-height: 40px;
+        border: 1px solid rgba(244, 241, 232, 0.22);
+        border-radius: 8px;
+        background: rgba(244, 241, 232, 0.12);
+        color: #f4f1e8;
+        font: inherit;
+        font-weight: 800;
+        cursor: pointer;
+      }
+
+      .item-swap-actions [data-swap-confirm="replace"] {
+        background: #56c271;
+        border-color: #56c271;
+        color: #111317;
+      }
+
+      .item-swap-actions button:focus-visible {
+        outline: 2px solid #f0b35a;
+        outline-offset: 2px;
+      }
+
+      @media (max-width: 640px) {
+        .inventory-panel {
+          top: calc(116px + env(safe-area-inset-top));
+          left: calc(8px + env(safe-area-inset-left));
+          width: min(320px, calc(100vw - 16px));
+          max-height: calc(100dvh - 128px - env(safe-area-inset-bottom));
+          padding: 10px;
+        }
+
+        .inventory-hint {
+          top: calc(116px + env(safe-area-inset-top));
+          left: calc(8px + env(safe-area-inset-left));
+        }
+
+        .inventory-panel__slot {
+          grid-template-columns: 46px minmax(0, 1fr);
+          min-height: 64px;
+          padding: 7px;
+        }
+
+        .inventory-panel__icon {
+          width: 46px;
+          height: 46px;
+        }
+
+        .inventory-panel__icon img {
+          width: 36px;
+          height: 36px;
+        }
+
+        .item-swap-comparison {
+          grid-template-columns: 1fr;
+        }
+      }
+    `;
+
+    document.head.appendChild(style);
   }
 }

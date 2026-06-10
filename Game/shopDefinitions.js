@@ -13,6 +13,7 @@ export const SHOP_EVENTS = Object.freeze({
 export const SHOP_DEFINITION = Object.freeze({
   offerCount: 3,
   priceMultiplier: 1,
+  rollQualityPriceSpread: 0.25,
 
   standVisual: Object.freeze({
     altarModelId: DEFAULT_SHOP_ALTAR_MODEL_ID,

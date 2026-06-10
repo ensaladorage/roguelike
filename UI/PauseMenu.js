@@ -93,7 +93,7 @@ export class PauseMenu {
       .pause-menu {
         position: fixed;
         inset: 0;
-        z-index: 24;
+        z-index: 40;
         display: none;
         place-items: center;
         padding: 18px;

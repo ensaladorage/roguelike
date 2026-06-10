@@ -1,4 +1,5 @@
 import * as THREE from "three";
+import { ITEM_TYPES } from "../CharacterData/itemDefinitions.js";
 import {
   createShopOffers,
   getShopProgressContext,
@@ -7,6 +8,11 @@ import {
 } from "./ShopOfferFactory.js";
 import { SHOP_DEFINITION, SHOP_EVENTS } from "./shopDefinitions.js";
 import { DEFAULT_SHOP_ALTAR_MODEL_ID } from "../CharacterData/modelDefinitions.js";
+import {
+  getItemDisplayDescription,
+  getItemDisplayName,
+  normalizeItemInstance,
+} from "./ItemInstanceFactory.js";
 
 export const SHOP_INTERACTION_RANGE = 1.2;
 const SHOP_INTERACTION_COOLDOWN = 1.15;
@@ -16,6 +22,7 @@ const SHOP_FALLBACK_ITEM_Y = 0.92;
 const SHOP_FALLBACK_LABEL_Y = 1.46;
 const SHOP_FOUNTAIN_SCALE = 0.72;
 const SHOP_FOUNTAIN_LABEL_Y = 1.32;
+const SHOP_COMPARISON_STYLE_ID = "shop-comparison-style";
 
 const SHOP_RARITY_COLORS = {
   common: 0x7ecf8d,
@@ -106,7 +113,8 @@ export class ShopManager {
         type: SHOP_EVENTS.OFFER_CREATED,
         offer,
         itemId: offer.itemId,
-        item: offer.itemDefinition,
+        item: offer.item,
+        itemInstance: offer.itemInstance,
         rarity: offer.rarity,
         price: offer.price,
       });
@@ -269,17 +277,51 @@ export class ShopManager {
       });
     }
 
+    const itemToPickup = offer.itemInstance ?? offer.itemId;
+    const replacementCandidate = inventory.getReplacementCandidate?.(itemToPickup);
+
     if (player.gold < offer.price) {
-      return this.failPurchase({
-        reason: "insufficientGold",
+      this.openShopComparison({
         offer,
-        gold: player.gold,
+        stand,
+        currentItem: replacementCandidate?.previousItem ?? null,
+        newItem: offer.itemInstance ?? offer.item,
+        mode: "insufficientGold",
       });
+      return {
+        success: false,
+        reason: "confirmationPending",
+        offer,
+      };
     }
 
-    if (!inventory.canPickupItem(offer.itemId)) {
+    const pickupBlockReason = inventory.getPickupBlockReason?.(itemToPickup);
+    if (pickupBlockReason === "slotOccupied") {
+      if (!replacementCandidate?.previousItem || !replacementCandidate?.itemInstance) {
+        return this.failPurchase({
+          reason: "slotOccupied",
+          offer,
+          gold: player.gold,
+        });
+      }
+
+      this.openShopComparison({
+        offer,
+        stand,
+        currentItem: replacementCandidate.previousItem,
+        newItem: replacementCandidate.itemInstance,
+        mode: "replace",
+      });
+      return {
+        success: false,
+        reason: "confirmationPending",
+        offer,
+      };
+    }
+
+    if (pickupBlockReason) {
       return this.failPurchase({
-        reason: "inventoryFull",
+        reason: pickupBlockReason,
         offer,
         gold: player.gold,
       });
@@ -452,7 +494,8 @@ export class ShopManager {
     overlay.innerHTML = `
       <div class="shop-confirm-dialog">
         <h2 id="shopConfirmTitle">Confirm purchase</h2>
-        <p>Buy ${offer.itemDefinition.name} for ${offer.price} gold?</p>
+        <p>Buy ${escapeHtml(getItemDisplayName(offer.item))} for ${offer.price} Gold?</p>
+        <p class="shop-confirm-description">${escapeHtml(getItemDisplayDescription(offer.item))}</p>
         <div class="shop-confirm-actions">
           <button type="button" data-shop-confirm="yes">Buy</button>
           <button type="button" data-shop-confirm="no">Cancel</button>
@@ -508,6 +551,242 @@ export class ShopManager {
     this.confirmationElement = overlay;
   }
 
+  openShopComparison({
+    offer,
+    stand,
+    currentItem = null,
+    newItem = null,
+    mode = "replace",
+  } = {}) {
+    if (!offer || !stand || !newItem) return;
+
+    this.ensureShopComparisonStyles();
+    this.closePurchaseConfirmation({ unlock: false });
+    this.scene?.setPlayerControlLocked?.(true, SHOP_CONFIRM_LOCK_REASON);
+
+    const insufficientGold = mode === "insufficientGold";
+    const title = insufficientGold ? "Not enough Gold" : "Replace equipped item?";
+    const overlay = document.createElement("section");
+    overlay.className = "item-swap-overlay shop-comparison-overlay";
+    overlay.setAttribute("role", "dialog");
+    overlay.setAttribute("aria-modal", "true");
+    overlay.setAttribute("aria-labelledby", "shopComparisonTitle");
+
+    const dialog = document.createElement("div");
+    dialog.className = "item-swap-dialog shop-comparison-dialog";
+
+    const closeButton = document.createElement("button");
+    closeButton.type = "button";
+    closeButton.className = "shop-comparison-close";
+    closeButton.dataset.shopConfirm = "close";
+    closeButton.setAttribute("aria-label", "Close");
+    closeButton.textContent = "X";
+
+    const heading = document.createElement("h2");
+    heading.id = "shopComparisonTitle";
+    heading.textContent = title;
+
+    const price = document.createElement("p");
+    price.className = "shop-comparison-price";
+    price.textContent = `Price: ${offer.price} Gold`;
+
+    const comparison = document.createElement("div");
+    comparison.className = "item-swap-comparison";
+    comparison.append(
+      this.createShopComparisonCard("Current", currentItem),
+      this.createShopComparisonCard("Shop Item", newItem)
+    );
+
+    const actions = document.createElement("div");
+    actions.className = insufficientGold
+      ? "shop-comparison-status"
+      : "item-swap-actions";
+
+    if (insufficientGold) {
+      actions.textContent = "Not enough Gold";
+    } else {
+      const keepButton = document.createElement("button");
+      keepButton.type = "button";
+      keepButton.dataset.shopConfirm = "keep";
+      keepButton.textContent = "Keep Current";
+
+      const replaceButton = document.createElement("button");
+      replaceButton.type = "button";
+      replaceButton.dataset.shopConfirm = "replace";
+      replaceButton.textContent = "Replace";
+
+      actions.append(keepButton, replaceButton);
+    }
+
+    dialog.append(closeButton, heading, price, comparison, actions);
+    overlay.appendChild(dialog);
+
+    overlay.addEventListener("pointerdown", (event) => {
+      event.stopPropagation();
+    });
+
+    overlay.addEventListener("click", (event) => {
+      event.stopPropagation();
+      const action = event.target?.dataset?.shopConfirm;
+      if (!action) return;
+
+      if (action === "replace") {
+        const result = this.purchaseOfferWithReplacement(offer.id, newItem);
+
+        if (result.success) {
+          stand.cooldown = SHOP_INTERACTION_COOLDOWN;
+          this.refreshStand(stand);
+        }
+      }
+
+      this.closePurchaseConfirmation();
+    });
+
+    const keyHandler = (event) => {
+      if (event.key === "Escape") {
+        event.preventDefault();
+        this.closePurchaseConfirmation();
+        return;
+      }
+
+      if (event.key === "Enter" && !insufficientGold) {
+        event.preventDefault();
+        const result = this.purchaseOfferWithReplacement(offer.id, newItem);
+
+        if (result.success) {
+          stand.cooldown = SHOP_INTERACTION_COOLDOWN;
+          this.refreshStand(stand);
+        }
+
+        this.closePurchaseConfirmation();
+      }
+    };
+
+    window.addEventListener("keydown", keyHandler);
+    document.body.appendChild(overlay);
+
+    if (insufficientGold) {
+      closeButton.focus();
+    } else {
+      overlay.querySelector("[data-shop-confirm='replace']")?.focus();
+    }
+
+    this.pendingConfirmation = {
+      offerId: offer.id,
+      stand,
+      keyHandler,
+    };
+    this.confirmationElement = overlay;
+  }
+
+  createShopComparisonCard(labelText, item) {
+    const card = document.createElement("article");
+    card.className = "item-swap-card";
+
+    const label = document.createElement("span");
+    label.className = "item-swap-card__label";
+    label.textContent = labelText;
+    card.appendChild(label);
+
+    if (!item) {
+      const empty = document.createElement("strong");
+      empty.textContent = "Empty slot";
+
+      const description = document.createElement("span");
+      description.className = "item-swap-card__stats";
+      description.textContent = "No item equipped.";
+
+      card.append(empty, description);
+      return card;
+    }
+
+    const image = document.createElement("img");
+    image.src = item.imagePath;
+    image.alt = "";
+    image.setAttribute("aria-hidden", "true");
+
+    const name = document.createElement("strong");
+    name.textContent = getItemDisplayName(item);
+
+    const category = document.createElement("span");
+    category.className = "item-swap-card__category";
+    category.textContent = item.foodCategory ??
+      (item.type === ITEM_TYPES.CONSUMABLE ? "Consumable" : item.type) ??
+      "Item";
+
+    const description = document.createElement("span");
+    description.className = "item-swap-card__stats";
+    description.textContent = getItemDisplayDescription(item);
+
+    card.append(image, name, category, description);
+    return card;
+  }
+
+  ensureShopComparisonStyles() {
+    if (document.getElementById(SHOP_COMPARISON_STYLE_ID)) return;
+
+    const style = document.createElement("style");
+    style.id = SHOP_COMPARISON_STYLE_ID;
+    style.textContent = `
+      .shop-comparison-dialog {
+        position: relative;
+      }
+
+      .shop-comparison-close {
+        position: absolute;
+        top: 8px;
+        right: 8px;
+        display: grid;
+        place-items: center;
+        width: 28px;
+        height: 28px;
+        border: 1px solid rgba(244, 241, 232, 0.22);
+        border-radius: 7px;
+        background: rgba(244, 241, 232, 0.1);
+        color: #f4f1e8;
+        font: inherit;
+        font-size: 12px;
+        font-weight: 900;
+        line-height: 1;
+        cursor: pointer;
+      }
+
+      .shop-comparison-close:focus-visible {
+        outline: 2px solid #f0b35a;
+        outline-offset: 2px;
+      }
+
+      .shop-comparison-price {
+        margin: -6px 0 14px;
+        color: rgba(244, 241, 232, 0.76);
+        font-size: 13px;
+        font-weight: 800;
+        text-align: center;
+      }
+
+      .shop-comparison-status {
+        margin-top: 14px;
+        min-height: 40px;
+        display: grid;
+        place-items: center;
+        border: 1px solid rgba(255, 107, 107, 0.32);
+        border-radius: 8px;
+        background: rgba(255, 107, 107, 0.12);
+        color: #ffb3b3;
+        font-size: 15px;
+        font-weight: 900;
+      }
+
+      .shop-comparison-dialog .item-swap-actions [data-shop-confirm="replace"] {
+        background: #56c271;
+        border-color: #56c271;
+        color: #111317;
+      }
+    `;
+
+    document.head.appendChild(style);
+  }
+
   closePurchaseConfirmation({ unlock = true } = {}) {
     if (this.pendingConfirmation?.keyHandler) {
       window.removeEventListener("keydown", this.pendingConfirmation.keyHandler);
@@ -520,6 +799,111 @@ export class ShopManager {
     if (unlock) {
       this.scene?.setPlayerControlLocked?.(false, SHOP_CONFIRM_LOCK_REASON);
     }
+  }
+
+  purchaseOfferWithReplacement(offerIdOrIndex, itemInstance) {
+    const offer = this.findOffer(offerIdOrIndex);
+
+    if (!offer) {
+      return this.failPurchase({
+        reason: "offerMissing",
+        offerId: offerIdOrIndex,
+      });
+    }
+
+    if (offer.purchased) {
+      return {
+        success: false,
+        reason: "alreadyPurchased",
+        offer,
+      };
+    }
+
+    const player = this.scene?.player;
+    const inventory = this.scene?.inventory;
+
+    if (!player || !inventory || !itemInstance) {
+      return this.failPurchase({
+        reason: "shopUnavailable",
+        offer,
+      });
+    }
+
+    if (player.gold < offer.price) {
+      return this.failPurchase({
+        reason: "insufficientGold",
+        offer,
+        gold: player.gold,
+      });
+    }
+
+    if (!this.spendGold(player, offer.price)) {
+      return this.failPurchase({
+        reason: "insufficientGold",
+        offer,
+        gold: player.gold,
+      });
+    }
+
+    const result = inventory.replaceEquippedItem(itemInstance, {
+      source: "shopSwap",
+      offer,
+      shop: this,
+      enemies: this.scene?.enemies ?? [],
+    });
+
+    if (!result.success) {
+      player.addGold?.(offer.price);
+      return this.failPurchase({
+        reason: result.reason ?? "itemPickupFailed",
+        offer,
+        gold: player.gold,
+      });
+    }
+
+    offer.purchased = true;
+    this.dropPreviousShopItem(result.previousItem, offer);
+
+    this.emit({
+      type: SHOP_EVENTS.PURCHASE_SUCCEEDED,
+      offer,
+      itemId: offer.itemId,
+      item: offer.item,
+      itemInstance: offer.itemInstance,
+      rarity: offer.rarity,
+      price: offer.price,
+      remainingGold: player.gold,
+    });
+
+    return {
+      success: true,
+      offer,
+      itemId: offer.itemId,
+      price: offer.price,
+      remainingGold: player.gold,
+      previousItem: result.previousItem,
+    };
+  }
+
+  dropPreviousShopItem(previousItem, offer) {
+    if (!previousItem || !this.scene?.itemDropManager) return;
+
+    const stand = this.findStand(offer.id);
+    const playerPosition = this.scene.player?.model?.position?.clone?.();
+    const standPosition = stand?.model?.position?.clone?.();
+    const origin = playerPosition ?? standPosition;
+    const position = standPosition ?? playerPosition;
+    if (!origin || !position) return;
+
+    this.scene.itemDropManager.addItemDrops([
+      {
+        itemId: previousItem.baseItemId,
+        itemInstance: previousItem,
+        position: new THREE.Vector3(position.x, 0, position.z),
+        fallbackOrigin: origin,
+        source: "shopSwap",
+      },
+    ]);
   }
 
   purchaseOffer(offerIdOrIndex) {
@@ -560,9 +944,10 @@ export class ShopManager {
       });
     }
 
-    if (!inventory.canPickupItem(offer.itemId)) {
+    const itemToPickup = offer.itemInstance ?? offer.itemId;
+    if (!inventory.canPickupItem(itemToPickup)) {
       return this.failPurchase({
-        reason: "inventoryFull",
+        reason: inventory.getPickupBlockReason?.(itemToPickup) ?? "inventoryFull",
         offer,
         gold: player.gold,
       });
@@ -576,7 +961,7 @@ export class ShopManager {
       });
     }
 
-    const pickedUp = inventory.pickupItem(offer.itemId, {
+    const pickedUp = inventory.pickupItem(itemToPickup, {
       source: "shop",
       offer,
       shop: this,
@@ -605,7 +990,8 @@ export class ShopManager {
       type: SHOP_EVENTS.PURCHASE_SUCCEEDED,
       offer,
       itemId: offer.itemId,
-      item: offer.itemDefinition,
+      item: offer.item,
+      itemInstance: offer.itemInstance,
       rarity: offer.rarity,
       price: offer.price,
       remainingGold: player.gold,
@@ -673,7 +1059,8 @@ export class ShopManager {
       offer,
       offerId: result.offerId,
       itemId: offer?.itemId ?? null,
-      item: offer?.itemDefinition ?? null,
+      item: offer?.item ?? offer?.itemDefinition ?? null,
+      itemInstance: offer?.itemInstance ?? null,
       rarity: offer?.rarity ?? null,
       price: offer?.price ?? null,
       gold,
@@ -922,8 +1309,9 @@ export class ShopManager {
     const context = canvas.getContext("2d");
     const rarityColor = SHOP_RARITY_COLORS[offer.rarity] ?? SHOP_RARITY_COLORS.common;
     const accent = `#${rarityColor.toString(16).padStart(6, "0")}`;
-    const title = offer.purchased ? "SOLD" : offer.itemDefinition.name;
-    const subtitle = offer.purchased ? offer.itemDefinition.name : `${offer.price} gold`;
+    const itemName = getItemDisplayName(offer.item ?? offer.itemDefinition);
+    const title = offer.purchased ? "SOLD" : itemName;
+    const subtitle = offer.purchased ? itemName : `${offer.price} Gold`;
 
     context.clearRect(0, 0, canvas.width, canvas.height);
     context.fillStyle = "rgba(17, 19, 23, 0.82)";
@@ -1052,12 +1440,17 @@ export class ShopManager {
 
     if (!offer) return null;
 
+    const restoredItemInstance = normalizeItemInstance(savedOffer.itemInstance) ?? offer.itemInstance;
+
     return {
       ...offer,
       id: savedOffer.id,
       offerIndex: savedOffer.offerIndex,
       price: savedOffer.price,
       purchased: Boolean(savedOffer.purchased),
+      itemInstance: restoredItemInstance,
+      item: restoredItemInstance ?? offer.item,
+      rarity: savedOffer.rarity ?? offer.rarity,
     };
   }
 
@@ -1069,6 +1462,7 @@ export class ShopManager {
       rarity: offer.rarity,
       price: offer.price,
       purchased: offer.purchased,
+      itemInstance: offer.itemInstance,
     };
   }
 
@@ -1136,4 +1530,13 @@ export class ShopManager {
     this.events = [];
     return events;
   }
+}
+
+function escapeHtml(value) {
+  return String(value ?? "")
+    .replace(/&/g, "&amp;")
+    .replace(/</g, "&lt;")
+    .replace(/>/g, "&gt;")
+    .replace(/"/g, "&quot;")
+    .replace(/'/g, "&#039;");
 }
