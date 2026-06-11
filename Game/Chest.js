@@ -286,6 +286,7 @@ export class ChestManager {
       const chest = {
         model,
         animation,
+        closedLidRotationX: model.getObjectByName("lid")?.rotation.x ?? 0,
         roomId: data.roomId,
         roomTemplateId: data.roomTemplateId,
         chestType: data.chestType ?? CHEST_TYPES.STANDARD,
@@ -420,7 +421,34 @@ export class ChestManager {
 
   resolveEpicChest(chest) {
     this.scene.addLog("Epic chest opened.");
-    this.epicChestRewards.openChest(chest);
+    const opened = this.epicChestRewards.openChest(chest);
+    if (!opened) {
+      this.recloseChest(chest);
+    }
+    return opened;
+  }
+
+  recloseChest(chest) {
+    if (!chest) return;
+
+    chest.collected = false;
+
+    const action = chest.animation?.action;
+    const mixer = chest.animation?.mixer;
+    if (action && mixer) {
+      action.stop();
+      action.reset();
+      action.play();
+      mixer.setTime(0);
+      action.stop();
+    }
+
+    const lid = chest.model?.getObjectByName?.("lid");
+    if (lid) {
+      lid.rotation.x = chest.closedLidRotationX ?? 0;
+    }
+
+    this.scene?.updateHud?.();
   }
 
   resolveMimicCoffin(chest) {

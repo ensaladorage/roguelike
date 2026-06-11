@@ -54,6 +54,7 @@ export class HUD {
     this.logOffset = 0;
     this.statHighlightTimers = new Map();
     this.onEpicRewardSelect = null;
+    this.onEpicRewardCancel = null;
     this.inventoryPanelOpen = false;
     this.inventoryHint = null;
     this.inventoryPanel = null;
@@ -213,10 +214,11 @@ export class HUD {
     }
   }
 
-  showEpicChestRewards(options = [], onSelect = null) {
+  showEpicChestRewards(options = [], onSelect = null, onCancel = null) {
     if (!this.epicRewardOverlay || !this.epicRewardOptions) return;
 
     this.onEpicRewardSelect = onSelect;
+    this.onEpicRewardCancel = onCancel;
     this.epicRewardOptions.innerHTML = "";
 
     for (const option of options) {
@@ -245,14 +247,22 @@ export class HUD {
     }
 
     this.epicRewardOverlay.hidden = false;
-    this.epicRewardOptions.querySelector("button")?.focus();
+    this.epicRewardOverlay
+      .querySelector("[data-epic-reward-close]")
+      ?.focus();
   }
 
-  hideEpicChestRewards() {
+  hideEpicChestRewards({ cancelled = false } = {}) {
     if (!this.epicRewardOverlay) return;
 
+    const onCancel = this.onEpicRewardCancel;
     this.epicRewardOverlay.hidden = true;
     this.onEpicRewardSelect = null;
+    this.onEpicRewardCancel = null;
+
+    if (cancelled) {
+      onCancel?.();
+    }
   }
 
   updateBoss(boss) {
@@ -412,10 +422,18 @@ export class HUD {
   setupEpicRewardOverlay() {
     if (!this.epicRewardOverlay) return;
 
+    this.epicRewardOverlay.addEventListener("click", (event) => {
+      if (!event.target?.closest?.("[data-epic-reward-close]")) return;
+
+      event.stopPropagation();
+      this.hideEpicChestRewards({ cancelled: true });
+    });
+
     this.epicRewardOverlay.addEventListener("keydown", (event) => {
       if (event.key !== "Escape") return;
 
       event.preventDefault();
+      this.hideEpicChestRewards({ cancelled: true });
     });
   }
 

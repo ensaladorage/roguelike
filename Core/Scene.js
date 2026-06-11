@@ -121,6 +121,7 @@ export class GameScene {
     this.bossExitBlockedNotified = false;
     this.bossHudDiscovered = false;
     this.stageLockedConnectionBlockers = [];
+    this.stageLockedConnectionBlockerEffects = [];
 
     this.hud = new HUD();
     this.debugCheatState = {
@@ -629,6 +630,7 @@ export class GameScene {
     this.bossExitBlockedNotified = false;
     this.bossHudDiscovered = false;
     this.stageLockedConnectionBlockers = [];
+    this.stageLockedConnectionBlockerEffects = [];
     this.hud?.hideItemTooltip?.();
     this.hud?.hideEpicChestRewards?.();
     this.hud?.hideInventoryPanel?.();
@@ -997,6 +999,7 @@ export class GameScene {
     this.registerExitStairsInteractables();
 
     this.addEntryStairsBlockerVfx();
+    this.addStageLockedConnectionBlockerVfx();
 
     return environmentBuild;
   }
@@ -1050,6 +1053,35 @@ export class GameScene {
       this.vfx.addEntryStairsBlocker(stairs, this.player, {
         onEnterRadius: () => this.sfx.play("entryStairsBlocked"),
       });
+    }
+  }
+
+  addStageLockedConnectionBlockerVfx() {
+    if (!this.vfx || !this.player) return;
+
+    this.stageLockedConnectionBlockerEffects = [];
+
+    for (const blocker of this.stageLockedConnectionBlockers) {
+      const effect = this.vfx.addStageLockedConnectionBlocker(
+        blocker,
+        this.player,
+        {
+          onEnterRadius: (blockerEffect) => {
+            this.sfx.play("entryStairsBlocked");
+            this.vfx.playFloatingText(
+              "Defeat all enemies",
+              blockerEffect.blocker,
+              {
+                y: 1.25,
+              }
+            );
+          },
+        }
+      );
+
+      if (effect) {
+        this.stageLockedConnectionBlockerEffects.push(effect);
+      }
     }
   }
 
@@ -1177,7 +1209,12 @@ export class GameScene {
   }
 
   unlockStageLockedConnections() {
-    if (this.stageLockedConnectionBlockers.length === 0) return;
+    if (
+      this.stageLockedConnectionBlockers.length === 0 &&
+      this.stageLockedConnectionBlockerEffects.length === 0
+    ) {
+      return;
+    }
 
     const lockedConnectionIds = new Set(
       this.stageLockedConnectionBlockers.map((wall) => wall.connectionId)
@@ -1188,6 +1225,11 @@ export class GameScene {
         !lockedConnectionIds.has(wall.connectionId)
     );
     this.stageLockedConnectionBlockers = [];
+
+    for (const effect of this.stageLockedConnectionBlockerEffects) {
+      this.vfx?.removePersistentEffect?.(effect);
+    }
+    this.stageLockedConnectionBlockerEffects = [];
   }
 
   syncBossHud() {

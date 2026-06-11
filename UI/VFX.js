@@ -28,6 +28,30 @@ export const VFX_DEFAULTS = {
     pulseScale: 0.1,
     pulseSpeed: 2,
   },
+  stageLockedConnectionBlocker: {
+    color: rgb(255, 0, 0),
+    proximityRadius: 1.45,
+    fadeSpeed: 24,
+    tileSize: 1,
+    y: 0.08,
+    verticalY: 0.58,
+    verticalHeight: 1,
+    baseOpacity: 0.2,
+    pulseOpacity: 0.52,
+    pulseScale: 0.08,
+    pulseSpeed: 2.4,
+  },
+  floatingText: {
+    color: "#ffffff",
+    background: "rgba(40, 0, 0, 0.72)",
+    font: "700 22px Arial, sans-serif",
+    paddingX: 9,
+    paddingY: 5,
+    duration: 1.2,
+    rise: 0.6,
+    y: 1.15,
+    scale: 0.006,
+  },
   purpleGasCloud: {
     color: 0x9c61ff,
     duration: 1.25,
@@ -475,6 +499,119 @@ export class VFX {
     return effect;
   }
 
+  addStageLockedConnectionBlocker(blocker, player, options = {}) {
+    if (!this.root || !blocker || !player) return null;
+
+    const config = {
+      ...VFX_DEFAULTS.stageLockedConnectionBlocker,
+      ...options,
+    };
+    const tileSize = Math.max(0.1, config.tileSize);
+    const group = new THREE.Group();
+
+    const material = new THREE.MeshBasicMaterial({
+      color: config.color,
+      transparent: true,
+      opacity: config.baseOpacity,
+      depthWrite: false,
+      side: THREE.DoubleSide,
+      blending: THREE.AdditiveBlending,
+    });
+
+    const floorGeometry = new THREE.PlaneGeometry(tileSize, tileSize);
+    const floorTile = new THREE.Mesh(floorGeometry, material);
+    floorTile.rotation.x = -Math.PI / 2;
+    floorTile.position.set(blocker.x, config.y, blocker.z);
+    floorTile.renderOrder = 34;
+    group.add(floorTile);
+
+    const isWide = (blocker.w ?? 0) >= (blocker.d ?? 0);
+    const verticalGeometry = new THREE.PlaneGeometry(
+      tileSize,
+      config.verticalHeight
+    );
+    const verticalTile = new THREE.Mesh(verticalGeometry, material);
+    verticalTile.position.set(blocker.x, config.verticalY, blocker.z);
+    verticalTile.rotation.y = isWide ? 0 : Math.PI / 2;
+    verticalTile.renderOrder = 35;
+    group.add(verticalTile);
+
+    this.root.add(group);
+
+    const effect = {
+      type: "stageLockedConnectionBlocker",
+      role: "stageLockedConnectionBlocker",
+      group,
+      tiles: [floorTile, verticalTile],
+      geometries: [floorGeometry, verticalGeometry],
+      material,
+      player,
+      blocker: { ...blocker },
+      config,
+      elapsed: 0,
+      isPlayerInRadius: false,
+    };
+
+    this.persistentEffects.push(effect);
+    return effect;
+  }
+
+  playFloatingText(text, position, options = {}) {
+    if (!this.root || !text || !position) return null;
+
+    const config = {
+      ...VFX_DEFAULTS.floatingText,
+      ...options,
+    };
+    const canvas = document.createElement("canvas");
+    const context = canvas.getContext("2d");
+    if (!context) return null;
+
+    context.font = config.font;
+    const metrics = context.measureText(text);
+    const width = Math.ceil(metrics.width + config.paddingX * 2);
+    const height = Math.ceil(42 + config.paddingY * 2);
+    canvas.width = width;
+    canvas.height = height;
+
+    context.font = config.font;
+    context.textAlign = "center";
+    context.textBaseline = "middle";
+    context.fillStyle = config.background;
+    context.fillRect(0, 0, width, height);
+    context.fillStyle = config.color;
+    context.fillText(text, width / 2, height / 2);
+
+    const texture = new THREE.CanvasTexture(canvas);
+    texture.colorSpace = THREE.SRGBColorSpace;
+    const material = new THREE.SpriteMaterial({
+      map: texture,
+      transparent: true,
+      depthWrite: false,
+      depthTest: false,
+    });
+    const sprite = new THREE.Sprite(material);
+    sprite.position.set(position.x, config.y, position.z);
+    sprite.scale.set(width * config.scale, height * config.scale, 1);
+    sprite.renderOrder = 120;
+
+    this.root.add(sprite);
+
+    const effect = {
+      type: "floatingText",
+      sprite,
+      material,
+      texture,
+      startY: config.y,
+      elapsed: 0,
+      duration: config.duration,
+      rise: config.rise,
+    };
+
+    this.effects.push(effect);
+    return effect;
+  }
+
   addPlayerAttackRangeIndicator(player, options = {}) {
     if (!this.root || !player) return null;
 
@@ -519,6 +656,10 @@ export class VFX {
 
       if (effect.type === "playerAttackSlash") {
         return this.updatePlayerAttackSlash(effect, delta);
+      }
+
+      if (effect.type === "floatingText") {
+        return this.updateFloatingText(effect, delta);
       }
 
       effect.elapsed += delta;
@@ -675,6 +816,10 @@ export class VFX {
           this.updateEntryStairsBlocker(effect, delta);
           break;
 
+        case "stageLockedConnectionBlocker":
+          this.updateStageLockedConnectionBlocker(effect, delta);
+          break;
+
         case "playerAttackRangeIndicator":
           this.updatePlayerAttackRangeIndicator(effect);
           break;
@@ -718,6 +863,55 @@ export class VFX {
     effect.mesh.userData.ignoreFlash = true;
     effect.group.add(effect.mesh);
     effect.lastRange = range;
+  }
+
+  updateStageLockedConnectionBlocker(effect, delta) {
+    const playerPosition = this.getTargetPosition(effect.player);
+    if (!playerPosition) {
+      effect.group.visible = false;
+      effect.isPlayerInRadius = false;
+      return;
+    }
+
+    const isPlayerInRadius = this.isTargetWithinRadius(
+      effect.player,
+      effect.blocker,
+      effect.config.proximityRadius
+    );
+
+    effect.elapsed += delta;
+
+    if (isPlayerInRadius && !effect.isPlayerInRadius) {
+      effect.config.onEnterRadius?.(effect);
+    }
+
+    effect.isPlayerInRadius = isPlayerInRadius;
+
+    const pulse = (Math.sin(effect.elapsed * effect.config.pulseSpeed) + 1) / 2;
+    const opacity =
+      effect.config.baseOpacity + effect.config.pulseOpacity * pulse;
+    const scale = 1 + effect.config.pulseScale * pulse;
+
+    effect.group.visible = true;
+    effect.material.opacity = opacity;
+
+    for (const tile of effect.tiles) {
+      tile.scale.setScalar(scale);
+    }
+  }
+
+  updateFloatingText(effect, delta) {
+    effect.elapsed += delta;
+    const t = Math.min(1, effect.elapsed / effect.duration);
+    const eased = 1 - Math.pow(1 - t, 2);
+
+    effect.sprite.position.y = effect.startY + effect.rise * eased;
+    effect.material.opacity = 1 - eased;
+
+    if (t < 1) return true;
+
+    this.disposeFloatingText(effect);
+    return false;
   }
 
   updateEntryStairsBlocker(effect, delta) {
@@ -771,6 +965,8 @@ export class VFX {
         this.disposePlayerHitSlash(effect);
       } else if (effect.type === "playerAttackSlash") {
         this.disposePlayerAttackSlash(effect);
+      } else if (effect.type === "floatingText") {
+        this.disposeFloatingText(effect);
       } else {
         this.disposeEffect(effect);
       }
@@ -796,6 +992,17 @@ export class VFX {
     }
 
     this.pointLights = [];
+  }
+
+  removePersistentEffect(effect) {
+    if (!effect) return;
+
+    const index = this.persistentEffects.indexOf(effect);
+    if (index >= 0) {
+      this.persistentEffects.splice(index, 1);
+    }
+
+    this.disposePersistentEffect(effect);
   }
 
   getTargetPosition(target) {
@@ -844,8 +1051,19 @@ export class VFX {
     effect.material.dispose();
   }
 
+  disposeFloatingText(effect) {
+    effect.sprite.removeFromParent();
+    effect.material.dispose();
+    effect.texture.dispose();
+  }
+
   disposePersistentEffect(effect) {
     effect.group.removeFromParent();
+    if (effect.geometries) {
+      for (const geometry of effect.geometries) {
+        geometry.dispose();
+      }
+    }
     effect.geometry?.dispose();
     effect.material?.dispose();
   }

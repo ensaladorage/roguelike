@@ -507,6 +507,7 @@
     }
 
     .epic-reward-dialog {
+      position: relative;
       width: min(620px, calc(100vw - 36px));
       padding: 18px;
       border: 1px solid rgba(244, 241, 232, 0.22);
@@ -515,8 +516,34 @@
       box-shadow: 0 24px 48px rgba(0, 0, 0, 0.42);
     }
 
+    .epic-reward-close {
+      position: absolute;
+      top: 10px;
+      right: 10px;
+      display: grid;
+      place-items: center;
+      width: 34px;
+      height: 34px;
+      padding: 0;
+      border: 1px solid rgba(244, 241, 232, 0.2);
+      border-radius: 8px;
+      background: rgba(244, 241, 232, 0.08);
+      color: #f4f1e8;
+      font: inherit;
+      font-size: 24px;
+      line-height: 1;
+      cursor: pointer;
+    }
+
+    .epic-reward-close:hover,
+    .epic-reward-close:focus-visible {
+      border-color: rgba(240, 179, 90, 0.86);
+      outline: none;
+    }
+
     .epic-reward-dialog h2 {
       margin: 0 0 14px;
+      padding: 0 38px;
       color: #f4f1e8;
       font-size: 20px;
       letter-spacing: 0;
@@ -787,6 +814,7 @@
 
   <div class="epic-reward-overlay" id="epicRewardOverlay" role="dialog" aria-modal="true" aria-labelledby="epicRewardTitle" hidden>
     <div class="epic-reward-dialog">
+      <button class="epic-reward-close" type="button" data-epic-reward-close aria-label="Close reward choices">&times;</button>
       <h2 id="epicRewardTitle">Choose one reward</h2>
       <div class="epic-reward-options" id="epicRewardOptions"></div>
     </div>

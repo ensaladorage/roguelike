@@ -37,9 +37,15 @@ export class EpicChestRewardManager {
 
     this.pendingChest = chest;
     this.scene.setPlayerControlLocked?.(true, "epicChestReward");
-    this.scene.hud.showEpicChestRewards?.(options, (option) => {
-      this.selectReward(option);
-    });
+    this.scene.hud.showEpicChestRewards?.(
+      options,
+      (option) => {
+        this.selectReward(option);
+      },
+      () => {
+        this.cancelRewardSelection({ hideOverlay: false, restoreChest: true });
+      }
+    );
     return true;
   }
 
@@ -158,10 +164,24 @@ export class EpicChestRewardManager {
     ]);
   }
 
-  cancel() {
+  cancelRewardSelection({ hideOverlay = true, restoreChest = false } = {}) {
+    const chest = this.pendingChest;
     this.pendingChest = null;
-    this.scene?.hud?.hideEpicChestRewards?.();
+
+    if (hideOverlay) {
+      this.scene?.hud?.hideEpicChestRewards?.();
+    }
+
+    if (restoreChest && chest) {
+      this.scene?.chestManager?.recloseChest?.(chest);
+      this.scene?.addLog?.("Epic chest closed.");
+    }
+
     this.scene?.setPlayerControlLocked?.(false, "epicChestReward");
+  }
+
+  cancel() {
+    this.cancelRewardSelection({ hideOverlay: true, restoreChest: false });
   }
 
   createRewardOptions(chest) {
