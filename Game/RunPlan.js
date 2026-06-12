@@ -12,18 +12,17 @@ const COMMON_TREASURE_REWARD = Object.freeze({
   lockedUntilStageClear: true,
   normalChestCount: Object.freeze({ min: 1, max: 2 }),
   normalItemCount: Object.freeze({ min: 1, max: 2 }),
-  normalItemPool: Object.freeze(["steak", "chili", "purpleShroom"]),
+  normalItemPool: Object.freeze(["steak", "chili", "potato", "purpleShroom"]),
   normalItemRarity: ITEM_RARITIES.COMMON,
   normalChestCoinDrop: Object.freeze({ totalValueMin: 10, totalValueMax: 16 }),
   epicChest: Object.freeze({
     enabled: true,
     choiceCount: 3,
-    possibleItemIds: Object.freeze(["ramen", "energyDrink", "iceCream"]),
+    possibleItemIds: Object.freeze([]),
     rarityWeights: Object.freeze({
       [ITEM_RARITIES.RARE]: 45,
       [ITEM_RARITIES.EPIC]: 55,
     }),
-    displayRarity: ITEM_RARITIES.EPIC,
   }),
 });
 
@@ -65,7 +64,7 @@ export const SHOP_TIERS = Object.freeze({
   1: Object.freeze({
     tier: 1,
     offerCount: 2,
-    possibleItemIds: Object.freeze(["steak", "chili", "energyDrink"]),
+    possibleItemIds: Object.freeze(["steak", "chili", "potato", "energyDrink"]),
     priceMultiplier: 0.95,
     rarityWeights: Object.freeze({
       [ITEM_RARITIES.COMMON]: 96,
@@ -84,9 +83,12 @@ export const SHOP_TIERS = Object.freeze({
     possibleItemIds: Object.freeze([
       "steak",
       "chili",
+      "potato",
       "energyDrink",
       "purpleShroom",
       "ramen",
+      "fish",
+      "garlic",
       "iceCream",
     ]),
     priceMultiplier: 1,
@@ -107,9 +109,12 @@ export const SHOP_TIERS = Object.freeze({
     possibleItemIds: Object.freeze([
       "steak",
       "chili",
+      "potato",
       "energyDrink",
       "purpleShroom",
       "ramen",
+      "fish",
+      "garlic",
       "iceCream",
     ]),
     priceMultiplier: 1.1,

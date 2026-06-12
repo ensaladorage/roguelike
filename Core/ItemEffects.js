@@ -188,10 +188,9 @@ export class ItemEffects {
 
     const stats = getItemStats(itemOrDefinition);
     const amount = stats.attackSpeed ?? 0;
-    const maxAttackSpeed = stats.maxAttackSpeed ?? Infinity;
     const previousValue =
       player.attackSpeed ?? (player.attackCooldown > 0 ? 1 / player.attackCooldown : 1);
-    const nextValue = Math.min(maxAttackSpeed, previousValue + amount);
+    const nextValue = previousValue + amount;
 
     if (typeof player.setAttackSpeed === "function") {
       player.setAttackSpeed(nextValue);

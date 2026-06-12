@@ -68,12 +68,6 @@ export const ITEM_DEFINITIONS = {
         op: "add",
         range: { min: 0.12, max: 0.35, step: 0.01 },
       },
-      {
-        stat: "maxAttackSpeed",
-        op: "set",
-        value: 4,
-        display: false,
-      },
     ],
     modifiers: {
       positive: ["attackSpeed"],
@@ -82,12 +76,41 @@ export const ITEM_DEFINITIONS = {
     shop: { basePrice: 100 },
   },
 
+  garlic: {
+    id: "garlic",
+    name: "Garlic",
+    descriptionTemplate: "+{attackSpeed} attack speed, {maxHp} max HP",
+    type: ITEM_TYPES.EQUIPPABLE,
+    rarity: ITEM_RARITIES.RARE,
+    foodCategory: ITEM_FOOD_CATEGORIES.SPICY,
+    hudSlot: 8,
+    imagePath: "Assets/Images/Garlic.png",
+    effect: ITEM_EFFECTS.ATTACK_SPEED_UP,
+    effects: [
+      {
+        stat: "attackSpeed",
+        op: "add",
+        range: { min: 0.3, max: 0.8, step: 0.01 },
+      },
+      {
+        stat: "maxHp",
+        op: "add",
+        range: { min: -20, max: -10, step: 1 },
+      },
+    ],
+    modifiers: {
+      positive: ["attackSpeed"],
+      negative: ["maxHp"],
+    },
+    shop: { basePrice: 260 },
+  },
+
   ramen: {
     id: "ramen",
     name: "Ramen",
     descriptionTemplate: "+{maxHp} max HP",
     type: ITEM_TYPES.EQUIPPABLE,
-    rarity: ITEM_RARITIES.COMMON,
+    rarity: ITEM_RARITIES.RARE,
     foodCategory: ITEM_FOOD_CATEGORIES.HEARTY,
     hudSlot: 3,
     imagePath: "Assets/Images/Ramen.png",
@@ -104,6 +127,30 @@ export const ITEM_DEFINITIONS = {
       negative: [],
     },
     shop: { basePrice: 120 },
+  },
+
+  potato: {
+    id: "potato",
+    name: "Potato",
+    descriptionTemplate: "+{maxHp} max HP",
+    type: ITEM_TYPES.EQUIPPABLE,
+    rarity: ITEM_RARITIES.COMMON,
+    foodCategory: ITEM_FOOD_CATEGORIES.HEARTY,
+    hudSlot: 3,
+    imagePath: "Assets/Images/Potato.png",
+    effect: ITEM_EFFECTS.MAX_HP_UP,
+    effects: [
+      {
+        stat: "maxHp",
+        op: "add",
+        range: { min: 5, max: 10, step: 1 },
+      },
+    ],
+    modifiers: {
+      positive: ["maxHp"],
+      negative: [],
+    },
+    shop: { basePrice: 70 },
   },
 
   energyDrink: {
@@ -174,7 +221,7 @@ export const ITEM_DEFINITIONS = {
     name: "Ice Cream",
     descriptionTemplate: "Grants dash. Distance: {dashDistance}. Cooldown: {dashCooldownSeconds}s.",
     type: ITEM_TYPES.EQUIPPABLE,
-    rarity: ITEM_RARITIES.RARE,
+    rarity: ITEM_RARITIES.EPIC,
     foodCategory: ITEM_FOOD_CATEGORIES.ABILITY,
     hudSlot: 7,
     imagePath: "Assets/Images/Icecream.png",
@@ -207,9 +254,8 @@ export const ITEM_DEFINITIONS = {
     rarity: ITEM_RARITIES.RARE,
     foodCategory: ITEM_FOOD_CATEGORIES.PROTEIN,
     hudSlot: 6,
-    imagePath: "Assets/Images/Steak.png",
+    imagePath: "Assets/Images/Fish.png",
     effect: ITEM_EFFECTS.DAMAGE_UP,
-    disabled: true,
     effects: [
       {
         stat: "attackDamage",

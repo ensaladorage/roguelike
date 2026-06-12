@@ -24,10 +24,14 @@ export const SHOP_DEFINITION = Object.freeze({
 
   possibleItemIds: Object.freeze([
     "steak",
+    "potato",
     "purpleShroom",
     "chili",
+    "garlic",
     "energyDrink",
     "ramen",
+    "fish",
+    "iceCream",
   ]),
 
   fallbackPriceByRarity: Object.freeze({

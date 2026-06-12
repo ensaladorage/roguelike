@@ -1,5 +1,5 @@
 import * as THREE from "three";
-import { ITEM_TYPES } from "../CharacterData/itemDefinitions.js";
+import { ITEM_RARITIES, ITEM_TYPES } from "../CharacterData/itemDefinitions.js";
 import {
   createShopOffers,
   getShopProgressContext,
@@ -29,6 +29,45 @@ const SHOP_RARITY_COLORS = {
   rare: 0x5aa8ff,
   epic: 0xb66dff,
 };
+const ITEM_RARITY_CLASSES = ["is-common", "is-rare", "is-epic"];
+const ITEM_RARITY_CLASS_BY_RARITY = {
+  [ITEM_RARITIES.COMMON]: "is-common",
+  [ITEM_RARITIES.RARE]: "is-rare",
+  [ITEM_RARITIES.EPIC]: "is-epic",
+};
+const ITEM_RARITY_LABEL_BY_RARITY = {
+  [ITEM_RARITIES.COMMON]: "Common",
+  [ITEM_RARITIES.RARE]: "Rare",
+  [ITEM_RARITIES.EPIC]: "Epic",
+};
+
+function getItemRarity(item) {
+  return item?.rarity ?? ITEM_RARITIES.COMMON;
+}
+
+function getItemRarityClass(item) {
+  const rarity = getItemRarity(item);
+  return ITEM_RARITY_CLASS_BY_RARITY[rarity] ?? ITEM_RARITY_CLASS_BY_RARITY[ITEM_RARITIES.COMMON];
+}
+
+function getItemRarityLabel(item) {
+  const rarity = getItemRarity(item);
+  return ITEM_RARITY_LABEL_BY_RARITY[rarity] ?? ITEM_RARITY_LABEL_BY_RARITY[ITEM_RARITIES.COMMON];
+}
+
+function createItemRarityLabel(item) {
+  const label = document.createElement("span");
+  label.className = "item-rarity-label";
+  label.textContent = getItemRarityLabel(item);
+  return label;
+}
+
+function applyItemRarityClass(element, item) {
+  if (!element || !item) return;
+
+  element.classList.remove(...ITEM_RARITY_CLASSES);
+  element.classList.add(getItemRarityClass(item));
+}
 
 export class ShopManager {
   constructor(scene, config = SHOP_DEFINITION) {
@@ -686,7 +725,6 @@ export class ShopManager {
     const label = document.createElement("span");
     label.className = "item-swap-card__label";
     label.textContent = labelText;
-    card.appendChild(label);
 
     if (!item) {
       const empty = document.createElement("strong");
@@ -696,9 +734,12 @@ export class ShopManager {
       description.className = "item-swap-card__stats";
       description.textContent = "No item equipped.";
 
-      card.append(empty, description);
+      card.append(label, empty, description);
       return card;
     }
+
+    applyItemRarityClass(card, item);
+    card.append(createItemRarityLabel(item), label);
 
     const image = document.createElement("img");
     image.src = item.imagePath;

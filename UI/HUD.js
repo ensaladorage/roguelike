@@ -1,5 +1,6 @@
 import {
   ITEM_FOOD_CATEGORIES,
+  ITEM_RARITIES,
   getItemDefinitionByUseSlot,
   getItemMaxStack,
 } from "../CharacterData/itemDefinitions.js";
@@ -12,6 +13,17 @@ const QUICK_USE_SLOTS = [1, 2];
 const INVENTORY_STYLE_ID = "inventory-panel-style";
 const MAX_LOG_ENTRIES = 90;
 const VISIBLE_LOG_ENTRIES = 5;
+const ITEM_RARITY_CLASSES = ["is-common", "is-rare", "is-epic"];
+const ITEM_RARITY_CLASS_BY_RARITY = {
+  [ITEM_RARITIES.COMMON]: "is-common",
+  [ITEM_RARITIES.RARE]: "is-rare",
+  [ITEM_RARITIES.EPIC]: "is-epic",
+};
+const ITEM_RARITY_LABEL_BY_RARITY = {
+  [ITEM_RARITIES.COMMON]: "Common",
+  [ITEM_RARITIES.RARE]: "Rare",
+  [ITEM_RARITIES.EPIC]: "Epic",
+};
 const EQUIPMENT_SLOT_ORDER = [
   ITEM_FOOD_CATEGORIES.PROTEIN,
   ITEM_FOOD_CATEGORIES.SPICY,
@@ -113,6 +125,7 @@ export class HUD {
     if (!this.itemTooltip || !item) return;
 
     this.itemTooltip.innerHTML = "";
+    this.applyItemRarityClass(this.itemTooltip, item);
 
     const name = document.createElement("strong");
     name.textContent = getItemDisplayName(item);
@@ -120,7 +133,7 @@ export class HUD {
     const description = document.createElement("span");
     description.textContent = getItemDisplayDescription(item);
 
-    this.itemTooltip.append(name, description);
+    this.itemTooltip.append(this.createItemRarityLabel(item), name, description);
     this.itemTooltip.hidden = false;
     this.moveItemTooltip(position);
   }
@@ -138,6 +151,7 @@ export class HUD {
     if (!this.itemTooltip) return;
 
     this.itemTooltip.hidden = true;
+    this.clearItemRarityClass(this.itemTooltip);
   }
 
   toggleInventoryPanel(inventory) {
@@ -233,7 +247,8 @@ export class HUD {
     for (const option of options) {
       const button = document.createElement("button");
       button.type = "button";
-      button.className = `epic-reward-card is-${option.rarity ?? "epic"}`;
+      button.className = "epic-reward-card";
+      this.applyItemRarityClass(button, option.item ?? { rarity: option.rarity });
       button.dataset.rewardId = option.id;
 
       const image = document.createElement("img");
@@ -247,7 +262,12 @@ export class HUD {
       const description = document.createElement("span");
       description.textContent = getItemDisplayDescription(option.item);
 
-      button.append(image, name, description);
+      button.append(
+        this.createItemRarityLabel(option.item ?? { rarity: option.rarity }),
+        image,
+        name,
+        description
+      );
       button.addEventListener("click", () => {
         this.onEpicRewardSelect?.(option);
       });
@@ -642,6 +662,9 @@ export class HUD {
     const slot = document.createElement("div");
     slot.className = "inventory-panel__slot";
     slot.classList.toggle("is-empty", !item);
+    if (item) {
+      this.applyItemRarityClass(slot, item);
+    }
 
     const icon = document.createElement("div");
     icon.className = "inventory-panel__icon";
@@ -671,6 +694,9 @@ export class HUD {
     stats.textContent = item ? getItemDisplayDescription(item) : "No item equipped.";
 
     copy.append(label, name, stats);
+    if (item) {
+      slot.append(this.createItemRarityLabel(item));
+    }
     slot.append(icon, copy);
 
     if (item) {
@@ -729,6 +755,7 @@ export class HUD {
   createSwapCard(labelText, item) {
     const card = document.createElement("article");
     card.className = "item-swap-card";
+    this.applyItemRarityClass(card, item);
 
     const label = document.createElement("span");
     label.className = "item-swap-card__label";
@@ -750,8 +777,42 @@ export class HUD {
     description.className = "item-swap-card__stats";
     description.textContent = getItemDisplayDescription(item);
 
-    card.append(label, image, name, category, description);
+    card.append(this.createItemRarityLabel(item), label, image, name, category, description);
     return card;
+  }
+
+  getItemRarity(item) {
+    return item?.rarity ?? ITEM_RARITIES.COMMON;
+  }
+
+  getItemRarityClass(item) {
+    const rarity = this.getItemRarity(item);
+    return ITEM_RARITY_CLASS_BY_RARITY[rarity] ?? ITEM_RARITY_CLASS_BY_RARITY[ITEM_RARITIES.COMMON];
+  }
+
+  getItemRarityLabel(item) {
+    const rarity = this.getItemRarity(item);
+    return ITEM_RARITY_LABEL_BY_RARITY[rarity] ?? ITEM_RARITY_LABEL_BY_RARITY[ITEM_RARITIES.COMMON];
+  }
+
+  createItemRarityLabel(item) {
+    const label = document.createElement("span");
+    label.className = "item-rarity-label";
+    label.textContent = this.getItemRarityLabel(item);
+    return label;
+  }
+
+  clearItemRarityClass(element) {
+    element?.classList?.remove(...ITEM_RARITY_CLASSES);
+  }
+
+  applyItemRarityClass(element, item) {
+    if (!element) return;
+
+    this.clearItemRarityClass(element);
+    if (!item) return;
+
+    element.classList.add(this.getItemRarityClass(item));
   }
 
   updateQuickUseButtons(inventory) {
@@ -1064,6 +1125,7 @@ export class HUD {
       }
 
       .inventory-panel__slot {
+        position: relative;
         display: grid;
         grid-template-columns: 52px minmax(0, 1fr);
         gap: 10px;
@@ -1075,8 +1137,31 @@ export class HUD {
         background: rgba(244, 241, 232, 0.08);
       }
 
+      .inventory-panel__slot .item-rarity-label {
+        position: absolute;
+        top: 7px;
+        right: 9px;
+        max-width: 72px;
+        text-align: right;
+      }
+
       .inventory-panel__slot.is-empty {
         opacity: 0.72;
+      }
+
+      .inventory-panel__slot.is-common {
+        border-color: rgba(255, 255, 255, 0.78);
+        box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.16);
+      }
+
+      .inventory-panel__slot.is-rare {
+        border-color: rgba(90, 168, 255, 0.78);
+        box-shadow: inset 0 0 0 1px rgba(90, 168, 255, 0.2);
+      }
+
+      .inventory-panel__slot.is-epic {
+        border-color: rgba(180, 117, 255, 0.78);
+        box-shadow: inset 0 0 0 1px rgba(180, 117, 255, 0.24);
       }
 
       .inventory-panel__icon {
@@ -1228,6 +1313,25 @@ export class HUD {
         border-radius: 8px;
         background: rgba(244, 241, 232, 0.08);
         text-align: center;
+      }
+
+      .item-swap-card .item-rarity-label {
+        justify-self: start;
+      }
+
+      .item-swap-card.is-common {
+        border-color: rgba(255, 255, 255, 0.78);
+        box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.16);
+      }
+
+      .item-swap-card.is-rare {
+        border-color: rgba(90, 168, 255, 0.78);
+        box-shadow: inset 0 0 0 1px rgba(90, 168, 255, 0.2);
+      }
+
+      .item-swap-card.is-epic {
+        border-color: rgba(180, 117, 255, 0.78);
+        box-shadow: inset 0 0 0 1px rgba(180, 117, 255, 0.24);
       }
 
       .item-swap-card__label,

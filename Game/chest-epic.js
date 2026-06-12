@@ -12,12 +12,11 @@ import { createSeededRandom } from "./Utils.js";
 
 const DEFAULT_EPIC_CHEST_REWARD = {
   choiceCount: 3,
-  possibleItemIds: ["ramen", "energyDrink"],
+  possibleItemIds: [],
   rarityWeights: {
     [ITEM_RARITIES.RARE]: 45,
     [ITEM_RARITIES.EPIC]: 55,
   },
-  displayRarity: ITEM_RARITIES.EPIC,
 };
 
 export class EpicChestRewardManager {
@@ -195,9 +194,10 @@ export class EpicChestRewardManager {
 
     const options = [];
     const random = createSeededRandom(this.createRewardSeed(chest));
+    const usedItemIds = new Set();
 
     for (let index = 0; index < choiceCount; index += 1) {
-      const itemId = this.pickRewardItemId(config, fallbackIds, random);
+      const itemId = this.pickRewardItemId(config, fallbackIds, random, usedItemIds);
       const itemInstance = createItemInstance(itemId, {
         runSeed: this.scene.currentFloorLoad?.runSeed,
         floorSeed: this.scene.currentFloorLoad?.currentFloorSeed,
@@ -209,6 +209,7 @@ export class EpicChestRewardManager {
         rarity: config.displayRarity ?? getItemDefinition(itemId)?.rarity,
       });
       if (!itemInstance) continue;
+      usedItemIds.add(itemInstance.baseItemId);
 
       options.push({
         id: `${chest?.roomId ?? "epic"}:${index}:${itemInstance.baseItemId}`,
@@ -222,13 +223,13 @@ export class EpicChestRewardManager {
     return options;
   }
 
-  pickRewardItemId(config, fallbackIds, random = Math.random) {
+  pickRewardItemId(config, fallbackIds, random = Math.random, usedItemIds = new Set()) {
     const rarityPools = this.getRarityPools(config);
     const weightedRarities = Object.entries(config.rarityWeights ?? {})
       .map(([rarity, weight]) => ({
         rarity,
         weight: Math.max(0, Number.parseFloat(weight) || 0),
-        pool: rarityPools[rarity] ?? [],
+        pool: this.getAvailableRewardPool(rarityPools[rarity] ?? [], usedItemIds),
       }))
       .filter((entry) => entry.weight > 0 && entry.pool.length > 0);
     const totalWeight = weightedRarities.reduce((sum, entry) => sum + entry.weight, 0);
@@ -245,7 +246,16 @@ export class EpicChestRewardManager {
       }
     }
 
-    return fallbackIds[Math.floor(random() * fallbackIds.length)];
+    const fallbackPool = this.getAvailableRewardPool(fallbackIds, usedItemIds);
+    const pool = fallbackPool.length > 0 ? fallbackPool : fallbackIds;
+
+    return pool[Math.floor(random() * pool.length)];
+  }
+
+  getAvailableRewardPool(itemIds = [], usedItemIds = new Set()) {
+    const available = itemIds.filter((itemId) => !usedItemIds.has(itemId));
+
+    return available.length > 0 ? available : itemIds;
   }
 
   getRarityPools(config) {

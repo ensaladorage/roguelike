@@ -32,6 +32,8 @@ const ITEM_DROP_ID_STYLES = {
   purpleShroom: { color: 0x8c55d8, emissive: 0x22103d },
   fish: { color: 0x5ab9d6, emissive: 0x0d2c36 },
   iceCream: { color: 0x9edcff, emissive: 0x12304a },
+  potato: { color: 0xcaa15c, emissive: 0x2d1f0c },
+  garlic: { color: 0xf1efe0, emissive: 0x2d2b1e },
 };
 
 function getItemDropVisualStyle(definition) {

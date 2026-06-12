@@ -597,6 +597,46 @@
       display: none;
     }
 
+    .item-rarity-label {
+      display: inline-flex;
+      justify-self: start;
+      align-self: start;
+      color: rgba(255, 255, 255, 0.78);
+      font-size: 10px;
+      font-weight: 900;
+      letter-spacing: 0;
+      line-height: 1;
+      pointer-events: none;
+      text-transform: uppercase;
+    }
+
+    .is-common > .item-rarity-label {
+      color: rgba(255, 255, 255, 0.86);
+    }
+
+    .is-rare > .item-rarity-label {
+      color: rgba(90, 168, 255, 0.9);
+    }
+
+    .is-epic > .item-rarity-label {
+      color: rgba(180, 117, 255, 0.92);
+    }
+
+    .item-tooltip.is-common {
+      border-color: rgba(255, 255, 255, 0.78);
+      box-shadow: 0 14px 32px rgba(0, 0, 0, 0.34), inset 0 0 0 1px rgba(255, 255, 255, 0.16);
+    }
+
+    .item-tooltip.is-rare {
+      border-color: rgba(90, 168, 255, 0.78);
+      box-shadow: 0 14px 32px rgba(0, 0, 0, 0.34), inset 0 0 0 1px rgba(90, 168, 255, 0.2);
+    }
+
+    .item-tooltip.is-epic {
+      border-color: rgba(180, 117, 255, 0.78);
+      box-shadow: 0 14px 32px rgba(0, 0, 0, 0.34), inset 0 0 0 1px rgba(180, 117, 255, 0.24);
+    }
+
     .item-tooltip span {
       color: rgba(244, 241, 232, 0.78);
     }
@@ -679,6 +719,16 @@
       font: inherit;
       cursor: pointer;
       text-align: center;
+    }
+
+    .epic-reward-card.is-common {
+      border-color: rgba(255, 255, 255, 0.78);
+      box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.16);
+    }
+
+    .epic-reward-card.is-rare {
+      border-color: rgba(90, 168, 255, 0.78);
+      box-shadow: inset 0 0 0 1px rgba(90, 168, 255, 0.2);
     }
 
     .epic-reward-card.is-epic {
