@@ -18,7 +18,7 @@ const COMMON_TREASURE_REWARD = Object.freeze({
   epicChest: Object.freeze({
     enabled: true,
     choiceCount: 3,
-    possibleItemIds: Object.freeze(["ramen", "energyDrink"]),
+    possibleItemIds: Object.freeze(["ramen", "energyDrink", "iceCream"]),
     rarityWeights: Object.freeze({
       [ITEM_RARITIES.RARE]: 45,
       [ITEM_RARITIES.EPIC]: 55,
@@ -87,6 +87,7 @@ export const SHOP_TIERS = Object.freeze({
       "energyDrink",
       "purpleShroom",
       "ramen",
+      "iceCream",
     ]),
     priceMultiplier: 1,
     rarityWeights: Object.freeze({
@@ -109,6 +110,7 @@ export const SHOP_TIERS = Object.freeze({
       "energyDrink",
       "purpleShroom",
       "ramen",
+      "iceCream",
     ]),
     priceMultiplier: 1.1,
     rarityWeights: Object.freeze({

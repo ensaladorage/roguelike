@@ -21,6 +21,8 @@ const OCCLUSION_MIN_COVERED_SAMPLES = 1;
 const MIN_ATTACK_SPEED = 0.1;
 const DIRECT_MOVEMENT_ACCELERATION = 100;
 const DIRECT_MOVEMENT_ROTATION_RESPONSE = 45;
+const DASH_DURATION_SECONDS = 0.14;
+const DASH_DIRECTION_EPSILON = 0.0001;
 export const PLAYER_COMBAT_CONFIG = {
   attackWindupDuration: 0.18,
   attackArcDegrees: 105,
@@ -72,6 +74,16 @@ export class Player {
 
     this.events = [];
     this.directMovementVelocity = new THREE.Vector3();
+    this.dashUnlocked = false;
+    this.dashDistance = 0;
+    this.dashCooldown = 0;
+    this.dashCooldownTimer = 0;
+    this.dashDuration = DASH_DURATION_SECONDS;
+    this.dashActive = false;
+    this.dashElapsed = 0;
+    this.dashStartPosition = new THREE.Vector3();
+    this.dashEndPosition = new THREE.Vector3();
+    this.dashDirection = new THREE.Vector3(0, 0, 1);
 
     // 🔥 IMPORTANTE
     // Guardamos la rotación visual aparte para evitar
@@ -107,6 +119,37 @@ export class Player {
     );
   }
 
+  configureDash({ unlocked = false, distance = 0, cooldown = 0 } = {}) {
+    const safeDistance = this.normalizePositiveNumber(distance);
+    const safeCooldown = this.normalizePositiveNumber(cooldown);
+    const wasUnlocked = this.dashUnlocked;
+
+    this.dashUnlocked = Boolean(unlocked && safeDistance > 0 && safeCooldown > 0);
+    this.dashDistance = this.dashUnlocked ? safeDistance : 0;
+    this.dashCooldown = this.dashUnlocked ? safeCooldown : 0;
+
+    if (!this.dashUnlocked) {
+      this.clearDashRuntimeState();
+      return;
+    }
+
+    if (!wasUnlocked) {
+      this.dashCooldownTimer = this.dashCooldown;
+      return;
+    }
+
+    this.dashCooldownTimer = Math.min(
+      this.dashCooldown,
+      this.dashCooldownTimer
+    );
+  }
+
+  normalizePositiveNumber(value) {
+    const numericValue = Number.parseFloat(value);
+
+    return Number.isFinite(numericValue) ? Math.max(0, numericValue) : 0;
+  }
+
   createProgressSnapshot() {
     return {
       maxHp: this.maxHp,
@@ -119,6 +162,10 @@ export class Player {
       attackArcDegrees: this.attackArcDegrees,
       attackCooldown: this.attackCooldown,
       attackWindupDuration: this.attackWindupDuration,
+      dashUnlocked: this.dashUnlocked,
+      dashDistance: this.dashDistance,
+      dashCooldown: this.dashCooldown,
+      dashCooldownTimer: this.dashCooldownTimer,
     };
   }
 
@@ -142,6 +189,18 @@ export class Player {
     if (snapshot.attackWindupDuration !== undefined) {
       this.setAttackWindupDuration(snapshot.attackWindupDuration);
     }
+
+    if (snapshot.dashUnlocked) {
+      this.configureDash({
+        unlocked: snapshot.dashUnlocked,
+        distance: snapshot.dashDistance,
+        cooldown: snapshot.dashCooldown,
+      });
+      this.dashCooldownTimer = Math.min(
+        this.dashCooldown,
+        snapshot.dashCooldownTimer ?? this.dashCooldown
+      );
+    }
   }
 
   resetForNewRun() {
@@ -154,6 +213,7 @@ export class Player {
     this.attackArcDegrees = BASE_PLAYER_STATS.attackArcDegrees;
     this.setAttackSpeed(BASE_PLAYER_STATS.attackSpeed);
     this.setAttackWindupDuration(PLAYER_COMBAT_CONFIG.attackWindupDuration);
+    this.configureDash({ unlocked: false });
     this.resetRuntimeState();
   }
 
@@ -170,6 +230,9 @@ export class Player {
     this.lockedAttackDirection = null;
     this.pendingAttackEnemies = [];
     this.events = [];
+    this.clearDashRuntimeState({
+      preserveCooldown: this.dashUnlocked,
+    });
     this.stopDirectMovement();
     this.visualRotation = 0;
     this.model.rotation.y = 0;
@@ -416,6 +479,7 @@ export class Player {
     this.attackWindupTimer = 0;
     this.lockedAttackDirection = null;
     this.pendingAttackEnemies = [];
+    this.clearDashRuntimeState();
 
     this.state = PLAYER_STATES.DEAD;
 
@@ -443,6 +507,9 @@ export class Player {
   stopMovement() {
     if (this.state === PLAYER_STATES.DEAD) return;
 
+    this.clearDashRuntimeState({
+      preserveCooldown: true,
+    });
     this.stopDirectMovement();
     this.target = null;
     this.path = [];
@@ -486,6 +553,100 @@ export class Player {
     return true;
   }
 
+  requestDash(direction, { resolveDestination = null } = {}) {
+    if (this.hp <= 0 || this.state === PLAYER_STATES.DEAD) return false;
+
+    if (!this.dashUnlocked) {
+      this.emit({
+        type: "dashLocked",
+      });
+      return false;
+    }
+
+    if (this.dashActive) return false;
+
+    if (this.dashCooldownTimer < this.dashCooldown) {
+      this.emit({
+        type: "dashCooldownBlocked",
+        remaining: this.dashCooldown - this.dashCooldownTimer,
+        cooldown: this.dashCooldown,
+      });
+      return false;
+    }
+
+    const dashDirection = this.normalizeDashDirection(direction);
+    if (!dashDirection) return false;
+
+    const start = this.model.position.clone();
+    start.y = this.groundY;
+    const desiredEnd = start
+      .clone()
+      .addScaledVector(dashDirection, this.dashDistance);
+    desiredEnd.y = this.groundY;
+
+    const resolvedEnd =
+      typeof resolveDestination === "function"
+        ? resolveDestination(start, dashDirection, this.dashDistance, desiredEnd)
+        : desiredEnd;
+
+    if (
+      !resolvedEnd ||
+      start.distanceToSquared(resolvedEnd) <= DASH_DIRECTION_EPSILON
+    ) {
+      this.emit({
+        type: "dashBlocked",
+        direction: dashDirection.clone(),
+      });
+      return false;
+    }
+
+    this.startDash(start, resolvedEnd, dashDirection);
+    return true;
+  }
+
+  normalizeDashDirection(direction) {
+    if (
+      !direction ||
+      typeof direction.lengthSq !== "function" ||
+      direction.lengthSq() <= DASH_DIRECTION_EPSILON
+    ) {
+      return null;
+    }
+
+    const dashDirection = direction.clone();
+    dashDirection.y = 0;
+
+    if (dashDirection.lengthSq() <= DASH_DIRECTION_EPSILON) return null;
+
+    return dashDirection.normalize();
+  }
+
+  startDash(start, end, direction) {
+    this.dashActive = true;
+    this.dashElapsed = 0;
+    this.dashStartPosition.copy(start);
+    this.dashEndPosition.copy(end);
+    this.dashDirection.copy(direction);
+    this.dashCooldownTimer = 0;
+    this.stopDirectMovement();
+    this.target = null;
+    this.path = [];
+    this.state = this.attackTarget ? PLAYER_STATES.COMBAT : PLAYER_STATES.MOVING;
+
+    this.visualRotation = Math.atan2(direction.x, direction.z);
+    this.model.rotation.y = this.visualRotation;
+
+    this.emit({
+      type: "dashStarted",
+      start: this.dashStartPosition.clone(),
+      end: this.dashEndPosition.clone(),
+      direction: this.dashDirection.clone(),
+      distance: this.dashStartPosition.distanceTo(this.dashEndPosition),
+      cooldown: this.dashCooldown,
+      duration: this.dashDuration,
+    });
+  }
+
   startDirectionalAttackWindup(direction, enemies = []) {
     this.clearAttackTarget();
     this.lockedAttackDirection = direction.clone();
@@ -520,6 +681,15 @@ export class Player {
       this.updateAttackCooldown(delta);
     }
 
+    if (this.state !== PLAYER_STATES.DEAD) {
+      this.updateDashCooldown(delta);
+    }
+
+    if (this.dashActive) {
+      this.updateDash(delta);
+      return;
+    }
+
     if (this.hasDirectMovementInput(movementInput)) {
       this.updateDirectMovement(delta, movementInput);
       return;
@@ -542,6 +712,113 @@ export class Player {
       case PLAYER_STATES.COMBAT:
         this.updateCombat(delta);
         break;
+    }
+  }
+
+  updateDash(delta) {
+    this.dashElapsed += delta;
+    const duration = Math.max(0.001, this.dashDuration);
+    const t = Math.min(1, this.dashElapsed / duration);
+    const eased = 1 - Math.pow(1 - t, 2);
+
+    this.model.position.lerpVectors(
+      this.dashStartPosition,
+      this.dashEndPosition,
+      eased
+    );
+    this.model.position.y = this.groundY;
+
+    if (this.shouldFaceAttackDirection()) {
+      this.faceAttackDirection();
+    } else {
+      this.visualRotation = Math.atan2(
+        this.dashDirection.x,
+        this.dashDirection.z
+      );
+      this.model.rotation.y = this.visualRotation;
+    }
+
+    this.updateAttackState(delta);
+
+    if (t < 1) return;
+
+    this.finishDash();
+  }
+
+  finishDash() {
+    if (!this.dashActive) return;
+
+    this.model.position.copy(this.dashEndPosition);
+    this.dashActive = false;
+    this.dashElapsed = 0;
+    this.state = this.attackTarget ? PLAYER_STATES.COMBAT : PLAYER_STATES.IDLE;
+
+    this.emit({
+      type: "dashEnded",
+      position: this.model.position.clone(),
+      direction: this.dashDirection.clone(),
+      cooldown: this.dashCooldown,
+    });
+  }
+
+  updateDashCooldown(delta) {
+    if (!this.dashUnlocked || this.dashCooldown <= 0) return;
+    if (this.dashCooldownTimer >= this.dashCooldown) return;
+
+    const wasReady = this.isDashReady();
+    this.dashCooldownTimer = Math.min(
+      this.dashCooldown,
+      this.dashCooldownTimer + delta
+    );
+
+    if (!wasReady && this.isDashReady()) {
+      this.emit({
+        type: "dashReady",
+        cooldown: this.dashCooldown,
+      });
+    }
+  }
+
+  isDashReady() {
+    return Boolean(
+      this.dashUnlocked &&
+      this.dashCooldown > 0 &&
+      this.dashCooldownTimer >= this.dashCooldown
+    );
+  }
+
+  getDashFeedbackState() {
+    const cooldown = Math.max(0, this.dashCooldown);
+    const cooldownProgress = cooldown > 0
+      ? Math.max(0, Math.min(1, this.dashCooldownTimer / cooldown))
+      : 0;
+    const remainingSeconds = this.dashUnlocked
+      ? Math.max(0, cooldown - this.dashCooldownTimer)
+      : 0;
+
+    return {
+      unlocked: this.dashUnlocked,
+      isReady: this.isDashReady(),
+      isCoolingDown: Boolean(
+        this.dashUnlocked &&
+        cooldown > 0 &&
+        cooldownProgress < 1
+      ),
+      cooldownProgress,
+      remainingSeconds,
+      distance: this.dashDistance,
+      cooldown,
+    };
+  }
+
+  clearDashRuntimeState({ preserveCooldown = false } = {}) {
+    this.dashActive = false;
+    this.dashElapsed = 0;
+    this.dashStartPosition.copy(this.model.position);
+    this.dashEndPosition.copy(this.model.position);
+
+    if (!preserveCooldown) {
+      this.dashCooldownTimer = this.dashUnlocked ? this.dashCooldown : 0;
     }
   }
 

@@ -192,6 +192,7 @@ export class GameScene {
       (payload) => this.handleWorldClick(payload),
       {
         onKeyboardMovementStart: () => this.handleKeyboardMovementStart(),
+        onDashPressed: () => this.handleDashPressed(),
         onInteractableHover: (interactable, pointer) =>
           this.handleInteractableHover(interactable, pointer),
       }
@@ -1076,6 +1077,8 @@ export class GameScene {
               }
             );
           },
+          isVisible: (blockerEffect) =>
+            this.isStageLockedConnectionBlockerVisible(blockerEffect.blocker),
         }
       );
 
@@ -1083,6 +1086,16 @@ export class GameScene {
         this.stageLockedConnectionBlockerEffects.push(effect);
       }
     }
+  }
+
+  isStageLockedConnectionBlockerVisible(blocker) {
+    const manager = this.roomVisibilityManager;
+    const roomIds = blocker?.roomIds ?? [];
+
+    if (!manager?.enabled) return true;
+    if (roomIds.length === 0) return true;
+
+    return roomIds.some((roomId) => manager.visitedRoomIds?.has?.(roomId));
   }
 
   addLevelEnemies(level) {
@@ -2444,6 +2457,37 @@ export class GameScene {
     return Math.max(0.05, PLAYER_COLLISION_RADIUS - PLAYER_COLLISION_SKIN);
   }
 
+  getPlayerDashDestination(start, direction, distance) {
+    if (!start || !direction || distance <= 0) return null;
+
+    const radius = this.getPlayerMovementCollisionRadius();
+    const safeDirection = direction.clone();
+    safeDirection.y = 0;
+    if (safeDirection.lengthSq() <= 0.000001) return null;
+    safeDirection.normalize();
+
+    const maxDistance = Math.max(0, Number.parseFloat(distance) || 0);
+    const step = 0.12;
+    const steps = Math.max(1, Math.ceil(maxDistance / step));
+    let previous = start.clone();
+    let lastValid = start.clone();
+
+    for (let index = 1; index <= steps; index += 1) {
+      const traveled = Math.min(maxDistance, index * step);
+      const candidate = start.clone().addScaledVector(safeDirection, traveled);
+      candidate.y = PLAYER_GROUND_Y;
+
+      if (!this.canMoveBetween(previous, candidate, radius)) {
+        break;
+      }
+
+      lastValid = candidate;
+      previous = candidate;
+    }
+
+    return lastValid;
+  }
+
   getPlayerNavigationDestination() {
     if (this.player.path.length > 0) {
       return this.player.path[this.player.path.length - 1].clone();
@@ -2635,6 +2679,7 @@ export class GameScene {
     this.updateCamera(delta);
     this.player.updateOcclusionMarker(this.camera, this.wallMeshes);
     this.updateAttackCursorFeedback();
+    this.hud?.updateAbilitySlot?.(this.player, this.inventory);
     this.inputController?.updateCursor?.();
     this.renderer.render(this.scene, this.camera);
 
@@ -2648,6 +2693,40 @@ export class GameScene {
     if (!movementInput || movementInput.lengthSq() <= 0.000001) return null;
 
     return movementInput;
+  }
+
+  handleDashPressed() {
+    if (this.isPlayerControlLocked()) return;
+    if (!this.player) return;
+
+    const direction = this.getPlayerDashDirection();
+
+    this.player.requestDash(direction, {
+      resolveDestination: (start, dashDirection, distance) =>
+        this.getPlayerDashDestination(start, dashDirection, distance),
+    });
+  }
+
+  getPlayerDashDirection() {
+    const movementInput = this.getKeyboardMovementInput();
+    if (movementInput && movementInput.lengthSq() > 0.000001) {
+      return movementInput;
+    }
+
+    const pointerPoint = this.inputController?.getPointerWorldPoint?.();
+    const playerPosition = this.player?.model?.position;
+    if (pointerPoint && playerPosition) {
+      const pointerDirection = new THREE.Vector3(
+        pointerPoint.x - playerPosition.x,
+        0,
+        pointerPoint.z - playerPosition.z
+      );
+
+      if (pointerDirection.lengthSq() > 0.000001) return pointerDirection;
+    }
+
+    const facing = this.player?.visualRotation ?? this.player?.model?.rotation?.y ?? 0;
+    return new THREE.Vector3(Math.sin(facing), 0, Math.cos(facing));
   }
 
   isKeyboardMovementActive() {
@@ -2983,9 +3062,44 @@ export class GameScene {
           break;
 
         case "attackReady":
-          this.vfx.playModelFlash(this.player.model, 0xffffff, 0.12, {
-            emissiveIntensity: 1.2,
+          break;
+
+        case "dashLocked":
+          this.addLog("Dash locked: equip an ability item first.");
+          this.sfx.play("playerDashBlocked");
+          break;
+
+        case "dashCooldownBlocked":
+          this.addLog(`Dash cooling down: ${event.remaining.toFixed(1)}s.`);
+          this.sfx.play("playerDashBlocked");
+          break;
+
+        case "dashBlocked":
+          this.addLog("Dash blocked.");
+          this.sfx.play("playerDashBlocked");
+          break;
+
+        case "dashStarted":
+          this.addLog("Dash used.");
+          this.vfx?.playPlayerDashTrail?.(event.start, event.end, event.direction);
+          this.vfx?.playPlayerDashBurst?.(event.start, event.direction, {
+            scale: 0.8,
           });
+          this.sfx.play("playerDash");
+          break;
+
+        case "dashEnded":
+          this.vfx?.playPlayerDashBurst?.(event.position, event.direction, {
+            scale: 0.62,
+          });
+          break;
+
+        case "dashReady":
+          this.addLog("Dash ready.");
+          this.vfx.playModelFlash(this.player.model, 0x9edcff, 0.14, {
+            emissiveIntensity: 1.1,
+          });
+          this.sfx.play("playerDashReady");
           break;
 
         case "playerAttack":
@@ -3256,6 +3370,7 @@ export class GameScene {
     if (this.inventory) {
       this.hud.updateInventory(this.inventory);
     }
+    this.hud?.updateAbilitySlot?.(this.player, this.inventory);
     this.syncBossHud();
   }
 

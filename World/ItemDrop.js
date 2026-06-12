@@ -31,6 +31,7 @@ const ITEM_DROP_CATEGORY_STYLES = {
 const ITEM_DROP_ID_STYLES = {
   purpleShroom: { color: 0x8c55d8, emissive: 0x22103d },
   fish: { color: 0x5ab9d6, emissive: 0x0d2c36 },
+  iceCream: { color: 0x9edcff, emissive: 0x12304a },
 };
 
 function getItemDropVisualStyle(definition) {

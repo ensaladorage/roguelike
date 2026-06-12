@@ -46,6 +46,29 @@ export class SFX {
         gain: 0.075,
       },
 
+      playerDash: {
+        frequency: 860,
+        endFrequency: 1180,
+        duration: 0.12,
+        type: "triangle",
+        gain: 0.045,
+      },
+
+      playerDashReady: {
+        frequency: 980,
+        duration: 0.08,
+        type: "sine",
+        gain: 0.035,
+      },
+
+      playerDashBlocked: {
+        frequency: 180,
+        endFrequency: 120,
+        duration: 0.08,
+        type: "square",
+        gain: 0.025,
+      },
+
       enemyDefeated: {
         frequency: 820,
         duration: 0.16,

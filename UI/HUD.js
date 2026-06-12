@@ -39,6 +39,9 @@ export class HUD {
     this.logElement = document.querySelector("#log");
     this.logSlider = document.querySelector("#logSlider");
     this.quickUseElement = document.querySelector("#quickUseBar");
+    this.abilitySlot = document.querySelector("#abilitySlot");
+    this.abilitySlotImage = document.querySelector("#abilitySlotImage");
+    this.abilitySlotCooldown = document.querySelector("#abilitySlotCooldown");
     this.itemTooltip = document.querySelector("#itemTooltip");
     this.epicRewardOverlay = document.querySelector("#epicRewardOverlay");
     this.epicRewardOptions = document.querySelector("#epicRewardOptions");
@@ -49,6 +52,11 @@ export class HUD {
     this.bossHpText = document.querySelector("#bossHpText");
     this.bossHpBar = document.querySelector("#bossHpBar");
     this.quickUseButtons = new Map();
+    this.lastAbilitySlotState = {
+      instanceId: null,
+      wasReady: false,
+      wasUnlocked: false,
+    };
     this.onUseConsumableSlot = null;
     this.logEntries = [];
     this.logOffset = 0;
@@ -66,6 +74,7 @@ export class HUD {
 
     this.ensureInventoryStyles();
     this.setupQuickUseButtons();
+    this.setupAbilitySlot();
     this.setupEpicRewardOverlay();
     this.setupInventoryPanel();
     this.setupSwapConfirmation();
@@ -353,9 +362,106 @@ export class HUD {
   updateInventory(inventory) {
     this.currentInventory = inventory;
     this.updateQuickUseButtons(inventory);
+    this.updateAbilitySlot(this.currentPlayer, inventory);
     if (this.inventoryPanelOpen) {
       this.updateInventoryPanel(inventory);
     }
+  }
+
+  setupAbilitySlot() {
+    if (!this.abilitySlot) return;
+
+    this.abilitySlot.addEventListener("mouseenter", (event) => {
+      const item = this.getEquippedAbilityItem();
+      if (!item) return;
+
+      this.showItemTooltip(item, event);
+    });
+    this.abilitySlot.addEventListener("mousemove", (event) => {
+      this.moveItemTooltip(event);
+    });
+    this.abilitySlot.addEventListener("mouseleave", () => {
+      this.hideItemTooltip();
+    });
+    this.abilitySlot.addEventListener("click", (event) => {
+      event.preventDefault();
+      event.stopPropagation();
+    });
+  }
+
+  updateAbilitySlot(player = this.currentPlayer, inventory = this.currentInventory) {
+    this.currentPlayer = player ?? this.currentPlayer;
+    this.currentInventory = inventory ?? this.currentInventory;
+    if (!this.abilitySlot || !this.abilitySlotImage || !this.abilitySlotCooldown) {
+      return;
+    }
+
+    const item = this.getEquippedAbilityItem();
+    const feedback = this.currentPlayer?.getDashFeedbackState?.() ?? {
+      unlocked: false,
+      isReady: false,
+      isCoolingDown: false,
+      cooldownProgress: 0,
+      remainingSeconds: 0,
+    };
+    const hasItem = Boolean(item);
+    const progress = hasItem
+      ? Math.max(0, Math.min(1, feedback.cooldownProgress ?? 0))
+      : 0;
+    const isCoolingDown = Boolean(hasItem && feedback.isCoolingDown);
+    const isReady = Boolean(hasItem && feedback.isReady);
+    const instanceId = item?.instanceId ?? item?.baseItemId ?? null;
+
+    this.abilitySlot.classList.toggle("is-empty", !hasItem);
+    this.abilitySlot.classList.toggle("is-cooling", isCoolingDown);
+    this.abilitySlot.setAttribute("aria-disabled", hasItem ? "false" : "true");
+
+    if (hasItem) {
+      this.abilitySlotImage.src = item.imagePath;
+      this.abilitySlotImage.hidden = false;
+      this.abilitySlot.title = `Space: ${getItemDisplayName(item)}`;
+      this.abilitySlot.setAttribute(
+        "aria-label",
+        `Space: ${getItemDisplayName(item)}`
+      );
+    } else {
+      this.abilitySlotImage.hidden = true;
+      this.abilitySlot.removeAttribute("title");
+      this.abilitySlot.setAttribute("aria-label", "Space: ability empty");
+    }
+
+    this.abilitySlotCooldown.style.height = `${Math.round(progress * 100)}%`;
+
+    const shouldFlash =
+      hasItem &&
+      isReady &&
+      instanceId === this.lastAbilitySlotState.instanceId &&
+      this.lastAbilitySlotState.wasUnlocked &&
+      !this.lastAbilitySlotState.wasReady;
+
+    if (shouldFlash) {
+      this.flashAbilitySlot();
+    }
+
+    this.lastAbilitySlotState = {
+      instanceId,
+      wasReady: isReady,
+      wasUnlocked: hasItem,
+    };
+  }
+
+  getEquippedAbilityItem() {
+    return this.currentInventory?.getEquippedItemForCategory?.(
+      ITEM_FOOD_CATEGORIES.ABILITY
+    ) ?? null;
+  }
+
+  flashAbilitySlot() {
+    if (!this.abilitySlot) return;
+
+    this.abilitySlot.classList.remove("is-ready-flash");
+    void this.abilitySlot.offsetWidth;
+    this.abilitySlot.classList.add("is-ready-flash");
   }
 
   setupQuickUseButtons() {

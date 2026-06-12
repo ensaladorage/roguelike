@@ -21,6 +21,7 @@ export const ITEM_EFFECTS = {
   DAMAGE_UP: "damageUp",
   ATTACK_SPEED_UP: "attackSpeedUp",
   MAX_HP_UP: "maxHpUp",
+  UNLOCK_DASH: "unlockDash",
   HEAL: "heal",
   STUN_ENEMY: "stunEnemy",
   AREA_STUN_POISON: "areaStunPoison",
@@ -166,6 +167,36 @@ export const ITEM_DEFINITIONS = {
       negative: [],
     },
     shop: { basePrice: 100 },
+  },
+
+  iceCream: {
+    id: "iceCream",
+    name: "Ice Cream",
+    descriptionTemplate: "Grants dash. Distance: {dashDistance}. Cooldown: {dashCooldownSeconds}s.",
+    type: ITEM_TYPES.EQUIPPABLE,
+    rarity: ITEM_RARITIES.RARE,
+    foodCategory: ITEM_FOOD_CATEGORIES.ABILITY,
+    hudSlot: 7,
+    imagePath: "Assets/Images/Icecream.png",
+    effect: ITEM_EFFECTS.UNLOCK_DASH,
+    effects: [
+      {
+        stat: "dashDistance",
+        op: "set",
+        range: { min: 2.2, max: 3.2, step: 0.1 },
+      },
+      {
+        stat: "dashCooldownSeconds",
+        op: "set",
+        range: { min: 4.5, max: 6.5, step: 0.1 },
+        higherIsBetter: false,
+      },
+    ],
+    modifiers: {
+      positive: ["dashDistance", "dashCooldownSeconds"],
+      negative: [],
+    },
+    shop: { basePrice: 220 },
   },
 
   fish: {

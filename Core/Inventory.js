@@ -17,6 +17,8 @@ const EQUIPMENT_STATS = new Set([
   "maxHp",
   "moveSpeed",
   "speed",
+  "dashDistance",
+  "dashCooldownSeconds",
 ]);
 
 export class Inventory {

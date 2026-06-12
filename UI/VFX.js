@@ -87,6 +87,20 @@ export const VFX_DEFAULTS = {
     hitColor: 0xfff1b0,
     whiffColor: 0xd7e6ff,
   },
+  playerDashTrail: {
+    color: 0x9edcff,
+    duration: 0.18,
+    width: 0.42,
+    y: 0.12,
+    opacity: 0.58,
+  },
+  playerDashBurst: {
+    color: 0x9edcff,
+    duration: 0.16,
+    radius: 0.42,
+    y: 0.1,
+    opacity: 0.62,
+  },
   modelFlash: {
     duration: 0.16,
     emissiveIntensity: 0.9,
@@ -371,6 +385,100 @@ export class VFX {
     });
   }
 
+  playPlayerDashTrail(start, end, direction, options = {}) {
+    if (!this.root || !start || !end || !direction) return;
+
+    const config = {
+      ...VFX_DEFAULTS.playerDashTrail,
+      ...options,
+    };
+    const dashDirection = new THREE.Vector3(direction.x, 0, direction.z);
+    if (dashDirection.lengthSq() <= 0.0001) return;
+    dashDirection.normalize();
+
+    const length = Math.max(0.1, start.distanceTo(end));
+    const center = start.clone().lerp(end, 0.5);
+    const group = new THREE.Group();
+    group.position.set(center.x, config.y, center.z);
+    group.rotation.y = Math.atan2(dashDirection.x, dashDirection.z);
+
+    const material = new THREE.MeshBasicMaterial({
+      color: config.color,
+      transparent: true,
+      opacity: config.opacity,
+      depthWrite: false,
+      side: THREE.DoubleSide,
+      blending: THREE.AdditiveBlending,
+    });
+    const mesh = new THREE.Mesh(
+      new THREE.PlaneGeometry(config.width, length),
+      material
+    );
+
+    mesh.rotation.x = -Math.PI / 2;
+    mesh.renderOrder = 94;
+    group.add(mesh);
+    this.root.add(group);
+
+    this.effects.push({
+      type: "playerDashTrail",
+      group,
+      mesh,
+      material,
+      elapsed: 0,
+      duration: config.duration,
+      config,
+    });
+  }
+
+  playPlayerDashBurst(position, direction, options = {}) {
+    if (!this.root || !position) return;
+
+    const config = {
+      ...VFX_DEFAULTS.playerDashBurst,
+      ...options,
+    };
+    const group = new THREE.Group();
+    group.position.set(position.x, config.y, position.z);
+
+    if (direction) {
+      const dashDirection = new THREE.Vector3(direction.x, 0, direction.z);
+      if (dashDirection.lengthSq() > 0.0001) {
+        dashDirection.normalize();
+        group.rotation.y = Math.atan2(dashDirection.x, dashDirection.z);
+      }
+    }
+
+    const material = new THREE.MeshBasicMaterial({
+      color: config.color,
+      transparent: true,
+      opacity: config.opacity,
+      depthWrite: false,
+      side: THREE.DoubleSide,
+      blending: THREE.AdditiveBlending,
+    });
+    const mesh = new THREE.Mesh(
+      new THREE.RingGeometry(config.radius * 0.45, config.radius, 48),
+      material
+    );
+
+    mesh.rotation.x = -Math.PI / 2;
+    mesh.scale.setScalar(config.scale ?? 1);
+    mesh.renderOrder = 95;
+    group.add(mesh);
+    this.root.add(group);
+
+    this.effects.push({
+      type: "playerDashBurst",
+      group,
+      mesh,
+      material,
+      elapsed: 0,
+      duration: config.duration,
+      config,
+    });
+  }
+
   addPointLight(type, target, options = {}) {
     if (!this.root) return null;
 
@@ -508,6 +616,7 @@ export class VFX {
     };
     const tileSize = Math.max(0.1, config.tileSize);
     const group = new THREE.Group();
+    group.visible = false;
 
     const material = new THREE.MeshBasicMaterial({
       color: config.color,
@@ -656,6 +765,14 @@ export class VFX {
 
       if (effect.type === "playerAttackSlash") {
         return this.updatePlayerAttackSlash(effect, delta);
+      }
+
+      if (effect.type === "playerDashTrail") {
+        return this.updatePlayerDashTrail(effect, delta);
+      }
+
+      if (effect.type === "playerDashBurst") {
+        return this.updatePlayerDashBurst(effect, delta);
       }
 
       if (effect.type === "floatingText") {
@@ -809,6 +926,36 @@ export class VFX {
     return false;
   }
 
+  updatePlayerDashTrail(effect, delta) {
+    effect.elapsed += delta;
+    const t = Math.min(1, effect.elapsed / effect.duration);
+    const eased = 1 - Math.pow(1 - t, 2);
+
+    effect.mesh.scale.x = 1 + eased * 0.3;
+    effect.mesh.scale.y = 1 - eased * 0.35;
+    effect.material.opacity = effect.config.opacity * (1 - eased);
+
+    if (t < 1) return true;
+
+    this.disposeSimpleMeshEffect(effect);
+    return false;
+  }
+
+  updatePlayerDashBurst(effect, delta) {
+    effect.elapsed += delta;
+    const t = Math.min(1, effect.elapsed / effect.duration);
+    const eased = 1 - Math.pow(1 - t, 2);
+    const baseScale = effect.config.scale ?? 1;
+
+    effect.mesh.scale.setScalar(baseScale * (0.65 + eased * 0.95));
+    effect.material.opacity = effect.config.opacity * (1 - eased);
+
+    if (t < 1) return true;
+
+    this.disposeSimpleMeshEffect(effect);
+    return false;
+  }
+
   updatePersistentEffects(delta) {
     for (const effect of this.persistentEffects) {
       switch (effect.type) {
@@ -868,6 +1015,13 @@ export class VFX {
   updateStageLockedConnectionBlocker(effect, delta) {
     const playerPosition = this.getTargetPosition(effect.player);
     if (!playerPosition) {
+      effect.group.visible = false;
+      effect.isPlayerInRadius = false;
+      return;
+    }
+
+    const visibleByRoom = effect.config.isVisible?.(effect) ?? true;
+    if (!visibleByRoom) {
       effect.group.visible = false;
       effect.isPlayerInRadius = false;
       return;
@@ -965,6 +1119,11 @@ export class VFX {
         this.disposePlayerHitSlash(effect);
       } else if (effect.type === "playerAttackSlash") {
         this.disposePlayerAttackSlash(effect);
+      } else if (
+        effect.type === "playerDashTrail" ||
+        effect.type === "playerDashBurst"
+      ) {
+        this.disposeSimpleMeshEffect(effect);
       } else if (effect.type === "floatingText") {
         this.disposeFloatingText(effect);
       } else {
@@ -1046,6 +1205,12 @@ export class VFX {
   }
 
   disposePlayerAttackSlash(effect) {
+    effect.group.removeFromParent();
+    effect.mesh.geometry.dispose();
+    effect.material.dispose();
+  }
+
+  disposeSimpleMeshEffect(effect) {
     effect.group.removeFromParent();
     effect.mesh.geometry.dispose();
     effect.material.dispose();

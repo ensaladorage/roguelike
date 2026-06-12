@@ -14,6 +14,8 @@ const STAT_LABELS = {
   stunDuration: "stun duration",
   poisonDamagePerSecond: "poison damage",
   moveSpeed: "move speed",
+  dashDistance: "dash distance",
+  dashCooldownSeconds: "dash cooldown",
 };
 
 export function createItemInstance(baseItemId, context = {}) {
@@ -154,7 +156,9 @@ function getStatRollQuality(effect, value) {
   const high = Math.max(min, max);
   const normalized = (Number.parseFloat(value) - low) / (high - low);
 
-  return normalized;
+  return effect.higherIsBetter === false
+    ? 1 - normalized
+    : normalized;
 }
 
 function withItemDisplay(itemInstance) {
@@ -197,6 +201,9 @@ function formatStatLine(stat, value) {
 
   if (stat === "heal") return `Restores ${formatStatValue(numericValue)} ${label}`;
   if (stat === "stunDuration") return `Stuns for ${formatStatValue(numericValue)}s`;
+  if (stat === "dashCooldownSeconds") {
+    return `${formatStatValue(numericValue)}s ${label}`;
+  }
   if (stat === "poisonDamagePerSecond") {
     return `${formatSignedValue(numericValue)} ${label}/s`;
   }

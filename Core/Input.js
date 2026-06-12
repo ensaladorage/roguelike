@@ -25,6 +25,7 @@ const KEYBOARD_INPUT_TAGS_TO_IGNORE = new Set([
   "SELECT",
   "TEXTAREA",
 ]);
+const DASH_KEY_CODE = "Space";
 
 export function setupInput(
   renderer,
@@ -181,6 +182,16 @@ export function setupInput(
   };
 
   const handleKeyDown = (event) => {
+    if (isDashKeyboardEvent(event)) {
+      if (shouldIgnoreKeyboardInput(event)) return;
+
+      event.preventDefault();
+      if (!event.repeat) {
+        options.onDashPressed?.();
+      }
+      return;
+    }
+
     if (!isKeyboardMovementEvent(event)) return;
     if (shouldIgnoreKeyboardInput(event)) return;
 
@@ -194,6 +205,11 @@ export function setupInput(
   };
 
   const handleKeyUp = (event) => {
+    if (isDashKeyboardEvent(event)) {
+      event.preventDefault();
+      return;
+    }
+
     if (!isKeyboardMovementEvent(event)) return;
 
     keyboardMovement.pressedCodes.delete(event.code);
@@ -212,6 +228,16 @@ export function setupInput(
     getMovementInput() {
       return getKeyboardMovementInput(keyboardMovement, camera);
     },
+    getPointerWorldPoint() {
+      return getPointerWorldPoint(
+        pointerState,
+        renderer,
+        camera,
+        raycaster,
+        pointer,
+        floor
+      );
+    },
   };
 }
 
@@ -226,6 +252,10 @@ function isKeyboardMovementEvent(event) {
     KEYBOARD_MOVEMENT_DIRECTIONS,
     event.code
   );
+}
+
+function isDashKeyboardEvent(event) {
+  return event.code === DASH_KEY_CODE;
 }
 
 function shouldIgnoreKeyboardInput(event) {
@@ -588,6 +618,30 @@ function updatePointer(event, renderer, camera, raycaster, pointer) {
     raycaster,
     pointer
   );
+}
+
+function getPointerWorldPoint(
+  pointerState,
+  renderer,
+  camera,
+  raycaster,
+  pointer,
+  floor
+) {
+  if (!pointerState.inside || !floor) return null;
+
+  updatePointerFromClientPosition(
+    pointerState.clientX,
+    pointerState.clientY,
+    renderer,
+    camera,
+    raycaster,
+    pointer
+  );
+
+  const hits = raycaster.intersectObject(floor);
+
+  return hits[0]?.point?.clone?.() ?? null;
 }
 
 function updatePointerState(pointerState, event) {

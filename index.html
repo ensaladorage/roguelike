@@ -168,7 +168,7 @@
       border-radius: 5px;
       background: rgba(7, 8, 10, 0.82);
       color: #f8e9b4;
-      font-size: 12px;
+      font-size: 8px;
       font-weight: 900;
       line-height: 1;
       pointer-events: none;
@@ -207,6 +207,116 @@
     .quick-use-count[hidden],
     .quick-use-button img[hidden] {
       display: none;
+    }
+
+    .ability-slot-wrap {
+      position: fixed;
+      left: 50%;
+      bottom: calc(80px + env(safe-area-inset-bottom));
+      z-index: 8;
+      display: flex;
+      justify-content: flex-end;
+      width: min(380px, calc(100vw - 32px));
+      transform: translateX(-50%);
+      pointer-events: auto;
+    }
+
+    .ability-slot {
+      position: relative;
+      display: grid;
+      place-items: center;
+      width: 60px;
+      height: 60px;
+      padding: 8px;
+      overflow: hidden;
+      border: 1px solid rgba(158, 220, 255, 0.26);
+      border-radius: 8px;
+      background: linear-gradient(180deg, rgba(31, 46, 58, 0.9), rgba(12, 17, 23, 0.92));
+      box-shadow: 0 12px 28px rgba(0, 0, 0, 0.34), inset 0 0 0 1px rgba(255, 255, 255, 0.04);
+      backdrop-filter: blur(10px);
+      color: #f4f1e8;
+      cursor: inherit;
+      touch-action: manipulation;
+    }
+
+    .ability-slot.is-empty {
+      opacity: 0.45;
+      filter: grayscale(0.45);
+    }
+
+    .ability-slot__image {
+      position: relative;
+      z-index: 1;
+      width: 38px;
+      height: 38px;
+      object-fit: contain;
+      pointer-events: none;
+      transition: filter 120ms ease, opacity 120ms ease;
+    }
+
+    .ability-slot.is-cooling .ability-slot__image {
+      filter: brightness(0.36) saturate(0.7);
+    }
+
+    .ability-slot__image[hidden] {
+      display: none;
+    }
+
+    .ability-slot__key {
+      position: absolute;
+      top: 4px;
+      left: 4px;
+      z-index: 3;
+      display: grid;
+      place-items: center;
+      min-width: 34px;
+      height: 20px;
+      padding: 0 5px;
+      border: 1px solid rgba(244, 241, 232, 0.28);
+      border-radius: 5px;
+      background: rgba(7, 8, 10, 0.82);
+      color: #bfeaff;
+      font-size: 8px;
+      font-weight: 900;
+      line-height: 1;
+      pointer-events: none;
+    }
+
+    .ability-slot__cooldown {
+      position: absolute;
+      left: 0;
+      right: 0;
+      bottom: 0;
+      z-index: 2;
+      height: 0%;
+      background: linear-gradient(180deg, rgba(255, 255, 255, 0.74), rgba(196, 236, 255, 0.48));
+      mix-blend-mode: screen;
+      opacity: 0;
+      pointer-events: none;
+      transition: height 80ms linear, opacity 120ms ease;
+    }
+
+    .ability-slot.is-cooling .ability-slot__cooldown {
+      opacity: 0.9;
+    }
+
+    .ability-slot.is-ready-flash {
+      animation: abilityReadyFlash 360ms ease-out;
+    }
+
+    @keyframes abilityReadyFlash {
+      0% {
+        box-shadow: 0 0 0 rgba(255, 255, 255, 0), 0 12px 28px rgba(0, 0, 0, 0.34);
+      }
+
+      38% {
+        border-color: rgba(255, 255, 255, 0.9);
+        box-shadow: 0 0 24px rgba(255, 255, 255, 0.85), 0 12px 28px rgba(0, 0, 0, 0.34);
+      }
+
+      100% {
+        box-shadow: 0 0 0 rgba(255, 255, 255, 0), 0 12px 28px rgba(0, 0, 0, 0.34);
+      }
     }
 
     .stat-highlight {
@@ -676,6 +786,28 @@
         height: 34px;
       }
 
+      .ability-slot-wrap {
+        bottom: calc(100px + env(safe-area-inset-bottom));
+        width: min(330px, calc(100vw - 16px));
+      }
+
+      .ability-slot {
+        width: 54px;
+        height: 54px;
+        padding: 7px;
+      }
+
+      .ability-slot__image {
+        width: 34px;
+        height: 34px;
+      }
+
+      .ability-slot__key {
+        min-width: 32px;
+        height: 18px;
+        font-size: 10px;
+      }
+
       .quick-use-count {
         right: 3px;
         bottom: 3px;
@@ -736,6 +868,16 @@
         height: 35px;
       }
 
+      .ability-slot {
+        width: 54px;
+        height: 54px;
+      }
+
+      .ability-slot__image {
+        width: 35px;
+        height: 35px;
+      }
+
       .boss-health {
         top: calc(88px + env(safe-area-inset-top));
         left: calc(6px + env(safe-area-inset-left));
@@ -762,6 +904,16 @@
       }
 
       .quick-use-button img {
+        width: 34px;
+        height: 34px;
+      }
+
+      .ability-slot {
+        width: 50px;
+        height: 50px;
+      }
+
+      .ability-slot__image {
         width: 34px;
         height: 34px;
       }
@@ -809,6 +961,14 @@
   </section>
 
   <div class="quick-use-bar" id="quickUseBar" aria-label="Consumable quick use"></div>
+
+  <div class="ability-slot-wrap" aria-label="Ability quick use">
+    <button class="ability-slot is-empty" id="abilitySlot" type="button" aria-label="Space: ability empty" aria-disabled="true" tabindex="-1">
+      <span class="ability-slot__key">Space</span>
+      <img class="ability-slot__image" id="abilitySlotImage" alt="" aria-hidden="true" hidden>
+      <span class="ability-slot__cooldown" id="abilitySlotCooldown" aria-hidden="true"></span>
+    </button>
+  </div>
 
   <div class="item-tooltip" id="itemTooltip" hidden></div>
 

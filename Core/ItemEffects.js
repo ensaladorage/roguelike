@@ -94,6 +94,13 @@ export class ItemEffects {
       changedStats.push(stat);
     }
 
+    if (
+      allStats.has("dashDistance") ||
+      allStats.has("dashCooldownSeconds")
+    ) {
+      this.applyDashEquipmentConfig(player, nextTotals);
+    }
+
     if (player.hp > player.maxHp) {
       player.hp = player.maxHp;
     }
@@ -134,7 +141,30 @@ export class ItemEffects {
       case "speed":
         player.speed = Math.max(0.1, (player.speed ?? 0) + delta);
         break;
+
+      case "dashDistance":
+      case "dashCooldownSeconds":
+        break;
     }
+  }
+
+  applyDashEquipmentConfig(player, totals = {}) {
+    if (!player) return;
+
+    const dashDistance = this.parseDashStat(totals.dashDistance);
+    const dashCooldownSeconds = this.parseDashStat(totals.dashCooldownSeconds);
+
+    player.configureDash?.({
+      unlocked: dashDistance > 0 && dashCooldownSeconds > 0,
+      distance: dashDistance,
+      cooldown: dashCooldownSeconds,
+    });
+  }
+
+  parseDashStat(value) {
+    const numericValue = Number.parseFloat(value ?? 0);
+
+    return Number.isFinite(numericValue) ? Math.max(0, numericValue) : 0;
   }
 
   applyDamageUp(itemOrDefinition, { player } = {}) {
