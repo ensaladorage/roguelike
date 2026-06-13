@@ -136,7 +136,7 @@ export class HUD {
 
     const category = document.createElement("span");
     category.className = "item-tooltip__meta";
-    category.textContent = `Category: ${this.getItemCategoryLabel(item)}`;
+    category.textContent = this.getItemCategoryLabel(item);
 
     const description = document.createElement("span");
     description.textContent = getItemDisplayDescription(item);
