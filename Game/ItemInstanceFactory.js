@@ -8,6 +8,7 @@ import { createSeededRandom } from "./Utils.js";
 
 const STAT_LABELS = {
   attackDamage: "attack damage",
+  attackRange: "attack range",
   attackSpeed: "attack speed",
   maxHp: "max HP",
   heal: "HP",

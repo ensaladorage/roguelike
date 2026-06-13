@@ -26,6 +26,10 @@ const COMMON_TREASURE_REWARD = Object.freeze({
   }),
 });
 
+const ENEMY_POTION_DROP_EARLY = Object.freeze({ chancePercent: 20 });
+const ENEMY_POTION_DROP_MID = Object.freeze({ chancePercent: 22 });
+const ENEMY_POTION_DROP_LATE = Object.freeze({ chancePercent: 25 });
+
 function createTreasureReward(overrides = {}) {
   return Object.freeze({
     ...COMMON_TREASURE_REWARD,
@@ -64,12 +68,19 @@ export const SHOP_TIERS = Object.freeze({
   1: Object.freeze({
     tier: 1,
     offerCount: 2,
-    possibleItemIds: Object.freeze(["steak", "chili", "potato", "energyDrink"]),
+    possibleItemIds: Object.freeze([
+      "ramen",
+      "fish",
+      "garlic",
+      "iceCream",
+      "dragonSteak",
+      "spicySauce",
+      "dragonFruit",
+    ]),
     priceMultiplier: 0.95,
     rarityWeights: Object.freeze({
-      [ITEM_RARITIES.COMMON]: 96,
-      [ITEM_RARITIES.RARE]: 4,
-      [ITEM_RARITIES.EPIC]: 0,
+      [ITEM_RARITIES.RARE]: 85,
+      [ITEM_RARITIES.EPIC]: 15,
     }),
     healing: Object.freeze({
       enabled: false,
@@ -81,21 +92,18 @@ export const SHOP_TIERS = Object.freeze({
     tier: 2,
     offerCount: 3,
     possibleItemIds: Object.freeze([
-      "steak",
-      "chili",
-      "potato",
-      "energyDrink",
-      "purpleShroom",
       "ramen",
       "fish",
       "garlic",
       "iceCream",
+      "dragonSteak",
+      "spicySauce",
+      "dragonFruit",
     ]),
     priceMultiplier: 1,
     rarityWeights: Object.freeze({
-      [ITEM_RARITIES.COMMON]: 82,
-      [ITEM_RARITIES.RARE]: 16,
-      [ITEM_RARITIES.EPIC]: 2,
+      [ITEM_RARITIES.RARE]: 70,
+      [ITEM_RARITIES.EPIC]: 30,
     }),
     healing: Object.freeze({
       enabled: true,
@@ -107,21 +115,18 @@ export const SHOP_TIERS = Object.freeze({
     tier: 3,
     offerCount: 3,
     possibleItemIds: Object.freeze([
-      "steak",
-      "chili",
-      "potato",
-      "energyDrink",
-      "purpleShroom",
       "ramen",
       "fish",
       "garlic",
       "iceCream",
+      "dragonSteak",
+      "spicySauce",
+      "dragonFruit",
     ]),
     priceMultiplier: 1.1,
     rarityWeights: Object.freeze({
-      [ITEM_RARITIES.COMMON]: 68,
-      [ITEM_RARITIES.RARE]: 26,
-      [ITEM_RARITIES.EPIC]: 6,
+      [ITEM_RARITIES.RARE]: 55,
+      [ITEM_RARITIES.EPIC]: 45,
     }),
     healing: Object.freeze({
       enabled: true,
@@ -140,6 +145,7 @@ export const RUN_PLAN = Object.freeze({
       name: "Stage 1 - Old Bones",
       enemyPoolWeights: Object.freeze({ [ENEMY_DIFFICULTY.EASY]: 100 }),
       enemyCoinDrop: Object.freeze({ totalValueMin: 4, totalValueMax: 6 }),
+      enemyPotionDrop: ENEMY_POTION_DROP_EARLY,
       difficultyScale: 1,
       compact: true,
       treasureReward: createTreasureReward({
@@ -152,6 +158,7 @@ export const RUN_PLAN = Object.freeze({
       name: "Stage 2 - Hungry Dark",
       enemyPoolWeights: Object.freeze({ [ENEMY_DIFFICULTY.EASY]: 100 }),
       enemyCoinDrop: Object.freeze({ totalValueMin: 4, totalValueMax: 7 }),
+      enemyPotionDrop: ENEMY_POTION_DROP_EARLY,
       difficultyScale: 1.05,
       compact: true,
       treasureReward: createTreasureReward({
@@ -173,6 +180,7 @@ export const RUN_PLAN = Object.freeze({
         [ENEMY_DIFFICULTY.MEDIUM]: 35,
       }),
       enemyCoinDrop: Object.freeze({ totalValueMin: 5, totalValueMax: 8 }),
+      enemyPotionDrop: ENEMY_POTION_DROP_MID,
       difficultyScale: 1.08,
       compact: true,
       treasureReward: createTreasureReward({
@@ -188,6 +196,7 @@ export const RUN_PLAN = Object.freeze({
         [ENEMY_DIFFICULTY.MEDIUM]: 45,
       }),
       enemyCoinDrop: Object.freeze({ totalValueMin: 5, totalValueMax: 8 }),
+      enemyPotionDrop: ENEMY_POTION_DROP_MID,
       difficultyScale: 1.12,
       compact: true,
       treasureReward: createTreasureReward({
@@ -210,6 +219,7 @@ export const RUN_PLAN = Object.freeze({
         [ENEMY_DIFFICULTY.HARD]: 20,
       }),
       enemyCoinDrop: Object.freeze({ totalValueMin: 6, totalValueMax: 9 }),
+      enemyPotionDrop: ENEMY_POTION_DROP_LATE,
       difficultyScale: 1.16,
       compact: true,
       treasureReward: createTreasureReward({
@@ -226,6 +236,7 @@ export const RUN_PLAN = Object.freeze({
         [ENEMY_DIFFICULTY.HARD]: 30,
       }),
       enemyCoinDrop: Object.freeze({ totalValueMin: 7, totalValueMax: 10 }),
+      enemyPotionDrop: ENEMY_POTION_DROP_LATE,
       difficultyScale: 1.2,
       compact: true,
       treasureReward: createTreasureReward({

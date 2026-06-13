@@ -79,7 +79,7 @@ export const ITEM_DEFINITIONS = {
   garlic: {
     id: "garlic",
     name: "Garlic",
-    descriptionTemplate: "+{attackSpeed} attack speed, {maxHp} max HP",
+    descriptionTemplate: "+{attackSpeed} attack speed",
     type: ITEM_TYPES.EQUIPPABLE,
     rarity: ITEM_RARITIES.RARE,
     foodCategory: ITEM_FOOD_CATEGORIES.SPICY,
@@ -92,15 +92,10 @@ export const ITEM_DEFINITIONS = {
         op: "add",
         range: { min: 0.3, max: 0.8, step: 0.01 },
       },
-      {
-        stat: "maxHp",
-        op: "add",
-        range: { min: -20, max: -10, step: 1 },
-      },
     ],
     modifiers: {
       positive: ["attackSpeed"],
-      negative: ["maxHp"],
+      negative: [],
     },
     shop: { basePrice: 260 },
   },
@@ -230,12 +225,12 @@ export const ITEM_DEFINITIONS = {
       {
         stat: "dashDistance",
         op: "set",
-        range: { min: 2.2, max: 3.2, step: 0.1 },
+        range: { min: 2, max: 3.5, step: 0.1 },
       },
       {
         stat: "dashCooldownSeconds",
         op: "set",
-        range: { min: 4.5, max: 6.5, step: 0.1 },
+        range: { min: 1.5, max: 4, step: 0.1 },
         higherIsBetter: false,
       },
     ],
@@ -249,7 +244,7 @@ export const ITEM_DEFINITIONS = {
   fish: {
     id: "fish",
     name: "Fish",
-    descriptionTemplate: "+{attackDamage} attack damage, {moveSpeed} move speed",
+    descriptionTemplate: "+{attackDamage} attack damage",
     type: ITEM_TYPES.EQUIPPABLE,
     rarity: ITEM_RARITIES.RARE,
     foodCategory: ITEM_FOOD_CATEGORIES.PROTEIN,
@@ -262,17 +257,94 @@ export const ITEM_DEFINITIONS = {
         op: "add",
         range: { min: 4, max: 12, step: 1 },
       },
+    ],
+    modifiers: {
+      positive: ["attackDamage"],
+      negative: [],
+    },
+    shop: { basePrice: 180 },
+  },
+
+  dragonSteak: {
+    id: "dragonSteak",
+    name: "Dragon Steak",
+    descriptionTemplate: "+{attackDamage} attack damage, {attackRange} attack range",
+    type: ITEM_TYPES.EQUIPPABLE,
+    rarity: ITEM_RARITIES.EPIC,
+    foodCategory: ITEM_FOOD_CATEGORIES.PROTEIN,
+    hudSlot: 4,
+    imagePath: "Assets/Images/DragonSteak.png",
+    effect: ITEM_EFFECTS.DAMAGE_UP,
+    effects: [
       {
-        stat: "moveSpeed",
+        stat: "attackDamage",
         op: "add",
-        range: { min: -0.35, max: -0.1, step: 0.01 },
+        range: { min: 22, max: 34, step: 1 },
+      },
+      {
+        stat: "attackRange",
+        op: "add",
+        range: { min: -0.3, max: -0.15, step: 0.01 },
       },
     ],
     modifiers: {
       positive: ["attackDamage"],
+      negative: ["attackRange"],
+    },
+    shop: { basePrice: 540 },
+  },
+
+  spicySauce: {
+    id: "spicySauce",
+    name: "Spicy Sauce",
+    descriptionTemplate: "+{attackSpeed} attack speed, {moveSpeed} move speed",
+    type: ITEM_TYPES.EQUIPPABLE,
+    rarity: ITEM_RARITIES.EPIC,
+    foodCategory: ITEM_FOOD_CATEGORIES.SPICY,
+    hudSlot: 5,
+    imagePath: "Assets/Images/SpicySauce.png",
+    effect: ITEM_EFFECTS.ATTACK_SPEED_UP,
+    effects: [
+      {
+        stat: "attackSpeed",
+        op: "add",
+        range: { min: 1, max: 1.6, step: 0.01 },
+      },
+      {
+        stat: "moveSpeed",
+        op: "add",
+        range: { min: -0.25, max: -0.15, step: 0.01 },
+      },
+    ],
+    modifiers: {
+      positive: ["attackSpeed"],
       negative: ["moveSpeed"],
     },
-    shop: { basePrice: 180 },
+    shop: { basePrice: 520 },
+  },
+
+  dragonFruit: {
+    id: "dragonFruit",
+    name: "Dragon Fruit",
+    descriptionTemplate: "+{maxHp} max HP",
+    type: ITEM_TYPES.EQUIPPABLE,
+    rarity: ITEM_RARITIES.EPIC,
+    foodCategory: ITEM_FOOD_CATEGORIES.HEARTY,
+    hudSlot: 3,
+    imagePath: "Assets/Images/DragonFruit.png",
+    effect: ITEM_EFFECTS.MAX_HP_UP,
+    effects: [
+      {
+        stat: "maxHp",
+        op: "add",
+        range: { min: 65, max: 95, step: 1 },
+      },
+    ],
+    modifiers: {
+      positive: ["maxHp"],
+      negative: [],
+    },
+    shop: { basePrice: 500 },
   },
 };
 

@@ -1022,6 +1022,7 @@ export class LevelBuilder {
       ...(bossOverrides.coinDrop ?? {}),
     };
     const potionDrop = {
+      ...(levelDefinition.enemyPotionDrop ?? {}),
       ...(spawn.potionDrop ?? {}),
       ...(bossOverrides.potionDrop ?? {}),
     };

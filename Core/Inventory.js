@@ -13,6 +13,7 @@ import {
 
 const EQUIPMENT_STATS = new Set([
   "attackDamage",
+  "attackRange",
   "attackSpeed",
   "maxHp",
   "moveSpeed",

@@ -122,6 +122,10 @@ export class ItemEffects {
         player.attackDamage = Math.max(0, (player.attackDamage ?? 0) + delta);
         break;
 
+      case "attackRange":
+        player.attackRange = Math.max(0.75, (player.attackRange ?? 0) + delta);
+        break;
+
       case "attackSpeed": {
         const nextSpeed = (player.attackSpeed ?? 0) + delta;
         if (typeof player.setAttackSpeed === "function") {

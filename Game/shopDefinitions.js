@@ -23,19 +23,16 @@ export const SHOP_DEFINITION = Object.freeze({
   }),
 
   possibleItemIds: Object.freeze([
-    "steak",
-    "potato",
-    "purpleShroom",
-    "chili",
     "garlic",
-    "energyDrink",
     "ramen",
     "fish",
     "iceCream",
+    "dragonSteak",
+    "spicySauce",
+    "dragonFruit",
   ]),
 
   fallbackPriceByRarity: Object.freeze({
-    [ITEM_RARITIES.COMMON]: 100,
     [ITEM_RARITIES.RARE]: 250,
     [ITEM_RARITIES.EPIC]: 500,
   }),
@@ -44,9 +41,8 @@ export const SHOP_DEFINITION = Object.freeze({
 
   rarityWeights: Object.freeze({
     default: Object.freeze({
-      [ITEM_RARITIES.COMMON]: 85,
-      [ITEM_RARITIES.RARE]: 14,
-      [ITEM_RARITIES.EPIC]: 1,
+      [ITEM_RARITIES.RARE]: 70,
+      [ITEM_RARITIES.EPIC]: 30,
     }),
 
     byRunProgress: Object.freeze([
@@ -55,9 +51,8 @@ export const SHOP_DEFINITION = Object.freeze({
         minCompletedFloors: 0,
         maxCompletedFloors: 3,
         weights: Object.freeze({
-          [ITEM_RARITIES.COMMON]: 85,
-          [ITEM_RARITIES.RARE]: 14,
-          [ITEM_RARITIES.EPIC]: 1,
+          [ITEM_RARITIES.RARE]: 85,
+          [ITEM_RARITIES.EPIC]: 15,
         }),
       }),
       Object.freeze({
@@ -65,9 +60,8 @@ export const SHOP_DEFINITION = Object.freeze({
         minCompletedFloors: 4,
         maxCompletedFloors: 7,
         weights: Object.freeze({
-          [ITEM_RARITIES.COMMON]: 72,
-          [ITEM_RARITIES.RARE]: 24,
-          [ITEM_RARITIES.EPIC]: 4,
+          [ITEM_RARITIES.RARE]: 70,
+          [ITEM_RARITIES.EPIC]: 30,
         }),
       }),
       Object.freeze({
@@ -75,9 +69,8 @@ export const SHOP_DEFINITION = Object.freeze({
         minCompletedFloors: 8,
         maxCompletedFloors: 9,
         weights: Object.freeze({
-          [ITEM_RARITIES.COMMON]: 62,
-          [ITEM_RARITIES.RARE]: 31,
-          [ITEM_RARITIES.EPIC]: 7,
+          [ITEM_RARITIES.RARE]: 55,
+          [ITEM_RARITIES.EPIC]: 45,
         }),
       }),
       Object.freeze({
@@ -85,9 +78,8 @@ export const SHOP_DEFINITION = Object.freeze({
         minCompletedFloors: 10,
         minFloorIndex: 11,
         weights: Object.freeze({
-          [ITEM_RARITIES.COMMON]: 50,
-          [ITEM_RARITIES.RARE]: 38,
-          [ITEM_RARITIES.EPIC]: 12,
+          [ITEM_RARITIES.RARE]: 45,
+          [ITEM_RARITIES.EPIC]: 55,
         }),
       }),
     ]),

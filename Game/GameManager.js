@@ -271,6 +271,7 @@ export class GameManager {
       stageProfile: floorPlan.stage?.compact ? "compactCombat" : "procedural",
       enemyPoolWeights: floorPlan.stage?.enemyPoolWeights,
       enemyCoinDrop: floorPlan.stage?.enemyCoinDrop,
+      enemyPotionDrop: floorPlan.stage?.enemyPotionDrop,
       treasureReward: floorPlan.stage?.treasureReward,
       difficultyTier: snapshot.difficultyTier,
       cycleIndex: snapshot.cycleIndex,

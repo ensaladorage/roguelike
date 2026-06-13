@@ -77,6 +77,8 @@ export class HUD {
     this.onEpicRewardCancel = null;
     this.inventoryPanelOpen = false;
     this.inventoryHint = null;
+    this.equippedHudList = null;
+    this.equippedHudSignature = "";
     this.inventoryPanel = null;
     this.inventorySlotList = null;
     this.currentPlayer = null;
@@ -130,10 +132,19 @@ export class HUD {
     const name = document.createElement("strong");
     name.textContent = getItemDisplayName(item);
 
+    const category = document.createElement("span");
+    category.className = "item-tooltip__meta";
+    category.textContent = `Category: ${this.getItemCategoryLabel(item)}`;
+
     const description = document.createElement("span");
     description.textContent = getItemDisplayDescription(item);
 
-    this.itemTooltip.append(this.createItemRarityLabel(item), name, description);
+    this.itemTooltip.append(
+      this.createItemRarityLabel(item),
+      name,
+      category,
+      description
+    );
     this.itemTooltip.hidden = false;
     this.moveItemTooltip(position);
   }
@@ -145,6 +156,16 @@ export class HUD {
     const y = Number.isFinite(position.clientY) ? position.clientY : 0;
     this.itemTooltip.style.left = `${x + 18}px`;
     this.itemTooltip.style.top = `${y + 18}px`;
+  }
+
+  getElementTooltipPosition(element) {
+    const rect = element?.getBoundingClientRect?.();
+    if (!rect) return {};
+
+    return {
+      clientX: rect.right,
+      clientY: rect.top,
+    };
   }
 
   hideItemTooltip() {
@@ -173,6 +194,7 @@ export class HUD {
     if (this.inventoryHint) {
       this.inventoryHint.hidden = true;
     }
+    this.setEquippedHudHidden(true);
     this.updateInventoryPanel(inventory);
   }
 
@@ -185,6 +207,7 @@ export class HUD {
     if (this.inventoryHint) {
       this.inventoryHint.hidden = false;
     }
+    this.updateEquippedHud(this.currentInventory);
     this.hideItemTooltip();
   }
 
@@ -386,6 +409,7 @@ export class HUD {
     if (this.inventoryPanelOpen) {
       this.updateInventoryPanel(inventory);
     }
+    this.updateEquippedHud(inventory);
   }
 
   setupAbilitySlot() {
@@ -576,6 +600,18 @@ export class HUD {
     });
     document.body.appendChild(closedHint);
 
+    const equippedHud = document.createElement("div");
+    equippedHud.className = "inventory-equipped-hud";
+    equippedHud.setAttribute("aria-label", "Equipped items");
+    equippedHud.hidden = true;
+    equippedHud.addEventListener("pointerdown", (event) => {
+      event.stopPropagation();
+    });
+    equippedHud.addEventListener("click", (event) => {
+      event.stopPropagation();
+    });
+    document.body.appendChild(equippedHud);
+
     const panel = document.createElement("section");
     panel.className = "inventory-panel";
     panel.setAttribute("role", "dialog");
@@ -608,6 +644,7 @@ export class HUD {
     panel.addEventListener("click", (event) => event.stopPropagation());
 
     this.inventoryHint = closedHint;
+    this.equippedHudList = equippedHud;
     this.inventoryPanel = panel;
     this.inventorySlotList = slots;
   }
@@ -714,6 +751,94 @@ export class HUD {
     return slot;
   }
 
+  updateEquippedHud(inventory = this.currentInventory) {
+    this.currentInventory = inventory ?? this.currentInventory;
+    if (!this.equippedHudList || !this.currentInventory) return;
+
+    const equippedItems = EQUIPMENT_SLOT_ORDER.map((category) => ({
+      category,
+      item: this.currentInventory.getEquippedItemForCategory?.(category) ?? null,
+    }));
+    const hasEquippedItem = equippedItems.some(({ item }) => Boolean(item));
+    const shouldHide = this.inventoryPanelOpen || !hasEquippedItem;
+    const nextSignature = equippedItems
+      .map(({ item }) => item?.instanceId ?? item?.baseItemId ?? "empty")
+      .join("|");
+
+    if (nextSignature === this.equippedHudSignature) {
+      this.setEquippedHudHidden(shouldHide);
+      return;
+    }
+
+    this.equippedHudSignature = nextSignature;
+    this.equippedHudList.innerHTML = "";
+
+    for (const { category, item } of equippedItems) {
+      this.equippedHudList.appendChild(
+        this.createEquippedHudSlot(category, item)
+      );
+    }
+
+    this.setEquippedHudHidden(shouldHide);
+  }
+
+  setEquippedHudHidden(hidden) {
+    if (!this.equippedHudList) return;
+
+    this.equippedHudList.hidden = Boolean(hidden);
+  }
+
+  createEquippedHudSlot(category, item) {
+    const slot = document.createElement("button");
+    slot.type = "button";
+    slot.className = "inventory-equipped-hud__slot";
+    slot.classList.toggle("is-empty", !item);
+    slot.setAttribute(
+      "aria-label",
+      item
+        ? `${EQUIPMENT_SLOT_LABELS[category] ?? category}: ${getItemDisplayName(item)}`
+        : `${EQUIPMENT_SLOT_LABELS[category] ?? category}: empty`
+    );
+    slot.tabIndex = item ? 0 : -1;
+
+    if (item) {
+      this.applyItemRarityClass(slot, item);
+    }
+
+    if (item?.imagePath) {
+      const image = document.createElement("img");
+      image.src = item.imagePath;
+      image.alt = "";
+      image.setAttribute("aria-hidden", "true");
+      slot.appendChild(image);
+    } else {
+      slot.textContent = EQUIPMENT_SLOT_LABELS[category]?.charAt(0) ?? "?";
+    }
+
+    if (item) {
+      slot.addEventListener("mouseenter", (event) => {
+        this.showItemTooltip(item, event);
+      });
+      slot.addEventListener("mousemove", (event) => {
+        this.moveItemTooltip(event);
+      });
+      slot.addEventListener("mouseleave", () => {
+        this.hideItemTooltip();
+      });
+      slot.addEventListener("focus", (event) => {
+        this.showItemTooltip(
+          item,
+          this.getElementTooltipPosition(event.currentTarget)
+        );
+      });
+      slot.addEventListener("blur", () => {
+        this.hideItemTooltip();
+      });
+    }
+
+    return slot;
+  }
+
   renderSwapConfirmation() {
     if (!this.swapConfirmationOverlay || !this.swapConfirmation) return;
 
@@ -793,6 +918,14 @@ export class HUD {
   getItemRarityLabel(item) {
     const rarity = this.getItemRarity(item);
     return ITEM_RARITY_LABEL_BY_RARITY[rarity] ?? ITEM_RARITY_LABEL_BY_RARITY[ITEM_RARITIES.COMMON];
+  }
+
+  getItemCategoryLabel(item) {
+    if (item?.foodCategory) {
+      return EQUIPMENT_SLOT_LABELS[item.foodCategory] ?? item.foodCategory;
+    }
+
+    return item?.type === "consumable" ? "Consumable" : "Item";
   }
 
   createItemRarityLabel(item) {
@@ -1063,7 +1196,7 @@ export class HUD {
         color: rgba(244, 241, 232, 0.82);
         font: inherit;
         font-size: 13px;
-        font-weight: 800;c
+        font-weight: 800;
         cursor: inherit;
         pointer-events: auto;
       }
@@ -1084,6 +1217,75 @@ export class HUD {
 
       .item-tooltip {
         z-index: 36;
+      }
+
+      .item-tooltip__meta {
+        color: rgba(240, 179, 90, 0.9);
+        font-size: 11px;
+        font-weight: 900;
+        text-transform: uppercase;
+      }
+
+      .inventory-equipped-hud {
+        position: fixed;
+        left: 39px;
+        top: 219px;
+        z-index: 8;
+        display: grid;
+        gap: 28px;
+        pointer-events: none;
+      }
+
+      .inventory-equipped-hud[hidden] {
+        display: none;
+      }
+
+      .inventory-equipped-hud__slot {
+        display: grid;
+        place-items: center;
+        width: 52px;
+        height: 52px;
+        border: 1px solid rgba(244, 241, 232, 0.18);
+        border-radius: 8px;
+        background: rgba(17, 19, 23, 0.76);
+        box-shadow: 0 12px 24px rgba(0, 0, 0, 0.24);
+        backdrop-filter: blur(10px);
+        color: rgba(244, 241, 232, 0.58);
+        font: inherit;
+        font-size: 20px;
+        font-weight: 900;
+        pointer-events: auto;
+      }
+
+      .inventory-equipped-hud__slot.is-empty {
+        visibility: hidden;
+        pointer-events: none;
+      }
+
+      .inventory-equipped-hud__slot.is-common {
+        border-color: rgba(255, 255, 255, 0.78);
+        box-shadow: 0 12px 24px rgba(0, 0, 0, 0.24), inset 0 0 0 1px rgba(255, 255, 255, 0.16);
+      }
+
+      .inventory-equipped-hud__slot.is-rare {
+        border-color: rgba(90, 168, 255, 0.78);
+        box-shadow: 0 12px 24px rgba(0, 0, 0, 0.24), inset 0 0 0 1px rgba(90, 168, 255, 0.2);
+      }
+
+      .inventory-equipped-hud__slot.is-epic {
+        border-color: rgba(180, 117, 255, 0.78);
+        box-shadow: 0 12px 24px rgba(0, 0, 0, 0.24), inset 0 0 0 1px rgba(180, 117, 255, 0.24);
+      }
+
+      .inventory-equipped-hud__slot img {
+        width: 42px;
+        height: 42px;
+        object-fit: contain;
+      }
+
+      .inventory-equipped-hud__slot:focus-visible {
+        outline: 2px solid #f0b35a;
+        outline-offset: 2px;
       }
 
       .inventory-panel[hidden],
@@ -1401,6 +1603,22 @@ export class HUD {
         .inventory-hint {
           top: calc(116px + env(safe-area-inset-top));
           left: calc(8px + env(safe-area-inset-left));
+        }
+
+        .inventory-equipped-hud {
+          top: calc(173px + env(safe-area-inset-top));
+          left: calc(25px + env(safe-area-inset-left));
+          gap: 26px;
+        }
+
+        .inventory-equipped-hud__slot {
+          width: 46px;
+          height: 46px;
+        }
+
+        .inventory-equipped-hud__slot img {
+          width: 36px;
+          height: 36px;
         }
 
         .inventory-panel__slot {

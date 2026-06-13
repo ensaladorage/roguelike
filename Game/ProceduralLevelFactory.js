@@ -337,6 +337,7 @@ function tryCreateCompactCombatLevel(rng, options, attempt) {
     enemyDifficulty: difficultyTier,
     enemyPoolWeights: options.enemyPoolWeights ?? null,
     enemyCoinDrop: options.enemyCoinDrop ?? null,
+    enemyPotionDrop: options.enemyPotionDrop ?? null,
     treasureReward: options.treasureReward ?? null,
     suppressChestRoomTypes: ["combat", "exit"],
     cycleIndex,

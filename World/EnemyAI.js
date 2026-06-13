@@ -3,13 +3,14 @@ import { splitCoinValueIntoTypes } from "../Game/Coin.js";
 
 export const ENEMY_POTION_DROP = {
   itemId: "energyDrink",
-  chancePercent: 10,
+  chancePercent: 20,
   radius: 0.82,
 };
 
 export const ENEMY_COIN_DROP = {
   totalValueMin: 2,
   totalValueMax: 5,
+  valueMultiplier: 1.05,
   radius: 0.7,
 };
 
@@ -1038,9 +1039,13 @@ export class EnemyAI {
 
   createCoinDrops() {
     const coins = [];
-    const totalValue = this.rollIntegerRange(
+    const rolledValue = this.rollIntegerRange(
       this.coinDropConfig.totalValueMin,
       this.coinDropConfig.totalValueMax
+    );
+    const totalValue = this.applyValueMultiplier(
+      rolledValue,
+      this.coinDropConfig.valueMultiplier
     );
     const coinTypes = splitCoinValueIntoTypes(totalValue);
     const count = coinTypes.length;
@@ -1088,6 +1093,7 @@ export class EnemyAI {
       })),
       totalValueMin: this.coinDropConfig.totalValueMin,
       totalValueMax: this.coinDropConfig.totalValueMax,
+      valueMultiplier: this.coinDropConfig.valueMultiplier,
     });
 
     return coins;
@@ -1151,6 +1157,16 @@ export class EnemyAI {
     const safeMax = Math.floor(Math.max(min, max));
 
     return safeMin + Math.floor(Math.random() * (safeMax - safeMin + 1));
+  }
+
+  applyValueMultiplier(value, multiplier = 1) {
+    const numericMultiplier = Number.parseFloat(multiplier);
+    const safeMultiplier =
+      Number.isFinite(numericMultiplier) && numericMultiplier >= 0
+        ? numericMultiplier
+        : 1;
+
+    return Math.max(0, Math.round(value * safeMultiplier));
   }
 
   face(target) {

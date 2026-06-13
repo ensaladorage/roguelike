@@ -37,6 +37,7 @@ export const CHEST_REWARD = {
 export const CHEST_COIN_DROP = {
   totalValueMin: 20,
   totalValueMax: 30,
+  valueMultiplier: 1.05,
   radius: 0.62,
 };
 
@@ -263,6 +264,16 @@ function rollIntegerRange(min, max) {
   const safeMax = Math.floor(Math.max(min, max));
 
   return safeMin + Math.floor(Math.random() * (safeMax - safeMin + 1));
+}
+
+function applyCoinValueMultiplier(value, multiplier = 1) {
+  const numericMultiplier = Number.parseFloat(multiplier);
+  const safeMultiplier =
+    Number.isFinite(numericMultiplier) && numericMultiplier >= 0
+      ? numericMultiplier
+      : 1;
+
+  return Math.max(0, Math.round(value * safeMultiplier));
 }
 
 export class ChestManager {
@@ -739,9 +750,13 @@ export class ChestManager {
       ...(coinDropConfig ?? {}),
     };
     const coins = [];
-    const totalValue = rollIntegerRange(
+    const rolledValue = rollIntegerRange(
       config.totalValueMin,
       config.totalValueMax
+    );
+    const totalValue = applyCoinValueMultiplier(
+      rolledValue,
+      config.valueMultiplier
     );
     const coinTypes = splitCoinValueIntoTypes(totalValue);
     const count = coinTypes.length;
