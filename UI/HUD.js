@@ -85,6 +85,7 @@ export class HUD {
     this.currentInventory = null;
     this.swapConfirmationOverlay = null;
     this.swapConfirmation = null;
+    this.handleModalEscape = this.handleModalEscape.bind(this);
 
     this.ensureInventoryStyles();
     this.setupQuickUseButtons();
@@ -93,6 +94,7 @@ export class HUD {
     this.setupInventoryPanel();
     this.setupSwapConfirmation();
     this.setupLogSlider();
+    window.addEventListener("keydown", this.handleModalEscape);
   }
 
   setConsumableUseHandler(handler) {
@@ -315,6 +317,35 @@ export class HUD {
     if (cancelled) {
       onCancel?.();
     }
+  }
+
+  handleModalEscape(event) {
+    if (event.key !== "Escape") return;
+
+    if (this.isSwapConfirmationOpen()) {
+      event.preventDefault();
+      event.stopImmediatePropagation();
+      this.hideItemSwapConfirmation({ cancelled: true });
+      return;
+    }
+
+    if (this.isEpicRewardOverlayOpen()) {
+      event.preventDefault();
+      event.stopImmediatePropagation();
+      this.hideEpicChestRewards({ cancelled: true });
+    }
+  }
+
+  isSwapConfirmationOpen() {
+    return Boolean(
+      this.swapConfirmationOverlay &&
+      !this.swapConfirmationOverlay.hidden &&
+      this.swapConfirmation
+    );
+  }
+
+  isEpicRewardOverlayOpen() {
+    return Boolean(this.epicRewardOverlay && !this.epicRewardOverlay.hidden);
   }
 
   updateBoss(boss) {
@@ -580,10 +611,7 @@ export class HUD {
     });
 
     this.epicRewardOverlay.addEventListener("keydown", (event) => {
-      if (event.key !== "Escape") return;
-
-      event.preventDefault();
-      this.hideEpicChestRewards({ cancelled: true });
+      this.handleModalEscape(event);
     });
   }
 
@@ -684,11 +712,7 @@ export class HUD {
     });
 
     overlay.addEventListener("keydown", (event) => {
-      if (event.key === "Escape") {
-        event.preventDefault();
-        event.stopPropagation();
-        this.hideItemSwapConfirmation({ cancelled: true });
-      }
+      this.handleModalEscape(event);
     });
 
     document.body.appendChild(overlay);

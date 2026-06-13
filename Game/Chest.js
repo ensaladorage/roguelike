@@ -41,6 +41,13 @@ export const CHEST_COIN_DROP = {
   radius: 0.62,
 };
 
+const CHEST_ITEM_DROP_LAYOUT = {
+  minSpacing: 1.06,
+  forwardDistance: 1.18,
+  sideSpacing: 0.95,
+  maxDistance: 2.45,
+};
+
 export const CHEST_TYPES = {
   STANDARD: "standard",
   MIMIC_COFFIN: "mimicCoffin",
@@ -655,9 +662,10 @@ export class ChestManager {
     if (!roll.success || !potionDropConfig.itemId) return;
 
     const origin = chest.model.position.clone();
+    const forward = this.getChestForward(chest);
     const position = origin
       .clone()
-      .addScaledVector(this.getChestForward(chest), potionDropConfig.radius ?? 0.82);
+      .addScaledVector(forward, potionDropConfig.radius ?? 0.82);
 
     if (this.scene.itemDropManager) {
       this.scene.itemDropManager.addItemDrops([
@@ -665,6 +673,13 @@ export class ChestManager {
           itemId: potionDropConfig.itemId,
           position: new THREE.Vector3(position.x, 0, position.z),
           fallbackOrigin: origin.clone(),
+          source: "chest",
+          dropLayout: {
+            ...CHEST_ITEM_DROP_LAYOUT,
+            groupId: `chest:${this.getChestSourceId(chest)}:mimicPotion`,
+            forwardX: forward.x,
+            forwardZ: forward.z,
+          },
         },
       ]);
     }
@@ -720,6 +735,13 @@ export class ChestManager {
           itemInstance,
           position: new THREE.Vector3(position.x, 0, position.z),
           fallbackOrigin: origin,
+          source: "chest",
+          dropLayout: {
+            ...CHEST_ITEM_DROP_LAYOUT,
+            groupId: `chest:${this.getChestSourceId(chest)}:items`,
+            forwardX: forward.x,
+            forwardZ: forward.z,
+          },
         };
       })
     );

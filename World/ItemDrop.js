@@ -13,6 +13,11 @@ const ITEM_DROP_WALL_CLEARANCE = 0.28;
 const ITEM_DROP_LANDING_MIN_DISTANCE = 0.62;
 const ITEM_DROP_LANDING_MAX_DISTANCE = 1.35;
 const ITEM_DROP_LANDING_ANGLE_SPREAD = Math.PI * 0.95;
+const ITEM_DROP_GROUP_MIN_SPACING = 1.02;
+const ITEM_DROP_GROUP_FORWARD_DISTANCE = 1.15;
+const ITEM_DROP_GROUP_FORWARD_STEP = 0.34;
+const ITEM_DROP_GROUP_SIDE_SPACING = 0.88;
+const ITEM_DROP_GROUP_MAX_DISTANCE = 2.35;
 const ITEM_DROP_PICKUP_RANGE = 0.8;
 const ITEM_DROP_BLOCKED_RETRY_DELAY = 1;
 const ITEM_DROP_CUBE_SIZE = 0.36;
@@ -50,6 +55,7 @@ export class ItemDropManager {
   }
 
   addItemDrops(items) {
+    const preparedDrops = [];
     const count = items.length;
 
     for (let index = 0; index < count; index += 1) {
@@ -65,17 +71,33 @@ export class ItemDropManager {
       const definition = getItemDefinition(getItemBaseId(itemInstance ?? itemDrop.itemId));
       if (!definition) continue;
 
-      const model = this.createItemModel(definition);
       const origin = itemDrop.fallbackOrigin
         ? itemDrop.fallbackOrigin.clone()
         : itemDrop.position.clone();
+      const position = itemDrop.position.clone();
 
-      const resolved = this.resolveDropPosition(
-        itemDrop.position.clone(),
+      preparedDrops.push({
+        itemDrop,
+        itemInstance,
+        definition,
         origin,
+        position,
         index,
-        count
-      );
+        count,
+      });
+    }
+
+    const resolvedPositions = this.resolveDropDestinations(preparedDrops);
+
+    for (let index = 0; index < preparedDrops.length; index += 1) {
+      const {
+        itemDrop,
+        itemInstance,
+        definition,
+        origin,
+      } = preparedDrops[index];
+      const model = this.createItemModel(definition);
+      const resolved = resolvedPositions[index];
 
       origin.y = ITEM_DROP_GROUND_Y;
       resolved.y = ITEM_DROP_GROUND_Y;
@@ -432,6 +454,246 @@ export class ItemDropManager {
         ) ?? "inventoryFull",
       },
     ]);
+  }
+
+  resolveDropDestinations(preparedDrops) {
+    const resolvedPositions = new Array(preparedDrops.length);
+    const groups = new Map();
+
+    for (let index = 0; index < preparedDrops.length; index += 1) {
+      const preparedDrop = preparedDrops[index];
+      const groupId = preparedDrop.itemDrop.dropLayout?.groupId;
+
+      if (!groupId) {
+        resolvedPositions[index] = this.resolveDropPosition(
+          preparedDrop.position.clone(),
+          preparedDrop.origin,
+          preparedDrop.index,
+          preparedDrop.count
+        );
+        continue;
+      }
+
+      if (!groups.has(groupId)) {
+        groups.set(groupId, []);
+      }
+      groups.get(groupId).push({ preparedDrop, index });
+    }
+
+    for (const entries of groups.values()) {
+      const drops = entries.map((entry) => entry.preparedDrop);
+      const layout = drops[0]?.itemDrop.dropLayout ?? {};
+      const positions = drops.length > 1
+        ? this.resolveGroupedDropPositions(drops, layout)
+        : [
+          this.resolveDropPosition(
+            drops[0].position.clone(),
+            drops[0].origin,
+            drops[0].index,
+            drops[0].count
+          ),
+        ];
+
+      for (let index = 0; index < entries.length; index += 1) {
+        resolvedPositions[entries[index].index] = positions[index];
+      }
+    }
+
+    return resolvedPositions;
+  }
+
+  resolveGroupedDropPositions(preparedDrops, layout = {}) {
+    const origin = preparedDrops[0]?.origin?.clone?.();
+    if (!origin) return [];
+
+    origin.y = 0;
+
+    const minSpacing = Number.isFinite(layout.minSpacing)
+      ? Math.max(0, layout.minSpacing)
+      : ITEM_DROP_GROUP_MIN_SPACING;
+    const accepted = [];
+
+    for (let index = 0; index < preparedDrops.length; index += 1) {
+      const candidates = this.createGroupedDropCandidates(
+        preparedDrops,
+        index,
+        origin,
+        layout
+      );
+      const chosen =
+        this.chooseGroupedDropCandidate(origin, candidates, accepted, minSpacing) ??
+        this.resolveGroupedDropFallback(
+          origin,
+          preparedDrops[index].position,
+          accepted,
+          layout
+        );
+
+      accepted.push(chosen);
+    }
+
+    return accepted;
+  }
+
+  createGroupedDropCandidates(preparedDrops, dropIndex, origin, layout = {}) {
+    const count = preparedDrops.length;
+    const centeredIndex = dropIndex - (count - 1) / 2;
+    const baseAngle = this.getGroupedDropBaseAngle(preparedDrops, origin, layout);
+    const forwardDistance = Number.isFinite(layout.forwardDistance)
+      ? layout.forwardDistance
+      : ITEM_DROP_GROUP_FORWARD_DISTANCE;
+    const forwardStep = Number.isFinite(layout.forwardStep)
+      ? layout.forwardStep
+      : ITEM_DROP_GROUP_FORWARD_STEP;
+    const sideSpacing = Number.isFinite(layout.sideSpacing)
+      ? layout.sideSpacing
+      : ITEM_DROP_GROUP_SIDE_SPACING;
+    const maxDistance = Number.isFinite(layout.maxDistance)
+      ? Math.max(forwardDistance, layout.maxDistance)
+      : ITEM_DROP_GROUP_MAX_DISTANCE;
+    const forward = new THREE.Vector3(Math.cos(baseAngle), 0, Math.sin(baseAngle));
+    const right = new THREE.Vector3(forward.z, 0, -forward.x);
+    const candidates = [];
+
+    for (let row = 0; row < 5; row += 1) {
+      const distance = forwardDistance +
+        row * forwardStep +
+        Math.abs(centeredIndex) * 0.08;
+      const side = centeredIndex * sideSpacing +
+        (row % 2 === 0 ? 0 : Math.sign(centeredIndex || 1) * sideSpacing * 0.35);
+      candidates.push(
+        this.clampGroupedDropOffset(
+          origin,
+          forward.clone().multiplyScalar(distance).addScaledVector(right, side),
+          maxDistance
+        )
+      );
+    }
+
+    const radialBase = Math.min(
+      maxDistance,
+      forwardDistance + Math.abs(centeredIndex) * 0.22
+    );
+    for (let ring = 0; ring < 6; ring += 1) {
+      const angleOffset = centeredIndex * 0.52 + (ring - 2.5) * 0.24;
+      const distance = Math.min(maxDistance, radialBase + ring * 0.18);
+      candidates.push(new THREE.Vector3(
+        origin.x + Math.cos(baseAngle + angleOffset) * distance,
+        0,
+        origin.z + Math.sin(baseAngle + angleOffset) * distance
+      ));
+    }
+
+    const preferred = preparedDrops[dropIndex]?.position?.clone?.();
+    if (preferred) {
+      preferred.y = 0;
+      candidates.push(preferred);
+    }
+
+    return candidates;
+  }
+
+  getGroupedDropBaseAngle(preparedDrops, origin, layout = {}) {
+    if (Number.isFinite(layout.forwardX) || Number.isFinite(layout.forwardZ)) {
+      const x = Number.isFinite(layout.forwardX) ? layout.forwardX : 0;
+      const z = Number.isFinite(layout.forwardZ) ? layout.forwardZ : 0;
+      if (Math.hypot(x, z) > 0.0001) {
+        return Math.atan2(z, x);
+      }
+    }
+
+    const firstOffset = preparedDrops[0]?.position?.clone?.().sub(origin);
+    if (firstOffset && firstOffset.lengthSq() > 0.0001) {
+      firstOffset.y = 0;
+      return Math.atan2(firstOffset.z, firstOffset.x);
+    }
+
+    return Math.random() * Math.PI * 2;
+  }
+
+  clampGroupedDropOffset(origin, offset, maxDistance) {
+    const distance = Math.hypot(offset.x, offset.z);
+    if (distance > maxDistance && distance > 0.0001) {
+      offset.multiplyScalar(maxDistance / distance);
+    }
+
+    return new THREE.Vector3(origin.x + offset.x, 0, origin.z + offset.z);
+  }
+
+  chooseGroupedDropCandidate(origin, candidates, accepted, minSpacing) {
+    let bestCandidate = null;
+    let bestDistance = -Infinity;
+
+    for (const candidate of candidates) {
+      const safeCandidate = this.resolveWallCollision(origin, candidate);
+      if (!safeCandidate) continue;
+
+      const nearestDistance = this.getNearestDropDistance(safeCandidate, accepted);
+      if (nearestDistance >= minSpacing) {
+        return safeCandidate;
+      }
+
+      if (nearestDistance > bestDistance) {
+        bestDistance = nearestDistance;
+        bestCandidate = safeCandidate;
+      }
+    }
+
+    return bestCandidate;
+  }
+
+  resolveGroupedDropFallback(origin, preferredPosition, accepted, layout = {}) {
+    const maxDistance = Number.isFinite(layout.maxDistance)
+      ? Math.max(ITEM_DROP_LANDING_MAX_DISTANCE, layout.maxDistance)
+      : ITEM_DROP_GROUP_MAX_DISTANCE;
+    const candidates = [];
+
+    if (preferredPosition) {
+      const preferred = preferredPosition.clone();
+      preferred.y = 0;
+      candidates.push(preferred);
+    }
+
+    for (let ring = 0; ring < 3; ring += 1) {
+      const distance = Math.min(maxDistance, ITEM_DROP_LANDING_MAX_DISTANCE + ring * 0.35);
+      for (let step = 0; step < 12; step += 1) {
+        const angle = (step / 12) * Math.PI * 2 + ring * 0.17;
+        candidates.push(new THREE.Vector3(
+          origin.x + Math.cos(angle) * distance,
+          0,
+          origin.z + Math.sin(angle) * distance
+        ));
+      }
+    }
+
+    let bestCandidate = null;
+    let bestDistance = -Infinity;
+
+    for (const candidate of candidates) {
+      const safeCandidate = this.resolveWallCollision(origin, candidate);
+      if (!safeCandidate) continue;
+
+      const nearestDistance = this.getNearestDropDistance(safeCandidate, accepted);
+      if (nearestDistance > bestDistance) {
+        bestDistance = nearestDistance;
+        bestCandidate = safeCandidate;
+      }
+    }
+
+    if (bestCandidate) return bestCandidate;
+
+    const originFallback = origin.clone();
+    originFallback.y = 0;
+    return originFallback;
+  }
+
+  getNearestDropDistance(candidate, accepted) {
+    if (accepted.length === 0) return Infinity;
+
+    return accepted.reduce(
+      (nearest, position) => Math.min(nearest, flatDistance(candidate, position)),
+      Infinity
+    );
   }
 
   resolveDropPosition(position, fallbackOrigin, dropIndex = 0, dropCount = 1) {
