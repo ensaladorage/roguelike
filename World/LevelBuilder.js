@@ -119,6 +119,8 @@ export class LevelBuilder {
       return this.buildAssembledLevel(levelDefinition, buildOptions);
     }
 
+    // Deprecated fallback for pre-assembled level definitions.
+    // Current run floors should use authored or assembled definitions.
     return this.buildLegacyLevel(levelDefinition);
   }
 

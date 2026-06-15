@@ -6,7 +6,7 @@ Responder siempre en español.
 
 Roguelike 3D top-down para navegador, servido como app estática de ES modules. Three.js se carga desde el import map de `index.html`; no hay bundler. Entradas principales: `main.js` y `Core/Scene.js`.
 
-El modo actual y único es `run`; no reintroducir tester mode. La progresión vive en `Game/RunPlan.js`: 10 stages, con combate compacto en 1, 2, 4, 5, 7 y 8; tiendas en 3, 6 y 9; boss placeholder en 10. Los pisos de combate siguen `enter -> combat -> treasure -> exit`; la treasure room queda bloqueada hasta limpiar los enemigos requeridos. La victoria/derrota reinicia por `GameManager`, sin recargar la página.
+El modo actual y único es `run`; no reintroducir tester mode. La progresión vive en `Game/RunPlan.js`: 10 stages, con combate compacto en 1, 2, 4, 5, 7 y 8; tiendas en 3, 6 y 9; boss en 10. Los pisos de combate siguen `enter -> combat -> treasure -> exit`; la treasure room queda bloqueada hasta limpiar los enemigos requeridos. La victoria/derrota reinicia por `GameManager`, sin recargar la página.
 
 ## Arquitectura
 

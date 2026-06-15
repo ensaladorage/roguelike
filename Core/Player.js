@@ -3,7 +3,6 @@ import * as THREE from "three";
 export const PLAYER_STATES = {
   IDLE: "idle",
   MOVING: "moving",
-  COMBAT: "combat",
   DEAD: "dead",
 };
 
@@ -68,10 +67,6 @@ export class Player {
     this.lockedAttackDirection = null;
     this.pendingAttackEnemies = [];
 
-    this.attackTarget = null;
-    this.currentEnemy = null;
-    this.attackAutoPursuitEnabled = false;
-
     this.events = [];
     this.directMovementVelocity = new THREE.Vector3();
     this.dashUnlocked = false;
@@ -85,9 +80,7 @@ export class Player {
     this.dashEndPosition = new THREE.Vector3();
     this.dashDirection = new THREE.Vector3(0, 0, 1);
 
-    // 🔥 IMPORTANTE
-    // Guardamos la rotación visual aparte para evitar
-    // que lookAt() rompa la dirección del personaje.
+    // Keep visual rotation separate so lookAt() cannot override the character direction.
     this.visualRotation = 0;
 
     this.occlusionRaycaster = new THREE.Raycaster();
@@ -220,9 +213,6 @@ export class Player {
   resetRuntimeState() {
     this.target = null;
     this.path = [];
-    this.attackTarget = null;
-    this.currentEnemy = null;
-    this.attackAutoPursuitEnabled = false;
     this.state = PLAYER_STATES.IDLE;
     this.attackTimer = this.attackCooldown;
     this.attackState = PLAYER_ATTACK_STATES.READY;
@@ -321,28 +311,11 @@ export class Player {
     ).length > 0;
   }
 
-  setTarget(position) {
-    if (this.state === PLAYER_STATES.DEAD) return;
+  applyRecoveryPath(points) {
+    if (this.state === PLAYER_STATES.DEAD) return false;
+    if (!points || points.length === 0) return false;
 
-    this.clearAttackTarget();
-    this.stopDirectMovement();
-    this.path = [];
-
-    this.target = position.clone();
-    this.target.y = this.groundY;
-
-    this.state = PLAYER_STATES.MOVING;
-  }
-
-  setPath(points) {
-    if (this.state === PLAYER_STATES.DEAD) return;
-    if (!points || points.length === 0) return;
-
-    this.clearAttackTarget();
-    this.applyPath(points);
-  }
-
-  applyPath(points) {
+    this.clearAttackIntent();
     this.stopDirectMovement();
     this.path = points.map((point) => {
       const waypoint = point.clone();
@@ -352,75 +325,11 @@ export class Player {
 
     this.target = this.path.shift();
     this.state = PLAYER_STATES.MOVING;
+    return true;
   }
 
-  setEnemy(enemy) {
-    this.enterCombat(enemy);
-  }
-
-  setAttackTarget(enemy, path = [], options = {}) {
-    if (this.hp <= 0) return;
-    if (this.state === PLAYER_STATES.DEAD) return;
-    if (!enemy || !enemy.alive) return;
-
-    const previousTarget = this.attackTarget;
-    const autoPursuit = options.autoPursuit ?? true;
-
-    this.attackTarget = enemy;
-    this.currentEnemy = enemy;
-    this.attackAutoPursuitEnabled = autoPursuit;
-
-    if (path.length > 0) {
-      this.applyPath(path);
-    } else {
-      this.target = null;
-      this.path = [];
-      this.state = PLAYER_STATES.COMBAT;
-    }
-
-    if (previousTarget === enemy) return;
-
-    if (previousTarget) {
-      this.emit({
-        type: "combatEnd",
-        enemy: previousTarget,
-      });
-    }
-
-    this.emit({
-      type: "combatStart",
-      enemy,
-    });
-  }
-
-  clearAttackTarget() {
-    const enemy = this.attackTarget ?? this.currentEnemy;
-    const wasAttacking = Boolean(enemy);
-
-    this.attackTarget = null;
-    this.currentEnemy = null;
-    this.attackAutoPursuitEnabled = false;
-    this.cancelAttackWindup(enemy);
-
-    if (!wasAttacking) return;
-
-    this.emit({
-      type: "combatEnd",
-      enemy,
-    });
-  }
-
-  enterCombat(enemy) {
-    this.setAttackTarget(enemy);
-  }
-
-  leaveCombat(enemy = this.currentEnemy) {
-    if (this.state === PLAYER_STATES.DEAD) return;
-
-    this.clearAttackTarget();
-    this.target = null;
-    this.path = [];
-    this.state = PLAYER_STATES.IDLE;
+  clearAttackIntent() {
+    this.cancelAttackWindup(null);
   }
 
   addGold(amount) {
@@ -473,8 +382,6 @@ export class Player {
 
     this.target = null;
     this.path = [];
-    this.attackTarget = null;
-    this.currentEnemy = null;
     this.attackState = PLAYER_ATTACK_STATES.READY;
     this.attackWindupTimer = 0;
     this.lockedAttackDirection = null;
@@ -500,7 +407,7 @@ export class Player {
   clearTarget() {
     if (this.state === PLAYER_STATES.DEAD) return;
 
-    this.clearAttackTarget();
+    this.clearAttackIntent();
     this.stopMovement();
   }
 
@@ -514,22 +421,7 @@ export class Player {
     this.target = null;
     this.path = [];
 
-    this.state = this.attackTarget
-      ? PLAYER_STATES.COMBAT
-      : PLAYER_STATES.IDLE;
-  }
-
-  cancelAttackAutoPursuit() {
-    if (!this.attackTarget) return;
-
-    this.attackAutoPursuitEnabled = false;
-    this.target = null;
-    this.path = [];
-    this.cancelAttackWindup(this.attackTarget);
-  }
-
-  canAutoPursueAttackTarget() {
-    return Boolean(this.attackTarget && this.attackAutoPursuitEnabled);
+    this.state = PLAYER_STATES.IDLE;
   }
 
   requestDirectionalAttack(point, { enemies = [] } = {}) {
@@ -631,7 +523,7 @@ export class Player {
     this.stopDirectMovement();
     this.target = null;
     this.path = [];
-    this.state = this.attackTarget ? PLAYER_STATES.COMBAT : PLAYER_STATES.MOVING;
+    this.state = PLAYER_STATES.MOVING;
 
     this.visualRotation = Math.atan2(direction.x, direction.z);
     this.model.rotation.y = this.visualRotation;
@@ -648,7 +540,7 @@ export class Player {
   }
 
   startDirectionalAttackWindup(direction, enemies = []) {
-    this.clearAttackTarget();
+    this.clearAttackIntent();
     this.lockedAttackDirection = direction.clone();
     this.pendingAttackEnemies = Array.isArray(enemies) ? [...enemies] : [];
     this.attackState = PLAYER_ATTACK_STATES.WINDUP;
@@ -708,10 +600,6 @@ export class Player {
       case PLAYER_STATES.MOVING:
         this.updateMoving(delta);
         break;
-
-      case PLAYER_STATES.COMBAT:
-        this.updateCombat(delta);
-        break;
     }
   }
 
@@ -751,7 +639,7 @@ export class Player {
     this.model.position.copy(this.dashEndPosition);
     this.dashActive = false;
     this.dashElapsed = 0;
-    this.state = this.attackTarget ? PLAYER_STATES.COMBAT : PLAYER_STATES.IDLE;
+    this.state = PLAYER_STATES.IDLE;
 
     this.emit({
       type: "dashEnded",
@@ -896,25 +784,6 @@ export class Player {
     return current + difference * blend;
   }
 
-  updateCombatWhileMoving(delta) {
-    if (!this.attackTarget || !this.attackTarget.alive) {
-      this.clearAttackTarget();
-      return;
-    }
-
-    const enemyPos = this.attackTarget.model.position;
-    const dx = enemyPos.x - this.model.position.x;
-    const dz = enemyPos.z - this.model.position.z;
-    const distance = Math.sqrt(dx * dx + dz * dz);
-
-    if (distance > this.attackRange) {
-      this.cancelAttackWindup(this.attackTarget);
-      return;
-    }
-
-    this.updateAttackState(delta);
-  }
-
   updateMoving(delta) {
     if (!this.target) {
       this.state = PLAYER_STATES.IDLE;
@@ -936,9 +805,7 @@ export class Player {
         this.target = this.path.shift();
       } else {
         this.target = null;
-        this.state = this.attackTarget
-          ? PLAYER_STATES.COMBAT
-          : PLAYER_STATES.IDLE;
+        this.state = PLAYER_STATES.IDLE;
       }
 
       this.updateAttackState(delta);
@@ -957,7 +824,6 @@ export class Player {
       step
     );
 
-    // 🔥 ROTACIÓN MANUAL LIMPIA
     if (this.shouldFaceAttackDirection()) {
       this.faceAttackDirection();
     } else {
@@ -968,44 +834,6 @@ export class Player {
 
       this.model.rotation.y =
         this.visualRotation;
-    }
-
-    this.updateAttackState(delta);
-  }
-
-  updateCombat(delta) {
-    if (
-      !this.attackTarget ||
-      !this.attackTarget.alive
-    ) {
-      this.clearAttackTarget();
-
-      this.state = PLAYER_STATES.IDLE;
-
-      return;
-    }
-
-    const enemyPos =
-      this.attackTarget.model.position;
-
-    const dx =
-      enemyPos.x - this.model.position.x;
-
-    const dz =
-      enemyPos.z - this.model.position.z;
-
-    const distance =
-      Math.sqrt(dx * dx + dz * dz);
-
-    // 🔥 YA NO USAMOS lookAt()
-    // porque rompe la rotación acumulada del modelo.
-    const angle = Math.atan2(dx, dz);
-
-    this.model.rotation.y = angle;
-
-    if (distance > this.attackRange) {
-      this.cancelAttackWindup(this.attackTarget);
-      return;
     }
 
     this.updateAttackState(delta);
@@ -1023,19 +851,6 @@ export class Player {
       case PLAYER_ATTACK_STATES.COOLDOWN:
         break;
     }
-  }
-
-  startAttackWindup() {
-    if (!this.isAttackTargetValid()) return;
-
-    this.attackState = PLAYER_ATTACK_STATES.WINDUP;
-    this.attackWindupTimer = 0;
-
-    this.emit({
-      type: "attackWindupStarted",
-      enemy: this.attackTarget,
-      duration: this.attackWindupDuration,
-    });
   }
 
   updateAttackWindup(delta) {
@@ -1120,7 +935,7 @@ export class Player {
     });
   }
 
-  cancelAttackWindup(enemy = this.attackTarget) {
+  cancelAttackWindup(enemy = null) {
     if (this.attackState !== PLAYER_ATTACK_STATES.WINDUP) return;
 
     this.attackState = PLAYER_ATTACK_STATES.READY;
@@ -1132,14 +947,6 @@ export class Player {
       type: "attackWindupCanceled",
       enemy,
     });
-  }
-
-  isAttackTargetValid() {
-    return Boolean(
-      this.attackTarget &&
-      this.attackTarget.alive &&
-      this.attackTarget.model?.position
-    );
   }
 
   getAttackCooldownProgress() {

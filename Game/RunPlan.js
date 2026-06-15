@@ -255,6 +255,7 @@ export const RUN_PLAN = Object.freeze({
       name: "Stage 10 - Hollow Warden",
       enemyPoolWeights: Object.freeze({ [ENEMY_DIFFICULTY.HARD]: 100 }),
       difficultyScale: 1,
+      // Deprecated marker: the stage now uses the boss/victory reset flow.
       bossPlaceholder: true,
       bossEnemyOverrides: Object.freeze({
         maxHp: 260,

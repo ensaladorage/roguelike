@@ -9,6 +9,7 @@ export const GAME_CONFIG = Object.freeze({
   run: {
     runSeed: null,
     startStageIndex: 1,
+    // Deprecated alias for old floor configs; startStageIndex is authoritative.
     startFloorIndex: 1,
   },
 });

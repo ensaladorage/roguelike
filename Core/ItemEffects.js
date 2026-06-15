@@ -356,16 +356,14 @@ export class ItemEffects {
       }
     }
 
-    const combatEnemy = targets.includes(player.currentEnemy)
-      ? player.currentEnemy
-      : targets[0];
+    const primaryEnemy = targets[0];
 
-    this.leavePlayerCombat(player, combatEnemy);
+    this.clearPlayerCombatIntent(player);
 
     return {
       applied: true,
       consumed: true,
-      enemy: targets[0],
+      enemy: primaryEnemy,
       enemies: targets,
       enemyCount: targets.length,
       center,
@@ -391,13 +389,7 @@ export class ItemEffects {
       .map(({ enemy }) => enemy);
   }
 
-  leavePlayerCombat(player, enemy) {
-    if (typeof player.leaveCombat === "function") {
-      player.leaveCombat(enemy);
-      return;
-    }
-
-    player.currentEnemy = null;
+  clearPlayerCombatIntent(player) {
     player.clearTarget?.();
   }
 

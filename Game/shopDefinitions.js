@@ -45,6 +45,7 @@ export const SHOP_DEFINITION = Object.freeze({
       [ITEM_RARITIES.EPIC]: 30,
     }),
 
+    // Deprecated fallback: current finite-run shops receive tier data from RunPlan.
     byRunProgress: Object.freeze([
       Object.freeze({
         id: "early",
@@ -74,6 +75,7 @@ export const SHOP_DEFINITION = Object.freeze({
         }),
       }),
       Object.freeze({
+        // Deprecated endless/post-run fallback; finite runs currently end at stage 10.
         id: "shop_after_floor_10",
         minCompletedFloors: 10,
         minFloorIndex: 11,

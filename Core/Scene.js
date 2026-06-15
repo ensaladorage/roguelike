@@ -29,14 +29,15 @@ import {
 import { RoomTemplateLibrary } from "../World/RoomTemplateLibrary.js";
 import { LevelBuilder } from "../World/LevelBuilder.js";
 import { ModularTileBuilder } from "../World/ModularTileBuilder.js";
+import { NavigationGrid } from "../World/NavigationGrid.js";
 import { RoomVisibilityManager } from "../World/RoomVisibilityManager.js";
 
 const PLAYER_GROUND_Y = 0;
 const PLAYER_COLLISION_RADIUS = 0.32;
 const ENEMY_COLLISION_RADIUS = 0.32;
 const NAV_GRID_SIZE = 0.7;
-const CLICK_TARGET_SEARCH_RADIUS = 1.35;
-const CLICK_TARGET_SEARCH_STEP = 0.22;
+const NAVIGATION_TARGET_SEARCH_RADIUS = 1.35;
+const NAVIGATION_TARGET_SEARCH_STEP = 0.22;
 const PLAYER_COLLISION_SKIN = 0.04;
 const PLAYER_ENEMY_COLLISION_SKIN = -0.03;
 const PLAYER_ENEMY_COLLISION_RADIUS_SCALE = 0.72;
@@ -50,6 +51,8 @@ const MAX_RENDER_PIXEL_RATIO = 1.75;
 const PAUSE_LOCK_REASON = "pauseMenu";
 const ITEM_SWAP_LOCK_REASON = "itemSwapConfirmation";
 const INTERACTION_CLICK_FEEDBACK_COLOR = 0xffd84a;
+const INTERACTION_OUT_OF_RANGE_MESSAGE = "Move closer.";
+const LEVEL_EXIT_INTERACTION_RANGE = 0.6;
 const FRONT_DIRECTION_BY_SIDE = {
   north: { x: 0, z: 1 },
   south: { x: 0, z: -1 },
@@ -75,6 +78,12 @@ export class GameScene {
       roomTemplateLibrary: this.roomTemplateLibrary,
     });
     this.modularTileBuilder = new ModularTileBuilder(this);
+    this.navigationGrid = new NavigationGrid({
+      gridSize: NAV_GRID_SIZE,
+      groundY: PLAYER_GROUND_Y,
+      targetSearchRadius: NAVIGATION_TARGET_SEARCH_RADIUS,
+      targetSearchStep: NAVIGATION_TARGET_SEARCH_STEP,
+    });
     this.roomVisibilityManager = new RoomVisibilityManager(this);
 
     this.camera = new THREE.PerspectiveCamera(
@@ -110,7 +119,6 @@ export class GameScene {
     this.collisionWalls = [];
     this.allWallMeshes = [];
     this.wallMeshes = [];
-    this.navBounds = null;
     this.levelExitTrigger = null;
     this.exitInteractableTargets = [];
     this.clickEffects = [];
@@ -646,7 +654,7 @@ export class GameScene {
     this.collisionWalls = [];
     this.allWallMeshes = [];
     this.wallMeshes = [];
-    this.navBounds = null;
+    this.navigationGrid.clear();
     this.levelExitTrigger = null;
     this.exitInteractableTargets = [];
   }
@@ -891,7 +899,11 @@ export class GameScene {
     const stairs = this.collisionWalls.find(
       (wall) =>
         wall.role === "entryStairs" &&
-        this.isInsideWall(start, wall, PLAYER_COLLISION_RADIUS)
+        this.navigationGrid.isPointInsideWall(
+          start,
+          wall,
+          PLAYER_COLLISION_RADIUS
+        )
     );
 
     if (!stairs) return null;
@@ -923,58 +935,12 @@ export class GameScene {
     maxSearchRadius = 3,
     searchStep = 0.2
   ) {
-    const candidates = [];
-    const seen = new Set();
-
-    const addCandidate = (x, z) => {
-      const candidate = new THREE.Vector3(x, PLAYER_GROUND_Y, z);
-      const key = `${candidate.x.toFixed(3)},${candidate.z.toFixed(3)}`;
-
-      if (seen.has(key)) return;
-      if (!this.isWalkablePosition(candidate, radius)) return;
-
-      seen.add(key);
-      candidates.push(candidate);
-    };
-
-    addCandidate(point.x, point.z);
-
-    for (const area of this.walkableAreas) {
-      const minX = area.x - area.w / 2 + radius;
-      const maxX = area.x + area.w / 2 - radius;
-      const minZ = area.z - area.d / 2 + radius;
-      const maxZ = area.z + area.d / 2 - radius;
-
-      if (minX > maxX || minZ > maxZ) continue;
-
-      addCandidate(
-        THREE.MathUtils.clamp(point.x, minX, maxX),
-        THREE.MathUtils.clamp(point.z, minZ, maxZ)
-      );
-    }
-
-    const angleStep = Math.PI / 8;
-
-    for (
-      let distance = searchStep;
-      distance <= maxSearchRadius;
-      distance += searchStep
-    ) {
-      for (let angle = 0; angle < Math.PI * 2; angle += angleStep) {
-        addCandidate(
-          point.x + Math.cos(angle) * distance,
-          point.z + Math.sin(angle) * distance
-        );
-      }
-
-      if (candidates.length > 0) break;
-    }
-
-    candidates.sort(
-      (a, b) => a.distanceToSquared(point) - b.distanceToSquared(point)
+    return this.navigationGrid.getNearestWalkablePosition(
+      point,
+      radius,
+      maxSearchRadius,
+      searchStep
     );
-
-    return candidates[0] ?? null;
   }
 
   addLevelGeometry(level) {
@@ -983,7 +949,10 @@ export class GameScene {
     this.stageLockedConnectionBlockers = this.collisionWalls.filter(
       (wall) => wall.role === "stageLockedConnection"
     );
-    this.navBounds = this.calculateNavBounds(this.walkableAreas);
+    this.navigationGrid.configure({
+      walkableAreas: this.walkableAreas,
+      collisionWalls: this.collisionWalls,
+    });
 
     const environmentBuild = this.modularTileBuilder.buildLevel(level.environment);
     this.allWallMeshes = environmentBuild.wallMeshes;
@@ -1237,6 +1206,10 @@ export class GameScene {
         wall.role !== "stageLockedConnection" ||
         !lockedConnectionIds.has(wall.connectionId)
     );
+    this.navigationGrid.configure({
+      walkableAreas: this.walkableAreas,
+      collisionWalls: this.collisionWalls,
+    });
     this.stageLockedConnectionBlockers = [];
 
     for (const effect of this.stageLockedConnectionBlockerEffects) {
@@ -1304,40 +1277,37 @@ export class GameScene {
   handleWorldClick(payload) {
     if (this.isPlayerControlLocked()) return;
 
-    const keyboardMovementActive = this.isKeyboardMovementActive();
     const chest = this.getChestFromInteractable(payload?.interactable);
     if (chest) {
       this.cancelStoredActionIntents();
-      this.handleChestClick(chest, payload, {
-        keyboardMovementActive,
-      });
+      this.handleChestClick(chest, payload);
       return;
     }
 
     const shopStand = this.getShopStandFromInteractable(payload?.interactable);
     if (shopStand) {
       this.cancelStoredActionIntents();
-      this.handleShopStandClick(shopStand, payload, {
-        keyboardMovementActive,
-      });
+      this.handleShopStandClick(shopStand, payload);
       return;
     }
 
     const shopFountain = this.getShopFountainFromInteractable(payload?.interactable);
     if (shopFountain) {
       this.cancelStoredActionIntents();
-      this.handleShopFountainClick(shopFountain, payload, {
-        keyboardMovementActive,
-      });
+      this.handleShopFountainClick(shopFountain, payload);
       return;
     }
 
     const itemDrop = this.getItemDropFromInteractable(payload?.interactable);
     if (itemDrop) {
       this.cancelStoredActionIntents();
-      this.handleItemDropClick(itemDrop, payload, {
-        keyboardMovementActive,
-      });
+      this.handleItemDropClick(itemDrop, payload);
+      return;
+    }
+
+    if (payload?.interactable?.type === "levelExit") {
+      this.cancelStoredActionIntents();
+      this.handleLevelExitClick(payload);
       return;
     }
 
@@ -1366,7 +1336,7 @@ export class GameScene {
     keepAttack = false,
   } = {}) {
     if (!keepAttack) {
-      this.player?.clearAttackTarget?.();
+      this.player?.clearAttackIntent?.();
     }
 
     // Add future delayed interactables here so manual movement/interactions clear stale actions.
@@ -1420,8 +1390,13 @@ export class GameScene {
     ) <= triggerRange;
   }
 
-  handleChestClick(chest, payload = {}, options = {}) {
+  handleChestClick(chest, payload = {}) {
     this.chestManager?.cancelPendingChestOpen?.();
+
+    if (!this.isChestInPlayerInteractionRange(chest)) {
+      this.showMoveCloserFeedback(payload.point ?? chest?.model?.position);
+      return;
+    }
 
     if (chest?.lockedUntilStageClear && !chest.stageUnlocked) {
       this.addLog("Clear the room before opening this chest.");
@@ -1430,30 +1405,10 @@ export class GameScene {
 
     if (!this.chestManager?.isChestInteractable?.(chest)) return;
 
-    if (options.keyboardMovementActive) {
-      if (!this.isChestInPlayerInteractionRange(chest)) return;
-
-      this.chestManager.requestChestOpen(chest);
-      this.createClickFeedback(payload.point ?? chest.model.position, {
-        color: INTERACTION_CLICK_FEEDBACK_COLOR,
-      });
-      return;
-    }
-
-    const navigation = this.getChestInteractionNavigation(
-      chest,
-      payload.point
-    );
-    if (!navigation) return;
-
     this.chestManager.requestChestOpen(chest);
-    this.createClickFeedback(payload.point ?? navigation.target, {
+    this.createClickFeedback(payload.point ?? chest.model.position, {
       color: INTERACTION_CLICK_FEEDBACK_COLOR,
     });
-
-    if (navigation.path.length > 0) {
-      this.player.setPath(navigation.path);
-    }
   }
 
   isShopStandInPlayerInteractionRange(stand) {
@@ -1485,82 +1440,73 @@ export class GameScene {
     ) <= pickupRange;
   }
 
-  handleShopStandClick(stand, payload = {}, options = {}) {
-    if (options.keyboardMovementActive) {
-      if (!this.isShopStandInPlayerInteractionRange(stand)) return;
+  isLevelExitInPlayerInteractionRange() {
+    if (!this.levelExitTrigger || !this.player?.model?.position) return false;
 
-      this.shopManager?.requestStandInteraction?.(stand);
+    return flatDistance(
+      this.player.model.position,
+      this.levelExitTrigger
+    ) <= LEVEL_EXIT_INTERACTION_RANGE;
+  }
+
+  showMoveCloserFeedback(position = null) {
+    this.addLog(INTERACTION_OUT_OF_RANGE_MESSAGE);
+
+    if (position) {
+      this.createClickFeedback(position, {
+        color: INTERACTION_CLICK_FEEDBACK_COLOR,
+      });
+    }
+  }
+
+  handleShopStandClick(stand, payload = {}) {
+    this.shopManager?.cancelPendingStandInteraction?.(stand);
+
+    if (!this.isShopStandInPlayerInteractionRange(stand)) {
+      this.showMoveCloserFeedback(payload.point ?? stand?.model?.position);
       return;
     }
-
-    const navigation = this.getShopStandInteractionNavigation(
-      stand,
-      payload.point
-    );
-    if (!navigation) return;
 
     const result = this.shopManager?.requestStandInteraction?.(stand);
     if (!result) return;
-    if (result.reason === "interactionUnavailable") return;
-
-    if (
-      result.reason === "movingToInteraction" &&
-      navigation.path.length > 0
-    ) {
-      this.player.setPath(navigation.path);
-    }
   }
 
-  handleShopFountainClick(fountain, payload = {}, options = {}) {
-    if (options.keyboardMovementActive) {
-      if (!this.isShopFountainInPlayerInteractionRange(fountain)) return;
+  handleShopFountainClick(fountain, payload = {}) {
+    this.shopManager?.cancelPendingFountainInteraction?.(fountain);
 
-      this.shopManager?.requestFountainInteraction?.(fountain);
+    if (!this.isShopFountainInPlayerInteractionRange(fountain)) {
+      this.showMoveCloserFeedback(payload.point ?? fountain?.model?.position);
       return;
     }
-
-    const navigation = this.getShopStandInteractionNavigation(
-      fountain,
-      payload.point
-    );
-    if (!navigation) return;
 
     const result = this.shopManager?.requestFountainInteraction?.(fountain);
     if (!result) return;
-    if (result.reason === "interactionUnavailable") return;
-
-    if (
-      result.reason === "movingToInteraction" &&
-      navigation.path.length > 0
-    ) {
-      this.player.setPath(navigation.path);
-    }
   }
 
-  handleItemDropClick(itemDrop, payload = {}, options = {}) {
+  handleItemDropClick(itemDrop, payload = {}) {
     if (!this.itemDropManager?.isItemDropInteractable?.(itemDrop)) return;
+    this.itemDropManager?.cancelPendingItemPickup?.(itemDrop);
 
-    if (options.keyboardMovementActive) {
-      if (!this.isItemDropInPlayerInteractionRange(itemDrop)) return;
-
-      this.itemDropManager.requestItemPickup(itemDrop);
+    if (!this.isItemDropInPlayerInteractionRange(itemDrop)) {
+      this.showMoveCloserFeedback(payload.point ?? itemDrop?.model?.position);
       return;
     }
 
-    const navigation = this.getItemDropInteractionNavigation(
-      itemDrop,
-      payload.point
-    );
-    if (!navigation) return;
-
     this.itemDropManager.requestItemPickup(itemDrop);
-    this.createClickFeedback(payload.point ?? navigation.target, {
+    this.createClickFeedback(payload.point ?? itemDrop.model.position, {
       color: INTERACTION_CLICK_FEEDBACK_COLOR,
     });
+  }
 
-    if (navigation.path.length > 0) {
-      this.player.setPath(navigation.path);
+  handleLevelExitClick(payload = {}) {
+    if (!this.levelExitTrigger || this.levelExitTrigger.activated) return;
+
+    if (!this.isLevelExitInPlayerInteractionRange()) {
+      this.showMoveCloserFeedback(payload.point ?? this.levelExitTrigger);
+      return;
     }
+
+    this.tryActivateLevelExit({ forceLockedMessage: true });
   }
 
   createEnemyNavigation() {
@@ -1608,100 +1554,8 @@ export class GameScene {
     });
   }
 
-  calculateNavBounds(areas) {
-    if (areas.length === 0) return null;
-
-    return areas.reduce(
-      (bounds, area) => ({
-        minX: Math.min(bounds.minX, area.x - area.w / 2),
-        maxX: Math.max(bounds.maxX, area.x + area.w / 2),
-        minZ: Math.min(bounds.minZ, area.z - area.d / 2),
-        maxZ: Math.max(bounds.maxZ, area.z + area.d / 2),
-      }),
-      {
-        minX: Infinity,
-        maxX: -Infinity,
-        minZ: Infinity,
-        maxZ: -Infinity,
-      }
-    );
-  }
-
   findNavigationPath(from, to, radius = PLAYER_COLLISION_RADIUS) {
-    if (!this.navBounds) return [];
-
-    if (this.canMoveBetween(from, to, radius)) {
-      return [to.clone()];
-    }
-
-    const start = this.getNearestWalkableNavCell(from, radius, {
-      maxRing: 3,
-      mustConnectToPosition: true,
-    }) ?? this.getNearestWalkableNavCell(from, radius, {
-      maxRing: 3,
-    });
-
-    const goal = this.getNearestWalkableNavCell(to, radius, {
-      maxRing: 3,
-      mustConnectToPosition: true,
-    });
-
-    if (!start || !goal) return [];
-
-    const open = [start];
-    const cameFrom = new Map();
-    const gScore = new Map([[this.navCellKey(start), 0]]);
-    const fScore = new Map([
-      [this.navCellKey(start), this.navHeuristic(start, goal)],
-    ]);
-    const closed = new Set();
-
-    while (open.length > 0) {
-      open.sort(
-        (a, b) =>
-          (fScore.get(this.navCellKey(a)) ?? Infinity) -
-          (fScore.get(this.navCellKey(b)) ?? Infinity)
-      );
-
-      const current = open.shift();
-      const currentKey = this.navCellKey(current);
-
-      if (current.x === goal.x && current.z === goal.z) {
-        return this.simplifyNavigationPath(
-          this.reconstructNavigationPath(cameFrom, current).concat(to.clone()),
-          from,
-          radius
-        );
-      }
-
-      closed.add(currentKey);
-
-      for (const neighbor of this.getNavNeighbors(current, radius)) {
-        const neighborKey = this.navCellKey(neighbor);
-        if (closed.has(neighborKey)) continue;
-
-        const tentativeG =
-          (gScore.get(currentKey) ?? Infinity) +
-          this.navStepCost(current, neighbor);
-
-        if (tentativeG >= (gScore.get(neighborKey) ?? Infinity)) {
-          continue;
-        }
-
-        cameFrom.set(neighborKey, current);
-        gScore.set(neighborKey, tentativeG);
-        fScore.set(
-          neighborKey,
-          tentativeG + this.navHeuristic(neighbor, goal)
-        );
-
-        if (!open.some((cell) => this.navCellKey(cell) === neighborKey)) {
-          open.push(neighbor);
-        }
-      }
-    }
-
-    return [];
+    return this.navigationGrid.findPath(from, to, radius);
   }
 
   findReachableNavigationTargetNear(
@@ -1709,541 +1563,23 @@ export class GameScene {
     to,
     radius = PLAYER_COLLISION_RADIUS
   ) {
-    const candidates = this.getWalkableTargetCandidates(to, radius);
-
-    for (const target of candidates) {
-      const path = this.findNavigationPath(from, target, radius);
-
-      if (path.length > 0) {
-        return { target, path };
-      }
-    }
-
-    return null;
-  }
-
-  worldToNavCell(position) {
-    return {
-      x: Math.round((position.x - this.navBounds.minX) / NAV_GRID_SIZE),
-      z: Math.round((position.z - this.navBounds.minZ) / NAV_GRID_SIZE),
-    };
+    return this.navigationGrid.findReachableTargetNear(from, to, radius);
   }
 
   navCellToWorld(cell) {
-    return new THREE.Vector3(
-      this.navBounds.minX + cell.x * NAV_GRID_SIZE,
-      PLAYER_GROUND_Y,
-      this.navBounds.minZ + cell.z * NAV_GRID_SIZE
-    );
-  }
-
-  isNavCellWalkable(cell, radius = PLAYER_COLLISION_RADIUS) {
-    const position = this.navCellToWorld(cell);
-    return this.isWalkablePosition(position, radius);
+    return this.navigationGrid.cellToWorld(cell);
   }
 
   getNearestWalkableNavCell(position, radius, options = {}) {
-    const maxRing = options.maxRing ?? 2;
-    const center = this.worldToNavCell(position);
-    const candidates = [];
-
-    for (let ring = 0; ring <= maxRing; ring += 1) {
-      for (let x = center.x - ring; x <= center.x + ring; x += 1) {
-        for (let z = center.z - ring; z <= center.z + ring; z += 1) {
-          const cellRing = Math.max(
-            Math.abs(x - center.x),
-            Math.abs(z - center.z)
-          );
-
-          if (cellRing !== ring) {
-            continue;
-          }
-
-          candidates.push({ x, z });
-        }
-      }
-    }
-
-    candidates.sort((a, b) => {
-      const aWorld = this.navCellToWorld(a);
-      const bWorld = this.navCellToWorld(b);
-
-      return (
-        aWorld.distanceToSquared(position) -
-        bWorld.distanceToSquared(position)
-      );
-    });
-
-    for (const cell of candidates) {
-      if (!this.isNavCellInBounds(cell)) continue;
-      if (!this.isNavCellWalkable(cell, radius)) continue;
-
-      const cellWorld = this.navCellToWorld(cell);
-      if (
-        options.mustConnectToPosition &&
-        !this.canMoveBetween(cellWorld, position, radius)
-      ) {
-        continue;
-      }
-
-      return cell;
-    }
-
-    return null;
-  }
-
-  getNavNeighbors(cell, radius = PLAYER_COLLISION_RADIUS) {
-    const neighbors = [];
-    const directions = [
-      { x: 1, z: 0 },
-      { x: -1, z: 0 },
-      { x: 0, z: 1 },
-      { x: 0, z: -1 },
-      { x: 1, z: 1 },
-      { x: 1, z: -1 },
-      { x: -1, z: 1 },
-      { x: -1, z: -1 },
-    ];
-
-    for (const dir of directions) {
-      const neighbor = {
-        x: cell.x + dir.x,
-        z: cell.z + dir.z,
-      };
-
-      if (!this.isNavCellInBounds(neighbor)) continue;
-      if (!this.isNavCellWalkable(neighbor, radius)) continue;
-
-      const currentWorld = this.navCellToWorld(cell);
-      const neighborWorld = this.navCellToWorld(neighbor);
-
-      if (!this.canMoveBetween(currentWorld, neighborWorld, radius)) continue;
-
-      if (
-        dir.x !== 0 &&
-        dir.z !== 0 &&
-        (!this.isNavCellWalkable({ x: cell.x + dir.x, z: cell.z }, radius) ||
-          !this.isNavCellWalkable({ x: cell.x, z: cell.z + dir.z }, radius))
-      ) {
-        continue;
-      }
-
-      neighbors.push(neighbor);
-    }
-
-    return neighbors;
-  }
-
-  isNavCellInBounds(cell) {
-    const position = this.navCellToWorld(cell);
-
-    return (
-      position.x >= this.navBounds.minX &&
-      position.x <= this.navBounds.maxX &&
-      position.z >= this.navBounds.minZ &&
-      position.z <= this.navBounds.maxZ
+    return this.navigationGrid.getNearestWalkableCell(
+      position,
+      radius,
+      options
     );
-  }
-
-  navCellKey(cell) {
-    return `${cell.x},${cell.z}`;
-  }
-
-  navHeuristic(a, b) {
-    const dx = Math.abs(a.x - b.x);
-    const dz = Math.abs(a.z - b.z);
-    return Math.hypot(dx, dz);
-  }
-
-  navStepCost(a, b) {
-    return a.x !== b.x && a.z !== b.z ? Math.SQRT2 : 1;
-  }
-
-  reconstructNavigationPath(cameFrom, current) {
-    const cells = [current];
-    let currentKey = this.navCellKey(current);
-
-    while (cameFrom.has(currentKey)) {
-      current = cameFrom.get(currentKey);
-      cells.unshift(current);
-      currentKey = this.navCellKey(current);
-    }
-
-    return cells.slice(1).map((cell) => this.navCellToWorld(cell));
-  }
-
-  simplifyNavigationPath(points, from, radius = PLAYER_COLLISION_RADIUS) {
-    if (points.length <= 2) return points;
-
-    const simplified = [];
-    let anchor = from.clone();
-    let index = 0;
-
-    while (index < points.length) {
-      let nextIndex = index;
-
-      for (let i = points.length - 1; i >= index; i -= 1) {
-        if (this.canMoveBetween(anchor, points[i], radius)) {
-          nextIndex = i;
-          break;
-        }
-      }
-
-      const next = points[nextIndex].clone();
-      simplified.push(next);
-      anchor = next;
-      index = nextIndex + 1;
-    }
-
-    return simplified;
-  }
-
-  getChestInteractionNavigation(chest, clickPoint = null) {
-    if (!chest?.model?.position || !this.player) return null;
-
-    const playerPosition = this.player.model.position;
-    const chestPosition = chest.model.position;
-    const triggerRange = chest.triggerRange ?? 1.25;
-
-    if (flatDistance(playerPosition, chestPosition) <= triggerRange) {
-      return {
-        target: clickPoint?.clone?.() ?? chestPosition.clone(),
-        path: [],
-      };
-    }
-
-    const candidates = this.getChestInteractionTargetCandidates(
-      chest,
-      clickPoint
-    );
-
-    for (const target of candidates) {
-      const path = this.findNavigationPath(
-        playerPosition,
-        target,
-        PLAYER_COLLISION_RADIUS
-      );
-
-      if (path.length > 0) {
-        return { target, path };
-      }
-    }
-
-    return null;
-  }
-
-  getChestInteractionTargetCandidates(chest, clickPoint = null) {
-    const chestPosition = chest.model.position;
-    const triggerRange = chest.triggerRange ?? 1.25;
-    const approachDistance = Math.max(
-      PLAYER_COLLISION_RADIUS * 2,
-      Math.min(triggerRange - 0.08, triggerRange * 0.85)
-    );
-    const candidates = [];
-    const seen = new Set();
-
-    const addCandidate = (point) => {
-      const target = point.clone();
-      target.y = PLAYER_GROUND_Y;
-      const key = `${target.x.toFixed(3)},${target.z.toFixed(3)}`;
-
-      if (seen.has(key)) return;
-      if (
-        flatDistance(target, chestPosition) <
-        PLAYER_COLLISION_RADIUS * 1.5
-      ) {
-        return;
-      }
-      if (!this.isWalkablePosition(target, PLAYER_COLLISION_RADIUS)) return;
-
-      seen.add(key);
-      candidates.push(target);
-    };
-
-    if (clickPoint) {
-      this.getWalkableTargetCandidates(
-        clickPoint,
-        PLAYER_COLLISION_RADIUS
-      ).forEach(addCandidate);
-    }
-
-    const towardPlayer = this.player.model.position.clone().sub(chestPosition);
-    towardPlayer.y = 0;
-
-    if (towardPlayer.lengthSq() > 0.0001) {
-      towardPlayer.normalize();
-      addCandidate(
-        chestPosition.clone().addScaledVector(towardPlayer, approachDistance)
-      );
-    }
-
-    for (let i = 0; i < 16; i += 1) {
-      const angle = (i / 16) * Math.PI * 2;
-      addCandidate(
-        new THREE.Vector3(
-          chestPosition.x + Math.cos(angle) * approachDistance,
-          PLAYER_GROUND_Y,
-          chestPosition.z + Math.sin(angle) * approachDistance
-        )
-      );
-    }
-
-    candidates.sort(
-      (a, b) =>
-        a.distanceToSquared(chestPosition) -
-        b.distanceToSquared(chestPosition)
-    );
-
-    return candidates;
-  }
-
-  getItemDropInteractionNavigation(itemDrop, clickPoint = null) {
-    if (!itemDrop?.model?.position || !this.player) return null;
-
-    const playerPosition = this.player.model.position;
-    const dropPosition = itemDrop.model.position;
-    const pickupRange = this.itemDropManager?.getPickupRange?.(itemDrop) ?? 0.8;
-
-    if (flatDistance(playerPosition, dropPosition) <= pickupRange) {
-      return {
-        target: clickPoint?.clone?.() ?? dropPosition.clone(),
-        path: [],
-      };
-    }
-
-    const candidates = this.getItemDropInteractionTargetCandidates(
-      itemDrop,
-      clickPoint
-    );
-
-    for (const target of candidates) {
-      const path = this.findNavigationPath(
-        playerPosition,
-        target,
-        PLAYER_COLLISION_RADIUS
-      );
-
-      if (path.length > 0) {
-        return { target, path };
-      }
-    }
-
-    return null;
-  }
-
-  getItemDropInteractionTargetCandidates(itemDrop, clickPoint = null) {
-    const dropPosition = itemDrop.model.position;
-    const pickupRange = this.itemDropManager?.getPickupRange?.(itemDrop) ?? 0.8;
-    const approachDistance = Math.max(
-      PLAYER_COLLISION_RADIUS * 2,
-      Math.min(pickupRange - 0.05, pickupRange * 0.88)
-    );
-    const candidates = [];
-    const seen = new Set();
-
-    const addCandidate = (point) => {
-      const target = point.clone();
-      target.y = PLAYER_GROUND_Y;
-      const key = `${target.x.toFixed(3)},${target.z.toFixed(3)}`;
-
-      if (seen.has(key)) return;
-      if (!this.isWalkablePosition(target, PLAYER_COLLISION_RADIUS)) return;
-
-      seen.add(key);
-      candidates.push(target);
-    };
-
-    if (clickPoint) {
-      this.getWalkableTargetCandidates(
-        clickPoint,
-        PLAYER_COLLISION_RADIUS
-      ).forEach(addCandidate);
-    }
-
-    const towardPlayer = this.player.model.position.clone().sub(dropPosition);
-    towardPlayer.y = 0;
-
-    if (towardPlayer.lengthSq() > 0.0001) {
-      towardPlayer.normalize();
-      addCandidate(
-        dropPosition.clone().addScaledVector(towardPlayer, approachDistance)
-      );
-    }
-
-    for (let i = 0; i < 12; i += 1) {
-      const angle = (i / 12) * Math.PI * 2;
-      addCandidate(
-        new THREE.Vector3(
-          dropPosition.x + Math.cos(angle) * approachDistance,
-          PLAYER_GROUND_Y,
-          dropPosition.z + Math.sin(angle) * approachDistance
-        )
-      );
-    }
-
-    candidates.sort(
-      (a, b) =>
-        a.distanceToSquared(dropPosition) -
-        b.distanceToSquared(dropPosition)
-    );
-
-    return candidates;
-  }
-
-  getShopStandInteractionNavigation(stand, clickPoint = null) {
-    if (!stand?.model?.position || !this.player) return null;
-
-    const playerPosition = this.player.model.position;
-    const standPosition = stand.model.position;
-
-    if (flatDistance(playerPosition, standPosition) <= SHOP_INTERACTION_RANGE) {
-      return {
-        target: clickPoint?.clone?.() ?? standPosition.clone(),
-        path: [],
-      };
-    }
-
-    const candidates = this.getShopStandInteractionTargetCandidates(
-      stand,
-      clickPoint
-    );
-
-    for (const target of candidates) {
-      const path = this.findNavigationPath(
-        playerPosition,
-        target,
-        PLAYER_COLLISION_RADIUS
-      );
-
-      if (path.length > 0) {
-        return { target, path };
-      }
-    }
-
-    return null;
-  }
-
-  getShopStandInteractionTargetCandidates(stand, clickPoint = null) {
-    const standPosition = stand.model.position;
-    const approachDistance = Math.max(
-      PLAYER_COLLISION_RADIUS * 2,
-      Math.min(SHOP_INTERACTION_RANGE - 0.08, SHOP_INTERACTION_RANGE * 0.85)
-    );
-    const candidates = [];
-    const seen = new Set();
-
-    const addCandidate = (point) => {
-      const target = point.clone();
-      target.y = PLAYER_GROUND_Y;
-      const key = `${target.x.toFixed(3)},${target.z.toFixed(3)}`;
-
-      if (seen.has(key)) return;
-      if (
-        flatDistance(target, standPosition) <
-        PLAYER_COLLISION_RADIUS * 1.5
-      ) {
-        return;
-      }
-      if (!this.isWalkablePosition(target, PLAYER_COLLISION_RADIUS)) return;
-
-      seen.add(key);
-      candidates.push(target);
-    };
-
-    if (clickPoint) {
-      this.getWalkableTargetCandidates(
-        clickPoint,
-        PLAYER_COLLISION_RADIUS
-      ).forEach(addCandidate);
-    }
-
-    const towardPlayer = this.player.model.position.clone().sub(standPosition);
-    towardPlayer.y = 0;
-
-    if (towardPlayer.lengthSq() > 0.0001) {
-      towardPlayer.normalize();
-      addCandidate(
-        standPosition.clone().addScaledVector(towardPlayer, approachDistance)
-      );
-    }
-
-    for (let i = 0; i < 16; i += 1) {
-      const angle = (i / 16) * Math.PI * 2;
-      addCandidate(
-        new THREE.Vector3(
-          standPosition.x + Math.cos(angle) * approachDistance,
-          PLAYER_GROUND_Y,
-          standPosition.z + Math.sin(angle) * approachDistance
-        )
-      );
-    }
-
-    candidates.sort(
-      (a, b) =>
-        a.distanceToSquared(standPosition) -
-        b.distanceToSquared(standPosition)
-    );
-
-    return candidates;
   }
 
   getWalkableTargetCandidates(point, radius) {
-    const candidates = [];
-    const seen = new Set();
-    const maxSnapDistanceSq =
-      CLICK_TARGET_SEARCH_RADIUS * CLICK_TARGET_SEARCH_RADIUS;
-
-    const addCandidate = (x, z) => {
-      const target = new THREE.Vector3(x, PLAYER_GROUND_Y, z);
-      const key = `${target.x.toFixed(3)},${target.z.toFixed(3)}`;
-
-      if (seen.has(key)) return;
-      if (!this.isWalkablePosition(target, radius)) return;
-
-      seen.add(key);
-      candidates.push(target);
-    };
-
-    addCandidate(point.x, point.z);
-
-    for (const area of this.walkableAreas) {
-      const minX = area.x - area.w / 2 + radius;
-      const maxX = area.x + area.w / 2 - radius;
-      const minZ = area.z - area.d / 2 + radius;
-      const maxZ = area.z + area.d / 2 - radius;
-
-      if (minX > maxX || minZ > maxZ) continue;
-
-      const clampedX = THREE.MathUtils.clamp(point.x, minX, maxX);
-      const clampedZ = THREE.MathUtils.clamp(point.z, minZ, maxZ);
-      const dx = clampedX - point.x;
-      const dz = clampedZ - point.z;
-
-      if (dx * dx + dz * dz > maxSnapDistanceSq) continue;
-
-      addCandidate(clampedX, clampedZ);
-    }
-
-    const angleStep = Math.PI / 8;
-
-    for (
-      let distance = CLICK_TARGET_SEARCH_STEP;
-      distance <= CLICK_TARGET_SEARCH_RADIUS;
-      distance += CLICK_TARGET_SEARCH_STEP
-    ) {
-      for (let angle = 0; angle < Math.PI * 2; angle += angleStep) {
-        addCandidate(
-          point.x + Math.cos(angle) * distance,
-          point.z + Math.sin(angle) * distance
-        );
-      }
-    }
-
-    candidates.sort(
-      (a, b) => a.distanceToSquared(point) - b.distanceToSquared(point)
-    );
-
-    return candidates;
+    return this.navigationGrid.getWalkableTargetCandidates(point, radius);
   }
 
   applyPlayerWorldCollision(previousPosition) {
@@ -2275,12 +1611,7 @@ export class GameScene {
         PLAYER_COLLISION_RADIUS
       );
 
-      if (recoveryPath.length > 0) {
-        if (this.player.attackTarget) {
-          this.player.applyPath(recoveryPath);
-        } else {
-          this.player.setPath(recoveryPath);
-        }
+      if (this.player.applyRecoveryPath?.(recoveryPath)) {
         return;
       }
     }
@@ -2497,141 +1828,19 @@ export class GameScene {
   }
 
   canMoveBetween(from, to, radius = PLAYER_COLLISION_RADIUS) {
-    const target = {
-      x: to.x,
-      z: to.z,
-    };
-
-    return (
-      this.isWalkablePosition(target, radius) &&
-      !this.movementHitsWall(from, to, radius)
-    );
+    return this.navigationGrid.canMoveBetween(from, to, radius);
   }
 
   getRandomWalkablePoint(areas = [], radius = PLAYER_COLLISION_RADIUS, origin = null) {
-    const sourceAreas = areas.length > 0 ? areas : this.walkableAreas;
-    const validAreas = sourceAreas.filter(
-      (area) => area.w > radius * 2 && area.d > radius * 2
-    );
-
-    if (validAreas.length === 0) return null;
-
-    for (let i = 0; i < 48; i += 1) {
-      const area = validAreas[Math.floor(Math.random() * validAreas.length)];
-      const x =
-        area.x - area.w / 2 + radius + Math.random() * (area.w - radius * 2);
-      const z =
-        area.z - area.d / 2 + radius + Math.random() * (area.d - radius * 2);
-      const point = new THREE.Vector3(x, PLAYER_GROUND_Y, z);
-
-      if (!this.isWalkablePosition(point, radius)) continue;
-      if (origin && flatDistance(origin, point) < radius * 3) continue;
-
-      return point;
-    }
-
-    return null;
+    return this.navigationGrid.getRandomWalkablePoint(areas, radius, origin);
   }
 
   isWalkablePosition(position, radius = 0) {
-    const insideWalkableArea = this.walkableAreas.some((area) =>
-      this.isInsideArea(position, area, radius)
-    );
-
-    if (!insideWalkableArea) return false;
-
-    return !this.collisionWalls.some((wall) =>
-      this.isInsideWall(position, wall, radius)
-    );
-  }
-
-  isInsideArea(position, area, radius) {
-    return (
-      position.x >= area.x - area.w / 2 + radius &&
-      position.x <= area.x + area.w / 2 - radius &&
-      position.z >= area.z - area.d / 2 + radius &&
-      position.z <= area.z + area.d / 2 - radius
-    );
-  }
-
-  isInsideWall(position, wall, radius) {
-    return (
-      position.x >= wall.x - wall.w / 2 - radius &&
-      position.x <= wall.x + wall.w / 2 + radius &&
-      position.z >= wall.z - wall.d / 2 - radius &&
-      position.z <= wall.z + wall.d / 2 + radius
-    );
+    return this.navigationGrid.isWalkablePosition(position, radius);
   }
 
   movementHitsWall(from, to, radius) {
-    if (from.distanceToSquared(to) <= 0.000001) return false;
-
-    return this.collisionWalls.some((wall) =>
-      this.segmentIntersectsWall(from, to, wall, radius)
-    );
-  }
-
-  segmentIntersectsWall(from, to, wall, radius) {
-    const minX = wall.x - wall.w / 2 - radius;
-    const maxX = wall.x + wall.w / 2 + radius;
-    const minZ = wall.z - wall.d / 2 - radius;
-    const maxZ = wall.z + wall.d / 2 + radius;
-
-    const directionX = to.x - from.x;
-    const directionZ = to.z - from.z;
-    let minT = 0;
-    let maxT = 1;
-
-    const xRange = this.clipSegmentAxis(
-      from.x,
-      directionX,
-      minX,
-      maxX,
-      minT,
-      maxT
-    );
-
-    if (!xRange) return false;
-
-    minT = xRange.minT;
-    maxT = xRange.maxT;
-
-    const zRange = this.clipSegmentAxis(
-      from.z,
-      directionZ,
-      minZ,
-      maxZ,
-      minT,
-      maxT
-    );
-
-    return Boolean(zRange);
-  }
-
-  clipSegmentAxis(origin, direction, min, max, minT, maxT) {
-    if (Math.abs(direction) < 0.000001) {
-      if (origin < min || origin > max) return null;
-      return { minT, maxT };
-    }
-
-    let axisMinT = (min - origin) / direction;
-    let axisMaxT = (max - origin) / direction;
-
-    if (axisMinT > axisMaxT) {
-      const temp = axisMinT;
-      axisMinT = axisMaxT;
-      axisMaxT = temp;
-    }
-
-    const nextMinT = Math.max(minT, axisMinT);
-    const nextMaxT = Math.min(maxT, axisMaxT);
-
-    if (nextMinT > nextMaxT) return null;
-
-    return {
-      minT: nextMinT,
-      maxT: nextMaxT,
-    };
+    return this.navigationGrid.movementHitsWall(from, to, radius);
   }
 
   animate() {
@@ -2999,14 +2208,20 @@ export class GameScene {
       this.levelExitTrigger
     );
 
-    if (distance > 0.6) return;
+    if (distance > LEVEL_EXIT_INTERACTION_RANGE) return;
+
+    this.tryActivateLevelExit();
+  }
+
+  tryActivateLevelExit({ forceLockedMessage = false } = {}) {
+    if (!this.levelExitTrigger || this.levelExitTrigger.activated) return false;
 
     if (this.gameManager.isStageExitLocked()) {
-      if (!this.bossExitBlockedNotified) {
+      if (forceLockedMessage || !this.bossExitBlockedNotified) {
         this.addLog(this.gameManager.getStageExitLockedMessage());
         this.bossExitBlockedNotified = true;
       }
-      return;
+      return false;
     }
 
     this.levelExitTrigger.activated = true;
@@ -3020,6 +2235,7 @@ export class GameScene {
       floorIndex: this.currentFloorLoad?.currentFloorIndex,
       mode: this.currentFloorLoad?.mode,
     });
+    return true;
   }
 
   updateClickEffects(delta) {
@@ -3047,14 +2263,6 @@ export class GameScene {
       console.log("gameEvent", event.type);
 
       switch (event.type) {
-        case "combatStart":
-          this.addLog("Combat started.");
-          break;
-
-        case "combatEnd":
-          this.addLog("Combat interrupted.");
-          break;
-
         case "attackWindupStarted":
           break;
 

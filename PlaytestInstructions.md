@@ -38,8 +38,9 @@ node -e "console.log(require.resolve('@playwright/test')); console.log(require.r
 4. Wait for the level load log before taking the first screenshot.
 5. Capture at least these states:
    - initial load
-   - after a ground click
-   - after a click near a doorway or connector
+   - after an empty-world click that starts a directional attack
+   - after clicking a far interactable and seeing `Move closer.`
+   - after walking into range with WASD and activating an interactable
    - paused state
    - mobile viewport state
 6. Review screenshots for:
@@ -77,8 +78,10 @@ await browser.close();
 
 - The HUD should remain readable on desktop and mobile.
 - The pause overlay should appear and freeze the scene cleanly.
-- Ground clicks should visibly move the player.
-- Door or connector clicks should not feel ambiguous.
+- Empty-world clicks should trigger a directional attack and never move the player.
+- Enemy clicks should attack in the clicked direction and never select or lock a target.
+- Interactable clicks should only activate in range; out-of-range clicks should log `Move closer.` and never create movement.
+- Run progression should remain finite: combat stages include locked treasure rooms, shops appear at stages 3, 6, and 9, and the stage 10 boss flow completes and resets the run.
 - The quick-use consumable buttons should match the inventory state.
 - Mobile should hide the footer hints and keep the quick-use bar usable.
 

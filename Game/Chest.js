@@ -827,7 +827,7 @@ export class ChestManager {
     if (this.scene.coinManager) {
       this.scene.coinManager.addCoinDrops(coins);
     } else {
-      // fallback: try old API if coinManager not yet initialized
+      // Compatibility fallback for scenes that still expose coin drops directly.
       if (typeof this.scene.addCoinDrops === 'function') this.scene.addCoinDrops(coins);
     }
   }
