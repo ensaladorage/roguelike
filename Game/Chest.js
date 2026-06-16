@@ -284,8 +284,9 @@ function applyCoinValueMultiplier(value, multiplier = 1) {
 }
 
 export class ChestManager {
-  constructor(scene) {
+  constructor(scene, options = {}) {
     this.scene = scene;
+    this.navigation = options.navigation ?? scene.navigationAdapter ?? scene;
 
     this.chests = [];
     this.pendingChest = null;
@@ -592,16 +593,16 @@ export class ChestManager {
 
     preferred.y = 0;
 
-    if (this.scene.isWalkablePosition?.(preferred, radius)) {
+    if (this.navigation?.isWalkablePosition?.(preferred, radius)) {
       return preferred;
     }
 
-    const navCell = this.scene.getNearestWalkableNavCell?.(preferred, radius, {
+    const navCell = this.navigation?.getNearestWalkableCell?.(preferred, radius, {
       maxRing: 3,
     });
 
-    if (navCell && typeof this.scene.navCellToWorld === "function") {
-      return this.scene.navCellToWorld(navCell);
+    if (navCell && typeof this.navigation?.cellToWorld === "function") {
+      return this.navigation.cellToWorld(navCell);
     }
 
     return origin;
@@ -640,8 +641,8 @@ export class ChestManager {
     );
 
     for (const candidate of candidates) {
-      if (!this.scene.isWalkablePosition?.(candidate, radius)) continue;
-      if (this.scene.movementHitsWall?.(playerPosition, candidate, radius)) continue;
+      if (!this.navigation?.isWalkablePosition?.(candidate, radius)) continue;
+      if (this.navigation?.movementHitsWall?.(playerPosition, candidate, radius)) continue;
 
       return candidate;
     }

@@ -15,9 +15,9 @@ import { VFX } from "../UI/VFX.js";
 import { DebugCheats } from "../UI/DebugCheats.js";
 import { ChestManager } from "../Game/Chest.js";
 import { CoinManager } from "../Game/Coin.js";
+import { GameEventRouter } from "../Game/GameEventRouter.js";
 import { SHOP_INTERACTION_RANGE, ShopManager } from "../Game/ShopManager.js";
 import { ItemDropManager } from "../World/ItemDrop.js";
-import { getItemDisplayName } from "../Game/ItemInstanceFactory.js";
 import { Environment } from "../World/Environment.js";
 import { ROOM_TEMPLATES } from "../RoomData/roomTemplates.js";
 import {
@@ -31,6 +31,7 @@ import { LevelBuilder } from "../World/LevelBuilder.js";
 import { ModularTileBuilder } from "../World/ModularTileBuilder.js";
 import { NavigationGrid } from "../World/NavigationGrid.js";
 import { RoomVisibilityManager } from "../World/RoomVisibilityManager.js";
+import { WorldNavigationAdapter } from "../World/WorldNavigationAdapter.js";
 
 const PLAYER_GROUND_Y = 0;
 const PLAYER_COLLISION_RADIUS = 0.32;
@@ -67,23 +68,30 @@ export class GameScene {
     this.scene = new THREE.Scene();
     this.scene.background = new THREE.Color(0x111317);
 
-    this.environment = new Environment(this);
-    this.chestManager = new ChestManager(this);
-    this.coinManager = new CoinManager(this);
-    this.shopManager = new ShopManager(this);
-    this.itemDropManager = new ItemDropManager(this);
-    this.models = {};
-    this.roomTemplateLibrary = new RoomTemplateLibrary(ROOM_TEMPLATES);
-    this.levelBuilder = new LevelBuilder({
-      roomTemplateLibrary: this.roomTemplateLibrary,
-    });
-    this.modularTileBuilder = new ModularTileBuilder(this);
     this.navigationGrid = new NavigationGrid({
       gridSize: NAV_GRID_SIZE,
       groundY: PLAYER_GROUND_Y,
       targetSearchRadius: NAVIGATION_TARGET_SEARCH_RADIUS,
       targetSearchStep: NAVIGATION_TARGET_SEARCH_STEP,
     });
+    this.navigationAdapter = new WorldNavigationAdapter(this.navigationGrid);
+    this.environment = new Environment(this);
+    this.chestManager = new ChestManager(this, {
+      navigation: this.navigationAdapter,
+    });
+    this.coinManager = new CoinManager(this, {
+      navigation: this.navigationAdapter,
+    });
+    this.shopManager = new ShopManager(this);
+    this.itemDropManager = new ItemDropManager(this, {
+      navigation: this.navigationAdapter,
+    });
+    this.models = {};
+    this.roomTemplateLibrary = new RoomTemplateLibrary(ROOM_TEMPLATES);
+    this.levelBuilder = new LevelBuilder({
+      roomTemplateLibrary: this.roomTemplateLibrary,
+    });
+    this.modularTileBuilder = new ModularTileBuilder(this);
     this.roomVisibilityManager = new RoomVisibilityManager(this);
 
     this.camera = new THREE.PerspectiveCamera(
@@ -158,10 +166,41 @@ export class GameScene {
     });
     this.vfx = new VFX({ root: this.levelGroup });
     this.gameManager = new GameManager(this);
+    this.eventRouter = new GameEventRouter(() =>
+      this.createEventRouterContext()
+    );
     this.itemEffects = new ItemEffects();
     this.inventory = null;
 
     this.init();
+  }
+
+  createEventRouterContext() {
+    return {
+      gameManager: this.gameManager,
+      player: this.player,
+      enemies: this.enemies,
+      inventory: this.inventory,
+      shopManager: this.shopManager,
+      coinManager: this.coinManager,
+      itemDropManager: this.itemDropManager,
+      hud: this.hud,
+      sfx: this.sfx,
+      vfx: this.vfx,
+      addLog: (message) => this.addLog(message),
+      updateHud: () => this.updateHud(),
+      syncBossHud: () => this.syncBossHud(),
+      flashModel: (model, color, duration) =>
+        this.flashModel(model, color, duration),
+      playEnemyDamageFlash: (enemy, color) =>
+        this.playEnemyDamageFlash(enemy, color),
+      updateDebugCheatBaselinesForStatChange: (result) =>
+        this.updateDebugCheatBaselinesForStatChange(result),
+      syncDebugCheatEffects: () => this.syncDebugCheatEffects(),
+      setBossExitBlockedNotified: (value) => {
+        this.bossExitBlockedNotified = value;
+      },
+    };
   }
 
   async init() {
@@ -654,7 +693,7 @@ export class GameScene {
     this.collisionWalls = [];
     this.allWallMeshes = [];
     this.wallMeshes = [];
-    this.navigationGrid.clear();
+    this.navigationAdapter.clear();
     this.levelExitTrigger = null;
     this.exitInteractableTargets = [];
   }
@@ -864,7 +903,7 @@ export class GameScene {
   getSafePlayerStartPosition(position) {
     const start = new THREE.Vector3(position.x, PLAYER_GROUND_Y, position.z);
 
-    if (this.isWalkablePosition(start, PLAYER_COLLISION_RADIUS)) {
+    if (this.navigationAdapter.isWalkablePosition(start, PLAYER_COLLISION_RADIUS)) {
       return start;
     }
 
@@ -879,7 +918,7 @@ export class GameScene {
       return entryStairsFallback;
     }
 
-    const fallback = this.getNearestWalkablePosition(
+    const fallback = this.navigationAdapter.getNearestWalkablePosition(
       start,
       PLAYER_COLLISION_RADIUS
     );
@@ -899,7 +938,7 @@ export class GameScene {
     const stairs = this.collisionWalls.find(
       (wall) =>
         wall.role === "entryStairs" &&
-        this.navigationGrid.isPointInsideWall(
+        this.navigationAdapter.isPointInsideWall(
           start,
           wall,
           PLAYER_COLLISION_RADIUS
@@ -917,29 +956,20 @@ export class GameScene {
       stairs.z + direction.z * ENTRY_STAIRS_FRONT_OFFSET
     );
 
-    if (this.isWalkablePosition(frontPoint, PLAYER_COLLISION_RADIUS)) {
+    if (
+      this.navigationAdapter.isWalkablePosition(
+        frontPoint,
+        PLAYER_COLLISION_RADIUS
+      )
+    ) {
       return frontPoint;
     }
 
-    return this.getNearestWalkablePosition(
+    return this.navigationAdapter.getNearestWalkablePosition(
       frontPoint,
       PLAYER_COLLISION_RADIUS,
       1.5,
       0.15
-    );
-  }
-
-  getNearestWalkablePosition(
-    point,
-    radius,
-    maxSearchRadius = 3,
-    searchStep = 0.2
-  ) {
-    return this.navigationGrid.getNearestWalkablePosition(
-      point,
-      radius,
-      maxSearchRadius,
-      searchStep
     );
   }
 
@@ -949,7 +979,7 @@ export class GameScene {
     this.stageLockedConnectionBlockers = this.collisionWalls.filter(
       (wall) => wall.role === "stageLockedConnection"
     );
-    this.navigationGrid.configure({
+    this.navigationAdapter.configure({
       walkableAreas: this.walkableAreas,
       collisionWalls: this.collisionWalls,
     });
@@ -1206,7 +1236,7 @@ export class GameScene {
         wall.role !== "stageLockedConnection" ||
         !lockedConnectionIds.has(wall.connectionId)
     );
-    this.navigationGrid.configure({
+    this.navigationAdapter.configure({
       walkableAreas: this.walkableAreas,
       collisionWalls: this.collisionWalls,
     });
@@ -1512,13 +1542,13 @@ export class GameScene {
   createEnemyNavigation() {
     return {
       canMoveBetween: (from, to, radius) =>
-        this.canMoveBetween(from, to, radius),
+        this.navigationAdapter.canMoveBetween(from, to, radius),
       findPath: (from, to, radius) =>
-        this.findNavigationPath(from, to, radius),
+        this.navigationAdapter.findPath(from, to, radius),
       findReachableTargetNear: (from, to, radius) =>
-        this.findReachableNavigationTargetNear(from, to, radius),
+        this.navigationAdapter.findReachableTargetNear(from, to, radius),
       getRandomWalkablePoint: (areas, radius, origin) =>
-        this.getRandomWalkablePoint(areas, radius, origin),
+        this.navigationAdapter.getRandomWalkablePoint(areas, radius, origin),
     };
   }
 
@@ -1554,39 +1584,17 @@ export class GameScene {
     });
   }
 
-  findNavigationPath(from, to, radius = PLAYER_COLLISION_RADIUS) {
-    return this.navigationGrid.findPath(from, to, radius);
-  }
-
-  findReachableNavigationTargetNear(
-    from,
-    to,
-    radius = PLAYER_COLLISION_RADIUS
-  ) {
-    return this.navigationGrid.findReachableTargetNear(from, to, radius);
-  }
-
-  navCellToWorld(cell) {
-    return this.navigationGrid.cellToWorld(cell);
-  }
-
-  getNearestWalkableNavCell(position, radius, options = {}) {
-    return this.navigationGrid.getNearestWalkableCell(
-      position,
-      radius,
-      options
-    );
-  }
-
-  getWalkableTargetCandidates(point, radius) {
-    return this.navigationGrid.getWalkableTargetCandidates(point, radius);
-  }
-
   applyPlayerWorldCollision(previousPosition) {
     const currentPosition = this.player.model.position;
     const movementRadius = this.getPlayerMovementCollisionRadius();
 
-    if (this.canMoveBetween(previousPosition, currentPosition, movementRadius)) {
+    if (
+      this.navigationAdapter.canMoveBetween(
+        previousPosition,
+        currentPosition,
+        movementRadius
+      )
+    ) {
       return;
     }
 
@@ -1605,7 +1613,7 @@ export class GameScene {
 
     const recoveryTarget = this.getPlayerNavigationDestination();
     if (recoveryTarget) {
-      const recoveryPath = this.findNavigationPath(
+      const recoveryPath = this.navigationAdapter.findPath(
         previousPosition,
         recoveryTarget,
         PLAYER_COLLISION_RADIUS
@@ -1698,7 +1706,13 @@ export class GameScene {
           enemyPosition.z + pushDirection.z * combinedRadius
         );
 
-        if (this.canMoveBetween(previousPosition, pushedPosition, playerRadius)) {
+        if (
+          this.navigationAdapter.canMoveBetween(
+            previousPosition,
+            pushedPosition,
+            playerRadius
+          )
+        ) {
           return pushedPosition;
         }
       }
@@ -1770,7 +1784,7 @@ export class GameScene {
     ];
 
     const validCandidates = candidates.filter((candidate) =>
-      this.canMoveBetween(previousPosition, candidate, radius)
+      this.navigationAdapter.canMoveBetween(previousPosition, candidate, radius)
     );
 
     if (validCandidates.length === 0) return null;
@@ -1808,7 +1822,7 @@ export class GameScene {
       const candidate = start.clone().addScaledVector(safeDirection, traveled);
       candidate.y = PLAYER_GROUND_Y;
 
-      if (!this.canMoveBetween(previous, candidate, radius)) {
+      if (!this.navigationAdapter.canMoveBetween(previous, candidate, radius)) {
         break;
       }
 
@@ -1825,22 +1839,6 @@ export class GameScene {
     }
 
     return this.player.target?.clone() ?? null;
-  }
-
-  canMoveBetween(from, to, radius = PLAYER_COLLISION_RADIUS) {
-    return this.navigationGrid.canMoveBetween(from, to, radius);
-  }
-
-  getRandomWalkablePoint(areas = [], radius = PLAYER_COLLISION_RADIUS, origin = null) {
-    return this.navigationGrid.getRandomWalkablePoint(areas, radius, origin);
-  }
-
-  isWalkablePosition(position, radius = 0) {
-    return this.navigationGrid.isWalkablePosition(position, radius);
-  }
-
-  movementHitsWall(from, to, radius) {
-    return this.navigationGrid.movementHitsWall(from, to, radius);
   }
 
   animate() {
@@ -1872,13 +1870,7 @@ export class GameScene {
     this.applyPlayerEnemyCollision(previousPlayerPosition);
     this.roomVisibilityManager.update(this.player.model.position, delta);
 
-    const events = [
-      ...this.player.consumeEvents(),
-      ...this.enemies.flatMap((enemy) => enemy.consumeEvents()),
-      ...(this.inventory ? this.inventory.consumeEvents() : []),
-      ...(this.shopManager ? this.shopManager.consumeEvents() : []),
-    ];
-
+    const events = this.eventRouter.collectFrameEvents();
     this.handleGameEvents(events);
     this.syncBossHud();
     this.chestManager.update(delta);
@@ -2258,241 +2250,7 @@ export class GameScene {
   }
 
   handleGameEvents(events) {
-    for (const event of events) {
-      this.gameManager.handleEvent(event);
-      console.log("gameEvent", event.type);
-
-      switch (event.type) {
-        case "attackWindupStarted":
-          break;
-
-        case "attackWindupCanceled":
-          break;
-
-        case "attackReady":
-          break;
-
-        case "dashLocked":
-          this.addLog("Dash locked: equip an ability item first.");
-          this.sfx.play("playerDashBlocked");
-          break;
-
-        case "dashCooldownBlocked":
-          this.addLog(`Dash cooling down: ${event.remaining.toFixed(1)}s.`);
-          this.sfx.play("playerDashBlocked");
-          break;
-
-        case "dashBlocked":
-          this.addLog("Dash blocked.");
-          this.sfx.play("playerDashBlocked");
-          break;
-
-        case "dashStarted":
-          this.addLog("Dash used.");
-          this.vfx?.playPlayerDashTrail?.(event.start, event.end, event.direction);
-          this.vfx?.playPlayerDashBurst?.(event.start, event.direction, {
-            scale: 0.8,
-          });
-          this.sfx.play("playerDash");
-          break;
-
-        case "dashEnded":
-          this.vfx?.playPlayerDashBurst?.(event.position, event.direction, {
-            scale: 0.62,
-          });
-          break;
-
-        case "dashReady":
-          this.addLog("Dash ready.");
-          this.vfx.playModelFlash(this.player.model, 0x9edcff, 0.14, {
-            emissiveIntensity: 1.1,
-          });
-          this.sfx.play("playerDashReady");
-          break;
-
-        case "playerAttack":
-          this.addLog(`Enemy takes ${event.damage} damage.`);
-          break;
-
-        case "playerAttackHit":
-          this.vfx?.playPlayerAttackSlash?.(
-            event.impactPoint,
-            event.direction,
-            {
-              color: 0xfff1b0,
-            }
-          );
-          this.sfx.play("playerAttackHit");
-          break;
-
-        case "playerAttackWhiff":
-          this.vfx?.playPlayerAttackSlash?.(
-            event.impactPoint,
-            event.direction,
-            {
-              color: 0xd7e6ff,
-            }
-          );
-          this.sfx.play("playerAttackWhiff");
-          break;
-
-        case "enemyAttack":
-          this.addLog(`Enemy attacks: -${event.damage} HP.`);
-          this.sfx.play("enemyAttack");
-          break;
-
-        case "enemyDamaged":
-          if (event.damage > 0) {
-            const flashColor =
-              event.source?.type === "poison" ? 0x9c61ff : 0xff4058;
-            this.playEnemyDamageFlash(event.enemy, flashColor);
-          }
-          this.syncBossHud();
-          break;
-
-        case "playerDamaged":
-          if (event.damage > 0) {
-            this.vfx.playModelFlash(this.player.model, 0xff4058, 0.16);
-            this.vfx.playPlayerHitSlash(this.player);
-            this.sfx.play("playerDamaged");
-          }
-          this.updateHud();
-          break;
-
-        case "enemyCoinsDropped":
-          this.coinManager.addCoinDrops(event.coins);
-          break;
-
-        case "enemyItemsDropped":
-          console.log("enemyItemsDropped", {
-            count: event.items?.length ?? 0,
-            itemIds: (event.items ?? []).map((item) => item.itemId),
-          });
-          if (this.itemDropManager) {
-            this.itemDropManager.addItemDrops(event.items ?? []);
-          }
-          break;
-
-        case "enemyDefeated":
-          if (event.enemy?.isBoss) {
-            this.bossExitBlockedNotified = false;
-            this.syncBossHud();
-          } else {
-            this.addLog("Enemy defeated.");
-          }
-          this.sfx.play("enemyDefeated");
-          break;
-
-        case "bossPhaseChanged":
-          this.addLog(`${event.enemy.enemyName} enters ${event.phaseName}.`);
-          this.flashModel(event.enemy.model, 0xff1f2f, 0.24);
-          this.syncBossHud();
-          break;
-
-        case "enemyStunned":
-          this.addLog(`Enemy stunned for ${event.duration.toFixed(1)}s.`);
-          this.flashModel(event.enemy.model, 0x9c61ff, 0.22);
-          break;
-
-        case "enemyPoisoned":
-          this.addLog(
-            `Enemy poisoned for ${event.duration.toFixed(1)}s.`
-          );
-          break;
-
-        case "itemPickedUp":
-          this.addLog(`Item picked up: ${getItemDisplayName(event.item)}.`);
-          this.updateHud();
-          break;
-
-        case "itemRemoved":
-          this.addLog(`Item removed: ${getItemDisplayName(event.item)}.`);
-          this.updateHud();
-          break;
-
-        case "passiveItemApplied":
-          this.addLog(`Passive applied: ${getItemDisplayName(event.item)}.`);
-          this.updateDebugCheatBaselinesForStatChange(event.result);
-          this.syncDebugCheatEffects();
-          this.highlightItemStat(event.result);
-          this.updateHud();
-          break;
-
-        case "passiveItemRemoved":
-          this.addLog(`Passive removed: ${getItemDisplayName(event.item)}.`);
-          this.updateDebugCheatBaselinesForStatChange(event.result);
-          this.syncDebugCheatEffects();
-          this.highlightItemStat(event.result);
-          this.updateHud();
-          break;
-
-        case "itemReplaced":
-          this.addLog(
-            `Equipped ${getItemDisplayName(event.item)}. Dropped ${getItemDisplayName(event.previousItem)}.`
-          );
-          this.updateDebugCheatBaselinesForStatChange(event.result);
-          this.syncDebugCheatEffects();
-          this.highlightItemStat(event.result);
-          this.updateHud();
-          break;
-
-        case "itemUsed":
-          this.addLog(`Item used: ${getItemDisplayName(event.item)}.`);
-          this.playItemUseFeedback(event);
-          this.highlightItemStat(event.result);
-          this.updateHud();
-          break;
-
-        case "itemUseFailed":
-          this.addLog(this.getItemUseFailedMessage(event));
-          break;
-
-        case "itemPickupBlocked":
-          this.addLog(this.getItemPickupBlockedMessage(event));
-          break;
-
-        case "itemRemoveFailed":
-          this.addLog(this.getItemRemoveFailedMessage(event));
-          break;
-
-        case "shopOfferCreated":
-          this.addLog(
-            `Shop offer: ${getItemDisplayName(event.item)} (${event.rarity}) - ${event.price} Gold.`
-          );
-          break;
-
-        case "shopPurchaseSucceeded":
-          this.addLog(`Bought ${getItemDisplayName(event.item)} for ${event.price} Gold.`);
-          this.updateHud();
-          break;
-
-        case "shopPurchaseFailed":
-          this.addLog(this.getShopPurchaseFailedMessage(event));
-          break;
-
-        case "shopOfferAlreadyPurchased":
-          this.addLog("Already purchased.");
-          break;
-
-        case "shopFountainUsed":
-          this.addLog(`Fountain restored ${event.healAmount} HP.`);
-          this.vfx?.playModelFlash?.(this.player.model, 0x5fc7ff, 0.22, {
-            emissiveIntensity: 1.1,
-          });
-          this.updateHud();
-          break;
-
-        case "shopFountainFailed":
-          this.addLog(this.getShopFountainFailedMessage(event));
-          break;
-
-        case "playerDefeated":
-          this.hud?.hideBoss?.();
-          this.flashModel(this.player.model, 0x7a1020, 0.6);
-          this.updateHud();
-          break;
-      }
-    }
+    this.eventRouter.route(events);
   }
 
   playEnemyDamageFlash(enemy, color) {
@@ -2580,106 +2338,6 @@ export class GameScene {
     }
     this.hud?.updateAbilitySlot?.(this.player, this.inventory);
     this.syncBossHud();
-  }
-
-  highlightItemStat(result) {
-    if (!result?.stat) return;
-
-    this.hud.highlightStat(result.stat);
-  }
-
-  playItemUseFeedback(event) {
-    if (event.itemId !== "purpleShroom") return;
-
-    const target = event.result?.center ?? event.result?.enemy;
-    if (!target) return;
-
-    this.vfx.playPurpleGasCloud(target, {
-      radius: event.result?.vfxRadius ?? event.result?.radius,
-      duration: event.result?.poisonDuration,
-    });
-    this.sfx.play("purpleShroom");
-  }
-
-  getItemUseFailedMessage(event) {
-    switch (event.reason) {
-      case "fullHp":
-        return "You do not need healing right now.";
-
-      case "noEnemyInRange":
-        return "No enemy is close enough for the shroom.";
-
-      case "missingItem":
-        return "You do not have that consumable.";
-
-      default:
-        return "Could not use that item.";
-    }
-  }
-
-  getItemPickupBlockedMessage(event) {
-    switch (event.reason) {
-      case "inventoryFull":
-        return `Inventory full: you cannot pick up ${getItemDisplayName(event.item)}.`;
-
-      case "slotOccupied":
-        return `Slot occupied: you already have a ${event.foodCategory ?? event.itemInstance?.foodCategory ?? "matching"} item equipped.`;
-
-      case "invalidEquipmentCategory":
-        return `Could not equip ${getItemDisplayName(event.item)}.`;
-
-      default:
-        return "Could not pick up that item.";
-    }
-  }
-
-  getItemRemoveFailedMessage(event) {
-    switch (event.reason) {
-      case "missingItem":
-        return `You do not have ${getItemDisplayName(event.item)}.`;
-
-      default:
-        return `Could not remove ${getItemDisplayName(event.item)}.`;
-    }
-  }
-
-  getShopPurchaseFailedMessage(event) {
-    switch (event.reason) {
-      case "insufficientGold":
-        return "Not enough Gold.";
-
-      case "inventoryFull":
-        return "Inventory full.";
-
-      case "slotOccupied":
-        return `Slot occupied: you already have a ${event.offer?.itemInstance?.foodCategory ?? "matching"} item equipped.`;
-
-      case "offerMissing":
-        return "That shop offer is no longer available.";
-
-      case "shopUnavailable":
-        return "The shop is not available right now.";
-
-      default:
-        return "Could not buy that shop offer.";
-    }
-  }
-
-  getShopFountainFailedMessage(event) {
-    switch (event.reason) {
-      case "fullHp":
-        return "You do not need healing right now.";
-
-      case "depleted":
-        return "The fountain is dry.";
-
-      case "fountainMissing":
-      case "shopUnavailable":
-        return "The fountain is not available right now.";
-
-      default:
-        return "Could not use the fountain.";
-    }
   }
 
   addLog(message) {

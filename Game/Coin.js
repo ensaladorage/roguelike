@@ -75,8 +75,9 @@ export function splitCoinValueIntoTypes(totalValue) {
 }
 
 export class CoinManager {
-  constructor(scene) {
+  constructor(scene, options = {}) {
     this.scene = scene; // GameScene instance
+    this.navigation = options.navigation ?? scene.navigationAdapter ?? scene;
     this.coinDrops = [];
     this.raycaster = new THREE.Raycaster();
     this.rayDirection = new THREE.Vector3();
@@ -309,8 +310,8 @@ export class CoinManager {
 
   isSafeLanding(origin, candidate) {
     return (
-      this.scene.isWalkablePosition(candidate, COIN_WALL_CLEARANCE) &&
-      !this.scene.movementHitsWall(origin, candidate, COIN_WALL_CLEARANCE)
+      this.navigation.isWalkablePosition(candidate, COIN_WALL_CLEARANCE) &&
+      !this.navigation.movementHitsWall(origin, candidate, COIN_WALL_CLEARANCE)
     );
   }
 

@@ -48,8 +48,9 @@ function getItemDropVisualStyle(definition) {
 }
 
 export class ItemDropManager {
-  constructor(scene) {
+  constructor(scene, options = {}) {
     this.scene = scene;
+    this.navigation = options.navigation ?? scene.navigationAdapter ?? scene;
     this.itemDrops = [];
     this.pendingItemDrop = null;
   }
@@ -757,8 +758,8 @@ export class ItemDropManager {
 
   isSafeLanding(origin, candidate) {
     return (
-      this.scene.isWalkablePosition(candidate, ITEM_DROP_WALL_CLEARANCE) &&
-      !this.scene.movementHitsWall(origin, candidate, ITEM_DROP_WALL_CLEARANCE)
+      this.navigation.isWalkablePosition(candidate, ITEM_DROP_WALL_CLEARANCE) &&
+      !this.navigation.movementHitsWall(origin, candidate, ITEM_DROP_WALL_CLEARANCE)
     );
   }
 
