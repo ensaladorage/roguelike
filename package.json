@@ -3,6 +3,8 @@
   "private": true,
   "version": "1.0.0",
   "scripts": {
+    "validate": "node Scripts/validate-imports.mjs",
+    "validate:imports": "node Scripts/validate-imports.mjs",
     "test": "playwright test"
   },
   "devDependencies": {
