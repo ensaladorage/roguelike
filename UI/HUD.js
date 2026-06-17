@@ -698,7 +698,9 @@ export class HUD {
     overlay.addEventListener("pointerdown", (event) => event.stopPropagation());
     overlay.addEventListener("click", (event) => {
       event.stopPropagation();
-      const action = event.target?.dataset?.swapConfirm;
+      const action = event.target
+        ?.closest?.("[data-swap-confirm]")
+        ?.dataset?.swapConfirm;
       if (!action) return;
 
       if (action === "replace") {
@@ -879,8 +881,8 @@ export class HUD {
     const comparison = document.createElement("div");
     comparison.className = "item-swap-comparison";
     comparison.append(
-      this.createSwapCard("Equipped", currentItem),
-      this.createSwapCard("New", newItem)
+      this.createSwapCard("Equipped", currentItem, "keep"),
+      this.createSwapCard("New", newItem, "replace")
     );
 
     const actions = document.createElement("div");
@@ -901,9 +903,21 @@ export class HUD {
     this.swapConfirmationOverlay.appendChild(dialog);
   }
 
-  createSwapCard(labelText, item) {
-    const card = document.createElement("article");
+  createSwapCard(labelText, item, action = null) {
+    const card = action
+      ? document.createElement("button")
+      : document.createElement("article");
     card.className = "item-swap-card";
+    if (action) {
+      card.type = "button";
+      card.dataset.swapConfirm = action;
+      card.setAttribute(
+        "aria-label",
+        action === "replace"
+          ? `Equip ${getItemDisplayName(item)}`
+          : `Keep ${getItemDisplayName(item)}`
+      );
+    }
     this.applyItemRarityClass(card, item);
 
     const label = document.createElement("span");
@@ -1538,7 +1552,22 @@ export class HUD {
         border: 1px solid rgba(244, 241, 232, 0.16);
         border-radius: 8px;
         background: rgba(244, 241, 232, 0.08);
+        color: inherit;
+        font: inherit;
         text-align: center;
+      }
+
+      button.item-swap-card {
+        cursor: pointer;
+      }
+
+      button.item-swap-card:hover {
+        background: rgba(244, 241, 232, 0.12);
+      }
+
+      button.item-swap-card:focus-visible {
+        outline: 2px solid #f0b35a;
+        outline-offset: 2px;
       }
 
       .item-swap-card .item-rarity-label {

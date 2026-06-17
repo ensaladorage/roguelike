@@ -329,7 +329,11 @@ export class ItemDropManager {
 
     const playerPos = this.scene.player.model.position;
     const distance = flatDistance(playerPos, itemDrop.model.position);
-    if (distance > this.getPickupRange(itemDrop)) return;
+    const pickupRange =
+      this.scene.getItemDropInteractionRange?.(itemDrop) ??
+      this.getPickupRange(itemDrop);
+
+    if (distance > pickupRange) return;
 
     this.pendingItemDrop = null;
     this.collectItemDrop(itemDrop);

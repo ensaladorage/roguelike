@@ -53,6 +53,7 @@ const PAUSE_LOCK_REASON = "pauseMenu";
 const ITEM_SWAP_LOCK_REASON = "itemSwapConfirmation";
 const INTERACTION_CLICK_FEEDBACK_COLOR = 0xffd84a;
 const INTERACTION_OUT_OF_RANGE_MESSAGE = "Move closer.";
+const PLAYER_INTERACTION_RANGE_FALLBACK = 1.65;
 const LEVEL_EXIT_INTERACTION_RANGE = 0.6;
 const FRONT_DIRECTION_BY_SIDE = {
   north: { x: 0, z: 1 },
@@ -1412,19 +1413,34 @@ export class GameScene {
   isChestInPlayerInteractionRange(chest) {
     if (!chest?.model?.position || !this.player?.model?.position) return false;
 
-    const triggerRange = chest.triggerRange ?? 1.25;
-
     return flatDistance(
       this.player.model.position,
       chest.model.position
-    ) <= triggerRange;
+    ) <= this.getChestInteractionRange(chest);
+  }
+
+  getPlayerInteractionRange() {
+    const attackRange = Number.parseFloat(this.player?.attackRange);
+    if (Number.isFinite(attackRange) && attackRange > 0) {
+      return attackRange;
+    }
+
+    return PLAYER_INTERACTION_RANGE_FALLBACK;
+  }
+
+  getChestInteractionRange(chest) {
+    return Math.max(
+      chest?.triggerRange ?? 1.25,
+      this.getPlayerInteractionRange()
+    );
   }
 
   handleChestClick(chest, payload = {}) {
     this.chestManager?.cancelPendingChestOpen?.();
 
     if (!this.isChestInPlayerInteractionRange(chest)) {
-      this.showMoveCloserFeedback(payload.point ?? chest?.model?.position);
+      this.playInteractionOutOfRangeSfx();
+      this.showMoveCloserFeedback(null, { showClickFeedback: false });
       return;
     }
 
@@ -1436,9 +1452,6 @@ export class GameScene {
     if (!this.chestManager?.isChestInteractable?.(chest)) return;
 
     this.chestManager.requestChestOpen(chest);
-    this.createClickFeedback(payload.point ?? chest.model.position, {
-      color: INTERACTION_CLICK_FEEDBACK_COLOR,
-    });
   }
 
   isShopStandInPlayerInteractionRange(stand) {
@@ -1462,12 +1475,17 @@ export class GameScene {
   isItemDropInPlayerInteractionRange(itemDrop) {
     if (!itemDrop?.model?.position || !this.player?.model?.position) return false;
 
-    const pickupRange = this.itemDropManager?.getPickupRange?.(itemDrop) ?? 0.8;
-
     return flatDistance(
       this.player.model.position,
       itemDrop.model.position
-    ) <= pickupRange;
+    ) <= this.getItemDropInteractionRange(itemDrop);
+  }
+
+  getItemDropInteractionRange(itemDrop) {
+    return Math.max(
+      this.itemDropManager?.getPickupRange?.(itemDrop) ?? 0.8,
+      this.getPlayerInteractionRange()
+    );
   }
 
   isLevelExitInPlayerInteractionRange() {
@@ -1479,14 +1497,18 @@ export class GameScene {
     ) <= LEVEL_EXIT_INTERACTION_RANGE;
   }
 
-  showMoveCloserFeedback(position = null) {
+  showMoveCloserFeedback(position = null, { showClickFeedback = true } = {}) {
     this.addLog(INTERACTION_OUT_OF_RANGE_MESSAGE);
 
-    if (position) {
+    if (showClickFeedback && position) {
       this.createClickFeedback(position, {
         color: INTERACTION_CLICK_FEEDBACK_COLOR,
       });
     }
+  }
+
+  playInteractionOutOfRangeSfx() {
+    this.sfx?.play?.("interactionOutOfRange");
   }
 
   handleShopStandClick(stand, payload = {}) {
@@ -1518,14 +1540,12 @@ export class GameScene {
     this.itemDropManager?.cancelPendingItemPickup?.(itemDrop);
 
     if (!this.isItemDropInPlayerInteractionRange(itemDrop)) {
-      this.showMoveCloserFeedback(payload.point ?? itemDrop?.model?.position);
+      this.playInteractionOutOfRangeSfx();
+      this.showMoveCloserFeedback(null, { showClickFeedback: false });
       return;
     }
 
     this.itemDropManager.requestItemPickup(itemDrop);
-    this.createClickFeedback(payload.point ?? itemDrop.model.position, {
-      color: INTERACTION_CLICK_FEEDBACK_COLOR,
-    });
   }
 
   handleLevelExitClick(payload = {}) {

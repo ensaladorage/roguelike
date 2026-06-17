@@ -632,8 +632,16 @@ export class ShopManager {
     const comparison = document.createElement("div");
     comparison.className = "item-swap-comparison";
     comparison.append(
-      this.createShopComparisonCard("Current", currentItem),
-      this.createShopComparisonCard("Shop Item", newItem)
+      this.createShopComparisonCard(
+        "Current",
+        currentItem,
+        insufficientGold ? null : "keep"
+      ),
+      this.createShopComparisonCard(
+        "Shop Item",
+        newItem,
+        insufficientGold ? null : "replace"
+      )
     );
 
     const actions = document.createElement("div");
@@ -666,7 +674,9 @@ export class ShopManager {
 
     overlay.addEventListener("click", (event) => {
       event.stopPropagation();
-      const action = event.target?.dataset?.shopConfirm;
+      const action = event.target
+        ?.closest?.("[data-shop-confirm]")
+        ?.dataset?.shopConfirm;
       if (!action) return;
 
       if (action === "replace") {
@@ -718,9 +728,15 @@ export class ShopManager {
     this.confirmationElement = overlay;
   }
 
-  createShopComparisonCard(labelText, item) {
-    const card = document.createElement("article");
+  createShopComparisonCard(labelText, item, action = null) {
+    const card = action
+      ? document.createElement("button")
+      : document.createElement("article");
     card.className = "item-swap-card";
+    if (action) {
+      card.type = "button";
+      card.dataset.shopConfirm = action;
+    }
 
     const label = document.createElement("span");
     label.className = "item-swap-card__label";
@@ -739,6 +755,14 @@ export class ShopManager {
     }
 
     applyItemRarityClass(card, item);
+    if (action) {
+      card.setAttribute(
+        "aria-label",
+        action === "replace"
+          ? `Buy and equip ${getItemDisplayName(item)}`
+          : `Keep ${getItemDisplayName(item)}`
+      );
+    }
     card.append(createItemRarityLabel(item), label);
 
     const image = document.createElement("img");

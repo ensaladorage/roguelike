@@ -374,7 +374,10 @@ export class ChestManager {
 
     const playerPos = this.scene.player.model.position;
     const distance = flatDistance(playerPos, chest.model.position);
-    const triggerRange = chest.triggerRange ?? 1.25;
+    const triggerRange =
+      this.scene.getChestInteractionRange?.(chest) ??
+      chest.triggerRange ??
+      1.25;
 
     if (distance > triggerRange) return;
 

@@ -33,6 +33,14 @@ export class SFX {
         gain: 0.035,
       },
 
+      interactionOutOfRange: {
+        frequency: 680,
+        endFrequency: 360,
+        duration: 0.09,
+        type: "sawtooth",
+        gain: 0.03,
+      },
+
       enemyAttack: {
         frequency: 180,
         duration: 0.12,
