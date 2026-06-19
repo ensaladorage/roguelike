@@ -42,7 +42,7 @@ export const ITEM_DEFINITIONS = {
       {
         stat: "attackDamage",
         op: "add",
-        range: { min: 2, max: 10, step: 1 },
+        range: { min: 2, max: 7, step: 1 },
       },
     ],
     modifiers: {
@@ -66,7 +66,7 @@ export const ITEM_DEFINITIONS = {
       {
         stat: "attackSpeed",
         op: "add",
-        range: { min: 0.12, max: 0.35, step: 0.01 },
+        range: { min: 0.1, max: 0.25, step: 0.01 },
       },
     ],
     modifiers: {
@@ -90,7 +90,7 @@ export const ITEM_DEFINITIONS = {
       {
         stat: "attackSpeed",
         op: "add",
-        range: { min: 0.3, max: 0.8, step: 0.01 },
+        range: { min: 0.35, max: 0.65, step: 0.01 },
       },
     ],
     modifiers: {
@@ -114,7 +114,7 @@ export const ITEM_DEFINITIONS = {
       {
         stat: "maxHp",
         op: "add",
-        range: { min: 15, max: 35, step: 1 },
+        range: { min: 20, max: 40, step: 1 },
       },
     ],
     modifiers: {
@@ -138,7 +138,7 @@ export const ITEM_DEFINITIONS = {
       {
         stat: "maxHp",
         op: "add",
-        range: { min: 5, max: 10, step: 1 },
+        range: { min: 6, max: 12, step: 1 },
       },
     ],
     modifiers: {
@@ -255,7 +255,7 @@ export const ITEM_DEFINITIONS = {
       {
         stat: "attackDamage",
         op: "add",
-        range: { min: 4, max: 12, step: 1 },
+        range: { min: 7, max: 14, step: 1 },
       },
     ],
     modifiers: {
@@ -279,7 +279,7 @@ export const ITEM_DEFINITIONS = {
       {
         stat: "attackDamage",
         op: "add",
-        range: { min: 22, max: 34, step: 1 },
+        range: { min: 18, max: 28, step: 1 },
       },
       {
         stat: "attackRange",
@@ -308,7 +308,7 @@ export const ITEM_DEFINITIONS = {
       {
         stat: "attackSpeed",
         op: "add",
-        range: { min: 1, max: 1.6, step: 0.01 },
+        range: { min: 0.75, max: 1.15, step: 0.01 },
       },
       {
         stat: "moveSpeed",
@@ -337,7 +337,7 @@ export const ITEM_DEFINITIONS = {
       {
         stat: "maxHp",
         op: "add",
-        range: { min: 65, max: 95, step: 1 },
+        range: { min: 55, max: 80, step: 1 },
       },
     ],
     modifiers: {

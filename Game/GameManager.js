@@ -272,6 +272,7 @@ export class GameManager {
       enemyPoolWeights: floorPlan.stage?.enemyPoolWeights,
       enemyCoinDrop: floorPlan.stage?.enemyCoinDrop,
       enemyPotionDrop: floorPlan.stage?.enemyPotionDrop,
+      combatEnemyCountTarget: floorPlan.stage?.combatEnemyCountTarget,
       treasureReward: floorPlan.stage?.treasureReward,
       difficultyTier: snapshot.difficultyTier,
       cycleIndex: snapshot.cycleIndex,

@@ -27,8 +27,8 @@ export const PLAYER_COMBAT_CONFIG = {
   attackArcDegrees: 105,
 };
 const BASE_PLAYER_STATS = {
-  maxHp: 100,
-  hp: 100,
+  maxHp: 120,
+  hp: 120,
   gold: 0,
   attackDamage: 10,
   speed: 3.5,
