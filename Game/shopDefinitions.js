@@ -33,8 +33,8 @@ export const SHOP_DEFINITION = Object.freeze({
   ]),
 
   fallbackPriceByRarity: Object.freeze({
-    [ITEM_RARITIES.RARE]: 250,
-    [ITEM_RARITIES.EPIC]: 500,
+    [ITEM_RARITIES.RARE]: 200,
+    [ITEM_RARITIES.EPIC]: 300,
   }),
 
   itemPriceOverrides: Object.freeze({}),

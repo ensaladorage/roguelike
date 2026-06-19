@@ -97,7 +97,7 @@ export const ITEM_DEFINITIONS = {
       positive: ["attackSpeed"],
       negative: [],
     },
-    shop: { basePrice: 260 },
+    shop: { basePrice: 250 },
   },
 
   ramen: {
@@ -291,7 +291,7 @@ export const ITEM_DEFINITIONS = {
       positive: ["attackDamage"],
       negative: ["attackRange"],
     },
-    shop: { basePrice: 540 },
+    shop: { basePrice: 400 },
   },
 
   spicySauce: {
@@ -320,7 +320,7 @@ export const ITEM_DEFINITIONS = {
       positive: ["attackSpeed"],
       negative: ["moveSpeed"],
     },
-    shop: { basePrice: 520 },
+    shop: { basePrice: 420 },
   },
 
   dragonFruit: {
@@ -344,7 +344,7 @@ export const ITEM_DEFINITIONS = {
       positive: ["maxHp"],
       negative: [],
     },
-    shop: { basePrice: 500 },
+    shop: { basePrice: 430 },
   },
 };
 
