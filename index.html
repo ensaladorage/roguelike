@@ -119,14 +119,15 @@
       position: fixed;
       left: 50%;
       bottom: calc(80px + env(safe-area-inset-bottom));
-      z-index: 8;
+      z-index: 10;
       display: flex;
       justify-content: flex-start;
       gap: 10px;
       width: min(380px, calc(100vw - 32px));
       transform: translateX(-50%);
-      pointer-events: auto;
+      pointer-events: none;
     }
+
 
     .quick-use-button {
       position: relative;
@@ -143,6 +144,7 @@
       color: #f4f1e8;
       cursor: inherit;
       touch-action: manipulation;
+      pointer-events: auto;
     }
 
     .quick-use-button[hidden] {
@@ -150,10 +152,9 @@
     }
 
     .quick-use-button img {
-      width: 38px;
-      height: 38px;
+      width: 34px;
+      height: 34px;
       object-fit: contain;
-      pointer-events: none;
     }
 
     .quick-use-key {
@@ -182,6 +183,7 @@
     .quick-use-button.is-empty {
       opacity: 0.45;
       filter: grayscale(0.45);
+      pointer-events: none;
     }
 
     .quick-use-count {
@@ -213,12 +215,12 @@
       position: fixed;
       left: 50%;
       bottom: calc(80px + env(safe-area-inset-bottom));
-      z-index: 8;
+      z-index: 10;
       display: flex;
       justify-content: flex-end;
       width: min(380px, calc(100vw - 32px));
       transform: translateX(-50%);
-      pointer-events: auto;
+      pointer-events: none;
     }
 
     .ability-slot {
@@ -237,6 +239,7 @@
       color: #f4f1e8;
       cursor: inherit;
       touch-action: manipulation;
+      pointer-events: auto;
     }
 
     .ability-slot.is-empty {

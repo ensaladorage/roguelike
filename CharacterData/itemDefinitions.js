@@ -151,7 +151,7 @@ export const ITEM_DEFINITIONS = {
   energyDrink: {
     id: "energyDrink",
     name: "Energy Drink",
-    description: "Restores HP when used.",
+    descriptionTemplate: "Restores {heal} HP when used.",
     type: ITEM_TYPES.CONSUMABLE,
     rarity: ITEM_RARITIES.COMMON,
     hudSlot: 1,
@@ -178,7 +178,7 @@ export const ITEM_DEFINITIONS = {
   purpleShroom: {
     id: "purpleShroom",
     name: "Purple Shroom",
-    description: "Stuns and poisons nearby enemies.",
+    descriptionTemplate: "Stuns {stunDuration}s and poisons {poisonDamagePerSecond}/s nearby enemies.",
     type: ITEM_TYPES.CONSUMABLE,
     rarity: ITEM_RARITIES.COMMON,
     hudSlot: 2,
