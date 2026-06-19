@@ -112,13 +112,18 @@ export const ITEM_DEFINITIONS = {
     effect: ITEM_EFFECTS.MAX_HP_UP,
     effects: [
       {
+        stat: "heal",
+        op: "add",
+        value: 15,
+      },
+      {
         stat: "maxHp",
         op: "add",
         range: { min: 20, max: 40, step: 1 },
       },
     ],
     modifiers: {
-      positive: ["maxHp"],
+      positive: ["maxHp", "heal"],
       negative: [],
     },
     shop: { basePrice: 120 },
@@ -136,13 +141,18 @@ export const ITEM_DEFINITIONS = {
     effect: ITEM_EFFECTS.MAX_HP_UP,
     effects: [
       {
+        stat: "heal",
+        op: "add",
+        value: 5,
+      },
+      {
         stat: "maxHp",
         op: "add",
         range: { min: 6, max: 12, step: 1 },
       },
     ],
     modifiers: {
-      positive: ["maxHp"],
+      positive: ["maxHp", "heal"],
       negative: [],
     },
     shop: { basePrice: 70 },
@@ -335,13 +345,18 @@ export const ITEM_DEFINITIONS = {
     effect: ITEM_EFFECTS.MAX_HP_UP,
     effects: [
       {
+        stat: "heal",
+        op: "add",
+        value: 25,
+      },
+      {
         stat: "maxHp",
         op: "add",
         range: { min: 55, max: 80, step: 1 },
       },
     ],
     modifiers: {
-      positive: ["maxHp"],
+      positive: ["maxHp", "heal"],
       negative: [],
     },
     shop: { basePrice: 430 },
