@@ -16,6 +16,7 @@ import { splitCoinValueIntoTypes } from "./Coin.js";
 export const CHEST_REWARD = {
   itemChancePercent: 80,
   itemRollCount: 1,
+  bonusItemRolls: [],
   progressionMinFloor: 1,
   progressionMaxFloor: 10,
   rarityChancePercentByFloor: {
@@ -90,23 +91,50 @@ export const MIMIC_COFFIN_CONFIG = {
 };
 
 export function getChestReward(overrides = {}, context = {}) {
-  const rewardConfig = {
-    ...CHEST_REWARD,
-    ...overrides,
-    rarityChancePercentByFloor: mergeRarityChanceConfig(
-      CHEST_REWARD.rarityChancePercentByFloor,
-      overrides.rarityChancePercentByFloor ?? overrides.rarityWeightsByFloor
-    ),
-  };
+  const rewardConfig = createChestRewardConfig(overrides);
   const random = context.rng ?? createSeededRandom(createChestRewardSeed(context));
-  const itemIds = rollChestItems(rewardConfig, context, random);
+  const itemIds = [
+    ...rollChestItems(rewardConfig, context, random, { rollGroup: "base" }),
+    ...rollBonusChestItems(rewardConfig, context, random),
+  ];
 
   return {
     itemIds,
   };
 }
 
-function rollChestItems(rewardConfig, context = {}, random = Math.random) {
+function createChestRewardConfig(overrides = {}, baseConfig = CHEST_REWARD) {
+  return {
+    ...baseConfig,
+    ...overrides,
+    rarityChancePercentByFloor: mergeRarityChanceConfig(
+      baseConfig.rarityChancePercentByFloor,
+      overrides.rarityChancePercentByFloor ?? overrides.rarityWeightsByFloor
+    ),
+    bonusItemRolls: overrides.bonusItemRolls ?? baseConfig.bonusItemRolls ?? [],
+  };
+}
+
+function rollBonusChestItems(rewardConfig, context = {}, random = Math.random) {
+  const bonusItemRolls = Array.isArray(rewardConfig.bonusItemRolls)
+    ? rewardConfig.bonusItemRolls
+    : [];
+
+  return bonusItemRolls.flatMap((bonusRoll, bonusIndex) => {
+    const bonusConfig = createChestRewardConfig(bonusRoll, rewardConfig);
+
+    return rollChestItems(bonusConfig, context, random, {
+      rollGroup: `bonus-${bonusIndex + 1}`,
+    });
+  });
+}
+
+function rollChestItems(
+  rewardConfig,
+  context = {},
+  random = Math.random,
+  options = {}
+) {
   const progressFloor = getRewardProgressFloor(rewardConfig, context);
   const rollCount = Math.max(0, Math.floor(rewardConfig.itemRollCount ?? 0));
   const itemIds = [];
@@ -124,6 +152,7 @@ function rollChestItems(rewardConfig, context = {}, random = Math.random) {
       : null;
 
     console.log("chestItemDropRoll", {
+      rollGroup: options.rollGroup ?? "base",
       rollIndex,
       itemId,
       rarity: rarityRoll?.rarity ?? null,

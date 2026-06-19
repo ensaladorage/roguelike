@@ -1266,6 +1266,10 @@ export class LevelBuilder {
 
   createNormalTreasureRewardOverrides({ treasureReward = {}, itemCount = 1 }) {
     const rarity = treasureReward.normalItemRarity ?? ITEM_RARITIES.COMMON;
+    const rareItemChancePercent = Math.max(
+      0,
+      Number.parseFloat(treasureReward.normalRareItemChancePercent ?? 0) || 0
+    );
 
     return {
       itemChancePercent: 100,
@@ -1284,6 +1288,22 @@ export class LevelBuilder {
       itemPoolsByRarity: {
         [rarity]: treasureReward.normalItemPool ?? [],
       },
+      bonusItemRolls: rareItemChancePercent > 0
+        ? [
+            {
+              itemChancePercent: rareItemChancePercent,
+              itemRollCount: 1,
+              rarityChancePercentByFloor: {
+                [ITEM_RARITIES.COMMON]: { floor1: 0, floor10: 0 },
+                [ITEM_RARITIES.RARE]: { floor1: 100, floor10: 100 },
+                [ITEM_RARITIES.EPIC]: { floor1: 0, floor10: 0 },
+              },
+              itemPoolsByRarity: {
+                [ITEM_RARITIES.RARE]: treasureReward.normalRareItemPool ?? [],
+              },
+            },
+          ]
+        : [],
     };
   }
 

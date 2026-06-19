@@ -14,6 +14,8 @@ const COMMON_TREASURE_REWARD = Object.freeze({
   normalItemCount: Object.freeze({ min: 1, max: 2 }),
   normalItemPool: Object.freeze(["steak", "chili", "potato", "purpleShroom"]),
   normalItemRarity: ITEM_RARITIES.COMMON,
+  normalRareItemChancePercent: 30,
+  normalRareItemPool: Object.freeze(["garlic", "ramen", "fish"]),
   normalChestCoinDrop: Object.freeze({ totalValueMin: 10, totalValueMax: 16 }),
   epicChest: Object.freeze({
     enabled: true,
@@ -44,6 +46,9 @@ function createTreasureReward(overrides = {}) {
     }),
     normalItemPool: Object.freeze(
       overrides.normalItemPool ?? COMMON_TREASURE_REWARD.normalItemPool
+    ),
+    normalRareItemPool: Object.freeze(
+      overrides.normalRareItemPool ?? COMMON_TREASURE_REWARD.normalRareItemPool
     ),
     normalChestCoinDrop: Object.freeze({
       ...COMMON_TREASURE_REWARD.normalChestCoinDrop,

@@ -243,6 +243,8 @@ export class GameScene {
         onDashPressed: () => this.handleDashPressed(),
         onInteractableHover: (interactable, pointer) =>
           this.handleInteractableHover(interactable, pointer),
+        isInteractableCursorActive: (interactable) =>
+          this.isInteractableCursorActive(interactable),
       }
     );
 
@@ -857,7 +859,9 @@ export class GameScene {
     this.player.groundY = PLAYER_GROUND_Y;
     this.player.resetRuntimeState?.();
     this.player.setFacingRotation?.(spawnRotationY);
-    this.vfx?.addPlayerAttackRangeIndicator?.(this.player);
+    this.vfx?.addPlayerAttackRangeIndicator?.(this.player, {
+      hasEnemyInRange: () => this.hasEnemyInPlayerAttackRange(),
+    });
   }
 
   getPlayerSpawnRotation(startPosition, safePosition) {
@@ -1287,6 +1291,14 @@ export class GameScene {
       .map((enemy) => enemy.model);
   }
 
+  hasEnemyInPlayerAttackRange() {
+    if (!this.player?.isEnemyInAttackDistance) return false;
+
+    return (this.enemies ?? []).some((enemy) =>
+      this.player.isEnemyInAttackDistance(enemy)
+    );
+  }
+
   getInteractableClickTargets() {
     const chests = (this.chestManager?.chests ?? [])
       .filter((chest) => !chest.collected && chest.model?.visible !== false)
@@ -1408,6 +1420,26 @@ export class GameScene {
     }
 
     this.hud?.showItemTooltip?.(itemDrop.item, pointer);
+  }
+
+  isInteractableCursorActive(interactable) {
+    const chest = this.getChestFromInteractable(interactable);
+    if (chest) {
+      return Boolean(
+        this.chestManager?.isChestInteractable?.(chest) &&
+        this.isChestInPlayerInteractionRange(chest)
+      );
+    }
+
+    const itemDrop = this.getItemDropFromInteractable(interactable);
+    if (itemDrop) {
+      return Boolean(
+        this.itemDropManager?.isItemDropInteractable?.(itemDrop) &&
+        this.isItemDropInPlayerInteractionRange(itemDrop)
+      );
+    }
+
+    return false;
   }
 
   isChestInPlayerInteractionRange(chest) {

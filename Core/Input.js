@@ -4,6 +4,7 @@ const CURSOR_ICONS = {
   movement: "Assets/Icons/MovementIcon.png",
   attack: "Assets/Icons/AttackIcon.png",
   interactable: "Assets/Icons/InteractableIcon.png",
+  interactableActive: "Assets/Icons/InteractableIconActive.png",
 };
 
 const MOVEMENT_CURSOR = `url("${CURSOR_ICONS.movement}") 4 3, auto`;
@@ -78,29 +79,8 @@ export function setupInput(
   renderer.domElement.addEventListener("pointerdown", (event) => {
     updatePointerState(pointerState, event);
     updatePointer(event, renderer, camera, raycaster, pointer);
-    const interactableHit = getPointedInteractableHit(
+    const pointerTarget = resolvePointerTarget(
       raycaster,
-      getInteractableTargets
-    );
-
-    if (interactableHit) {
-      onClick({
-        point: interactableHit.groundPoint,
-        interactable: interactableHit.interactable,
-      });
-      return;
-    }
-
-    const enemyHit = getPointedEnemyHit(raycaster, getEnemyTargets);
-
-    if (enemyHit) {
-      onClick({
-        point: enemyHit.point,
-      });
-      return;
-    }
-
-    const assistTarget = getAimAssistTarget(
       pointerState,
       renderer,
       camera,
@@ -108,17 +88,17 @@ export function setupInput(
       getInteractableTargets
     );
 
-    if (assistTarget?.intent === "interactable" && assistTarget.groundPoint) {
+    if (pointerTarget.intent === "interactable" && pointerTarget.groundPoint) {
       onClick({
-        point: assistTarget.groundPoint,
-        interactable: assistTarget.interactable,
+        point: pointerTarget.groundPoint,
+        interactable: pointerTarget.interactable,
       });
       return;
     }
 
-    if (assistTarget?.intent === "attack" && assistTarget.enemy?.alive) {
+    if (pointerTarget.intent === "attack" && pointerTarget.groundPoint) {
       onClick({
-        point: assistTarget.groundPoint,
+        point: pointerTarget.groundPoint,
       });
       return;
     }
@@ -143,29 +123,27 @@ export function setupInput(
       raycaster,
       pointer
     );
-    const assistTarget = getAimAssistTarget(
+    const pointerTarget = resolvePointerTarget(
+      raycaster,
       pointerState,
       renderer,
       camera,
       getEnemyTargets,
       getInteractableTargets
     );
-    const directInteractableHit = getPointedInteractableHit(
-      raycaster,
-      getInteractableTargets
-    );
-    const directEnemyHit = directInteractableHit
-      ? null
-      : getPointedEnemyHit(raycaster, getEnemyTargets);
-    const directHoverIntent = directInteractableHit
-      ? "interactable"
-      : directEnemyHit
+    const hoveredInteractable = pointerTarget.interactable ?? null;
+    const hoveredInteractableActive = hoveredInteractable
+      ? Boolean(options.isInteractableCursorActive?.(hoveredInteractable))
+      : false;
+    const hoverIntent = pointerTarget.intent === "interactable"
+      ? hoveredInteractableActive
+        ? "interactableActive"
+        : "interactable"
+      : pointerTarget.intent === "attack"
         ? "attack"
         : null;
-    const assistedHoverIntent =
-      assistTarget?.intent === "interactable" ? "interactable" : null;
     options.onInteractableHover?.(
-      directInteractableHit?.interactable ?? null,
+      hoveredInteractable,
       {
         clientX: pointerState.clientX,
         clientY: pointerState.clientY,
@@ -175,8 +153,8 @@ export function setupInput(
       pointerState,
       renderer.domElement,
       cursorOverlay,
-      directHoverIntent ?? assistedHoverIntent,
-      assistedHoverIntent ? assistTarget : null,
+      hoverIntent,
+      pointerTarget.assistTarget,
       attackFeedback
     );
   };
@@ -444,6 +422,14 @@ function injectCursorStyles() {
       animation: interactableCursorMotion 720ms ease-in-out infinite alternate;
     }
 
+    .game-cursor-overlay.is-interactable-active {
+      animation: interactableActiveCursorMotion 880ms ease-in-out infinite alternate;
+    }
+
+    .game-cursor-overlay.is-interactable-active .game-cursor-overlay__icon {
+      animation: interactableActiveIconGlow 880ms ease-in-out infinite alternate;
+    }
+
     @keyframes attackCursorMotion {
       from { --cursor-rotation: -2deg; }
       to { --cursor-rotation: 2deg; }
@@ -452,6 +438,25 @@ function injectCursorStyles() {
     @keyframes interactableCursorMotion {
       from { translate: 0 -1px; }
       to { translate: 0 3px; }
+    }
+
+    @keyframes interactableActiveCursorMotion {
+      from { translate: 0 -0.5px; }
+      to { translate: 0 0.5px; }
+    }
+
+    @keyframes interactableActiveIconGlow {
+      from { filter: drop-shadow(0 0 0 rgba(255, 255, 255, 0)); }
+      to { filter: drop-shadow(0 0 4px rgba(255, 255, 255, 0.36)); }
+    }
+
+    @media (prefers-reduced-motion: reduce) {
+      .game-cursor-overlay.is-attack,
+      .game-cursor-overlay.is-interactable,
+      .game-cursor-overlay.is-interactable-active,
+      .game-cursor-overlay.is-interactable-active .game-cursor-overlay__icon {
+        animation: none;
+      }
     }
   `;
 
@@ -485,6 +490,10 @@ function updateCursorOverlay(
 
   overlay.classList.toggle("is-attack", cursorIntent === "attack");
   overlay.classList.toggle("is-interactable", cursorIntent === "interactable");
+  overlay.classList.toggle(
+    "is-interactable-active",
+    cursorIntent === "interactableActive"
+  );
   updateAttackIndicator(overlay, attackFeedback, cursorIntent);
   const cursorPosition = getCursorOverlayPosition(pointerState, assistTarget);
   overlay.classList.add("is-active");
@@ -497,14 +506,12 @@ function getCursorOverlayPosition(pointerState, assistTarget) {
   const targetOffset = getCursorAssistOffset(pointerState, assistTarget);
   const pointerDelta = pointerState.pointerDeltaPx;
 
-  if (
-    !pointerState.assistOffsetInitialized ||
-    pointerDelta > AIM_ASSIST_POINTER_SNAP_DELTA_PX
-  ) {
+  if (pointerDelta > AIM_ASSIST_POINTER_SNAP_DELTA_PX) {
     pointerState.assistOffsetX = targetOffset.x;
     pointerState.assistOffsetY = targetOffset.y;
     pointerState.assistOffsetInitialized = true;
   } else {
+    pointerState.assistOffsetInitialized = true;
     pointerState.assistOffsetX = THREE.MathUtils.lerp(
       pointerState.assistOffsetX,
       targetOffset.x,
@@ -554,6 +561,9 @@ function getCursorIcon(cursorIntent) {
     case "interactable":
       return CURSOR_ICONS.interactable;
 
+    case "interactableActive":
+      return CURSOR_ICONS.interactableActive;
+
     default:
       return CURSOR_ICONS.movement;
   }
@@ -564,6 +574,7 @@ function hideCursorOverlay(canvas, overlay) {
     "is-active",
     "is-attack",
     "is-interactable",
+    "is-interactable-active",
     "has-attack-feedback",
     "is-attack-ready",
     "is-attack-windup"
@@ -683,6 +694,78 @@ function updatePointerFromClientPosition(
   pointer.y = -((clientY - bounds.top) / bounds.height) * 2 + 1;
 
   raycaster.setFromCamera(pointer, camera);
+}
+
+function resolvePointerTarget(
+  raycaster,
+  pointerState,
+  renderer,
+  camera,
+  getEnemyTargets,
+  getInteractableTargets
+) {
+  const directInteractableHit = getPointedInteractableHit(
+    raycaster,
+    getInteractableTargets
+  );
+
+  if (directInteractableHit) {
+    return {
+      intent: "interactable",
+      interactable: directInteractableHit.interactable,
+      groundPoint: directInteractableHit.groundPoint,
+      assistTarget: null,
+    };
+  }
+
+  const directEnemyHit = getPointedEnemyHit(raycaster, getEnemyTargets);
+
+  if (directEnemyHit) {
+    return {
+      intent: "attack",
+      enemy: directEnemyHit.enemy,
+      groundPoint: getGroundPoint(directEnemyHit.point),
+      assistTarget: null,
+    };
+  }
+
+  const assistTarget = getAimAssistTarget(
+    pointerState,
+    renderer,
+    camera,
+    getEnemyTargets,
+    getInteractableTargets
+  );
+
+  if (assistTarget?.intent === "interactable" && assistTarget.groundPoint) {
+    return {
+      intent: "interactable",
+      interactable: assistTarget.interactable,
+      groundPoint: assistTarget.groundPoint,
+      assistTarget,
+    };
+  }
+
+  if (
+    assistTarget?.intent === "attack" &&
+    assistTarget.enemy?.alive &&
+    assistTarget.groundPoint
+  ) {
+    return {
+      intent: "attack",
+      enemy: assistTarget.enemy,
+      groundPoint: assistTarget.groundPoint,
+      assistTarget,
+    };
+  }
+
+  return {
+    intent: null,
+    interactable: null,
+    enemy: null,
+    groundPoint: null,
+    assistTarget: null,
+  };
 }
 
 function getPointedEnemyHit(raycaster, getEnemyTargets) {

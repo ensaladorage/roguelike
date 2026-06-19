@@ -72,7 +72,8 @@ export const VFX_DEFAULTS = {
   },
   playerAttackRangeIndicator: {
     color: 0xffffff,
-    opacity: 0.22,
+    inRangeColor: rgb(255, 0, 0),
+    opacity: 0.6,
     y: 0.055,
     thickness: 0.018,
     segments: 96,
@@ -744,7 +745,10 @@ export class VFX {
       mesh: null,
       player,
       config,
+      baseColor: new THREE.Color(config.color),
+      inRangeColor: new THREE.Color(config.inRangeColor),
       lastRange: null,
+      lastHasEnemyInRange: null,
     };
 
     this.root.add(group);
@@ -985,6 +989,7 @@ export class VFX {
 
     effect.group.visible = true;
     effect.group.position.set(playerPosition.x, effect.config.y, playerPosition.z);
+    this.updatePlayerAttackRangeIndicatorColor(effect);
 
     if (
       effect.mesh &&
@@ -1010,6 +1015,17 @@ export class VFX {
     effect.mesh.userData.ignoreFlash = true;
     effect.group.add(effect.mesh);
     effect.lastRange = range;
+  }
+
+  updatePlayerAttackRangeIndicatorColor(effect) {
+    const hasEnemyInRange = Boolean(effect.config.hasEnemyInRange?.());
+
+    if (effect.lastHasEnemyInRange === hasEnemyInRange) return;
+
+    effect.material.color.copy(
+      hasEnemyInRange ? effect.inRangeColor : effect.baseColor
+    );
+    effect.lastHasEnemyInRange = hasEnemyInRange;
   }
 
   updateStageLockedConnectionBlocker(effect, delta) {

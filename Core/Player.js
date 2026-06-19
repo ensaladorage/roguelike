@@ -38,6 +38,7 @@ const BASE_PLAYER_STATS = {
 };
 
 const ATTACK_DIRECTION_EPSILON = 0.0001;
+const ENEMY_ATTACK_COLLISION_RADIUS_FALLBACK = 0;
 
 export class Player {
   constructor(model) {
@@ -982,7 +983,6 @@ export class Player {
     const attackArcDegrees =
       this.attackArcDegrees ?? PLAYER_COMBAT_CONFIG.attackArcDegrees;
     const halfArcRadians = THREE.MathUtils.degToRad(attackArcDegrees) / 2;
-    const minDot = Math.cos(halfArcRadians);
 
     return enemies
       .filter((enemy) =>
@@ -990,32 +990,85 @@ export class Player {
         enemy.model?.position &&
         enemy.model.visible !== false
       )
-      .map((enemy) => {
-        const toEnemy = new THREE.Vector3(
-          enemy.model.position.x - this.model.position.x,
-          0,
-          enemy.model.position.z - this.model.position.z
-        );
-        const distance = toEnemy.length();
-
-        if (distance > ATTACK_DIRECTION_EPSILON) {
-          toEnemy.normalize();
-        }
-
-        return {
-          enemy,
-          distance,
-          dot: distance <= ATTACK_DIRECTION_EPSILON
-            ? 1
-            : attackDirection.dot(toEnemy),
-        };
-      })
-      .filter(({ distance, dot }) =>
-        distance <= this.attackRange &&
-        dot >= minDot
+      .map((enemy) =>
+        this.getDirectionalAttackCandidate(enemy, attackDirection, halfArcRadians)
       )
-      .sort((a, b) => a.distance - b.distance)
+      .filter((candidate) => candidate?.isHit)
+      .sort((a, b) =>
+        a.contactDistance - b.contactDistance ||
+        a.centerDistance - b.centerDistance
+      )
       .map(({ enemy }) => enemy);
+  }
+
+  getEnemyAttackCollisionRadius(enemy) {
+    const radius = Number.parseFloat(enemy?.collisionRadius);
+
+    return Number.isFinite(radius) && radius > 0
+      ? radius
+      : ENEMY_ATTACK_COLLISION_RADIUS_FALLBACK;
+  }
+
+  isEnemyInAttackDistance(enemy) {
+    if (
+      !enemy?.alive ||
+      !enemy.model?.position ||
+      enemy.model.visible === false ||
+      !this.model?.position
+    ) {
+      return false;
+    }
+
+    const enemyRadius = this.getEnemyAttackCollisionRadius(enemy);
+    const dx = enemy.model.position.x - this.model.position.x;
+    const dz = enemy.model.position.z - this.model.position.z;
+    const centerDistance = Math.hypot(dx, dz);
+
+    return centerDistance - enemyRadius <= this.attackRange;
+  }
+
+  getDirectionalAttackCandidate(enemy, attackDirection, halfArcRadians) {
+    if (
+      !enemy?.model?.position ||
+      !this.model?.position ||
+      !attackDirection
+    ) {
+      return null;
+    }
+
+    const enemyRadius = this.getEnemyAttackCollisionRadius(enemy);
+    const toEnemy = new THREE.Vector3(
+      enemy.model.position.x - this.model.position.x,
+      0,
+      enemy.model.position.z - this.model.position.z
+    );
+    const centerDistance = toEnemy.length();
+    const contactDistance = Math.max(0, centerDistance - enemyRadius);
+    const isInDistance = contactDistance <= this.attackRange;
+
+    if (centerDistance > ATTACK_DIRECTION_EPSILON) {
+      toEnemy.normalize();
+    }
+
+    const dot = centerDistance <= ATTACK_DIRECTION_EPSILON
+      ? 1
+      : attackDirection.dot(toEnemy);
+    const angularTolerance = centerDistance > ATTACK_DIRECTION_EPSILON
+      ? Math.asin(Math.min(1, enemyRadius / centerDistance))
+      : 0;
+    const minDot = Math.cos(halfArcRadians + angularTolerance);
+    const isInArc =
+      centerDistance <= ATTACK_DIRECTION_EPSILON ||
+      centerDistance <= enemyRadius ||
+      dot >= minDot;
+
+    return {
+      enemy,
+      centerDistance,
+      contactDistance,
+      dot,
+      isHit: isInDistance && isInArc,
+    };
   }
 
   getDirectionalAttackImpactPoint(direction) {
