@@ -82,7 +82,7 @@ export const SHOP_TIERS = Object.freeze({
       "ramen",
       "fish",
     ]),
-    priceMultiplier: 0.85,
+    priceMultiplier: 0.7,
     rarityWeights: Object.freeze({
       [ITEM_RARITIES.COMMON]: 70,
       [ITEM_RARITIES.RARE]: 30,
@@ -108,7 +108,7 @@ export const SHOP_TIERS = Object.freeze({
       "spicySauce",
       "dragonFruit",
     ]),
-    priceMultiplier: 0.9,
+    priceMultiplier: 0.8,
     rarityWeights: Object.freeze({
       [ITEM_RARITIES.COMMON]: 20,
       [ITEM_RARITIES.RARE]: 65,
@@ -132,7 +132,7 @@ export const SHOP_TIERS = Object.freeze({
       "spicySauce",
       "dragonFruit",
     ]),
-    priceMultiplier: 1.1,
+    priceMultiplier: 0.9,
     rarityWeights: Object.freeze({
       [ITEM_RARITIES.COMMON]: 0,
       [ITEM_RARITIES.RARE]: 50,

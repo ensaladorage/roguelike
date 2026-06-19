@@ -165,7 +165,7 @@ export const ITEM_DEFINITIONS = {
       {
         stat: "heal",
         op: "add",
-        value: 30,
+        value: 50,
       },
     ],
     modifiers: {
