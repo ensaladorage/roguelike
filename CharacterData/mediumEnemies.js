@@ -25,7 +25,7 @@ export const MEDIUM_ENEMY_DEFINITIONS = [
     modelId: "enemy_zombie_01",
     maxHp: 130,
     speed: 0.85,
-    attackDamage: 135,
+    attackDamage: 13,
     attackRange: 1.75,
     attackCooldown: 1.35,
     collisionRadius: 0.34,
